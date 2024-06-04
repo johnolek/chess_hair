@@ -1,0 +1,75 @@
+<%= content_for :head do %>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.base.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.brown.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.cburnett.css"/>
+  <style>
+      .chessground {
+          width: 600px;
+          height: 600px;
+      }
+  </style>
+  <script type="module">
+      import { Chessground } from 'https://cdn.jsdelivr.net/npm/chessground@9.1.1/dist/chessground.min.js';
+      async function fetchGames() {
+          const response = await fetch('https://api.chess.com/pub/player/ham_sammy/games');
+          const data = await response.json();
+          return data.games;
+      }
+
+      function filterMyTurnGames(games) {
+          return games.filter(game => (game.turn === 'white' && game.white.includes('ham_sammy')) || (game.turn === 'black' && game.black.includes('ham_sammy')));
+      }
+
+      function generateGameLinks(games) {
+          const gameLinksContainer = document.getElementById('gameLinks');
+          gameLinksContainer.innerHTML = ''; // Clear the container
+
+          games.forEach(game => {
+              const link = document.createElement('a');
+              link.href = game.url;
+              link.target = '_blank';
+
+              const moveNumber = game.fen.split(' ')[5];
+              const myColor = game.turn === 'white' ? 'black' : 'white';
+              const opponent = game[myColor].split('/').pop();
+
+              link.textContent = `Game against ${opponent}, playing as ${myColor}, move number ${moveNumber}`;
+
+              const lineBreak = document.createElement('br');
+
+              const board = document.createElement('div');
+              board.id = game.url;
+              board.classList.add('chessground');
+              const boardConfig = {
+                  orientation: myColor,
+                  fen: game.fen,
+                  moveable: {
+                      free: false
+                  },
+              };
+
+              gameLinksContainer.appendChild(link);
+              gameLinksContainer.appendChild(board);
+              gameLinksContainer.appendChild(lineBreak);
+              setTimeout(() => {
+                  Chessground(board, boardConfig);
+              });
+          });
+      }
+
+      async function updateGames() {
+          const games = await fetchGames();
+          const myTurnGames = filterMyTurnGames(games);
+          generateGameLinks(myTurnGames);
+          document.title = `${myTurnGames.length} Games`;
+          setTimeout(updateGames, 5 * 1000);
+      }
+
+
+      document.addEventListener('DOMContentLoaded', async () => {
+          await updateGames();
+      });
+  </script>
+<% end %>
+<h1>Daily Games</h1>
+<div id="gameLinks"></div>

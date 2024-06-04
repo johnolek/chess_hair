@@ -7,6 +7,8 @@ Rails.application.routes.draw do
 
   get 'knight_moves', to: 'application#knight_moves'
 
+  get 'daily_games', to: 'application#daily_games'
+
   # Defines the root path route ("/")
   # root "posts#index"
 end
