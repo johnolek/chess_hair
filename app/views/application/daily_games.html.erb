@@ -4,8 +4,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.cburnett.css"/>
   <style>
       .chessground {
-          width: 600px;
-          height: 600px;
+          width: 400px;
+          height: 400px;
+      }
+      .game {
+          margin-right: 20px;
+          display: inline-block;
       }
   </style>
   <script type="module">
@@ -25,6 +29,8 @@
           gameLinksContainer.innerHTML = ''; // Clear the container
 
           games.forEach(game => {
+              const gameContainer = document.createElement('div');
+              gameContainer.classList.add('game');
               const link = document.createElement('a');
               link.href = game.url;
               link.target = '_blank';
@@ -48,9 +54,11 @@
                   },
               };
 
-              gameLinksContainer.appendChild(link);
-              gameLinksContainer.appendChild(board);
-              gameLinksContainer.appendChild(lineBreak);
+              gameContainer.appendChild(link);
+              gameContainer.appendChild(board);
+              gameContainer.appendChild(lineBreak);
+              gameLinksContainer.appendChild(gameContainer);
+
               setTimeout(() => {
                   Chessground(board, boardConfig);
               });
