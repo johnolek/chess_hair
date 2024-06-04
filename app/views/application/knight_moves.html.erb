@@ -1,0 +1,319 @@
+<% content_for :head do %>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script src="/js/knight_moves.js"></script>
+  <style>
+      :root {
+          --bs-primary: #0d6efd;
+          --bs-secondary: #6c757d;
+          --bs-success: #198754;
+          --bs-danger: #dc3545;
+          --bs-warning: #ffc107;
+          --bs-info: #0dcaf0;
+          --bs-light: #f8f9fa;
+          --bs-dark: #212529;
+      }
+
+      body {
+          font-family: Arial, sans-serif;
+          font-size: 24px;
+          background-color: rgba(83, 83, 83, 0.02);
+      }
+
+      #score-container, #game-controls {
+          width: 100%;
+      }
+
+      .correct {
+          color: green;
+      }
+
+      .incorrect {
+          color: red;
+      }
+
+      #startTimedGame, #timer {
+          display: inline-block;
+      }
+
+      #button-container button {
+          width: 100%;
+          height: 120px;
+      }
+
+      @keyframes incorrectAnswer {
+          25% { background-color: red; transform: translateX(-10px); }
+          50% { background-color: red; transform: translateX(10px); }
+          75% { background-color: red; transform: translateX(-10px); }
+          100% { transform: translateX(0px); }
+      }
+
+      .incorrectAnswer {
+          animation: incorrectAnswer 1s linear;
+      }
+
+      @keyframes correctAnswer {
+          50% { background-color: green; transform: scale(1.01); }
+          100% { transform: scale(1); }
+      }
+
+      .correctAnswer {
+          animation: correctAnswer 0.75s linear;
+      }
+
+      .floatingThing {
+          border-radius: 10px; /* This will give the elements rounded corners */
+          box-shadow: 0px 10px 15px rgba(0, 0, 0, 0.1); /* This will give the elements a shadow, creating a "floating" effect */
+          background-color: #ffffff; /* This will give the elements a background color */
+          padding: 20px; /* This will give some space between the content of the elements and their borders */
+          margin: 10px;
+      }
+
+      #results > * {
+          display: inline-block;
+      }
+  </style>
+  <script>
+      class ChessGame {
+          constructor() {
+              this.board = Chessboard('board', {
+                  pieceTheme: 'images/chesspieces/wikipedia/{piece}.png'
+              });
+              this.initKeyboardShortcuts();
+              this.initResizeListener();
+              this.highScore = 0;
+              this.startTimedGameButton = document.getElementById('startTimedGame');
+              this.moveCounter = document.getElementById('move-counter');
+              this.startTimedGameButton.addEventListener('click', () => {
+                  this.startTimedGame();
+              });
+              this.jsonData = window.knightMovesData;
+              this.positionData = null;
+              this.reset();
+              this.newPosition();
+          }
+
+          initResizeListener() {
+              window.addEventListener('resize', () => {
+                  this.board.resize();
+              });
+          }
+
+          startTimedGame() {
+              this.reset();
+              this.startTimedGameButton.disabled = true;
+              this.gameRunning = true;
+              this.newPosition();
+              this.gameTimer = setTimeout(() => {
+                  this.endGame();
+              }, 60000); // 1 minute
+              this.updateTimerDisplay(60);
+          }
+
+          endGame() {
+              this.updateTimerDisplay(0);
+              document.getElementById('timer').innerHTML = "";
+              clearTimeout(this.gameTimer);
+              if (this.correctCount > this.highScore && this.gameRunning) {
+                  this.highScore = this.correctCount;
+                  document.getElementById('highScoreCount').innerHTML = this.highScore;
+              }
+              const resultTextElement = document.getElementById('resultText');
+              resultTextElement.className = "";
+              if (this.incorrectCount > 0) {
+                  resultTextElement.innerText = `Incorrect, game over! The correct answer was ${this.getMinimumMovesForCurrentPosition()}. Your score was ${this.correctCount}.`
+                  resultTextElement.className = "incorrect";
+              } else {
+                  resultTextElement.innerText = `Time's up! Your score was ${this.correctCount}.`;
+                  resultTextElement.className = 'correct';
+              }
+
+              this.gameRunning = false;
+              this.gameTimer = null;
+              this.correctCount = 0;
+              this.incorrectCount = 0;
+              this.updateScores();
+              this.startTimedGameButton.disabled = false;
+          }
+
+          reset() {
+              this.correctCount = 0;
+              this.incorrectCount = 0;
+              this.gameRunning = false;
+              this.gameTimer = null;
+              this.startTimedGameButton.disabled = false;
+              this.updateScores();
+              this.updateResultText();
+          }
+
+          getRandomIndex(max) {
+              return Math.floor(Math.random() * max);
+          }
+
+          getRandomElement(array) {
+              const index = this.getRandomIndex(array.length);
+              return array[index];
+          }
+
+          initKeyboardShortcuts() {
+              window.addEventListener('keydown', (event) => {
+                  const key = event.key;
+                  if (key >= '1' && key <= '6') {
+                      // Trigger click event on corresponding button
+                      document.getElementById(key).click();
+                  }
+              });
+              // Add click event listener to each button
+              for (let i = 1; i <= 6; i++) {
+                  document.getElementById(String(i)).addEventListener('click', (event) => {
+                      this.processButton(event.target.id);
+                  });
+              }
+          }
+
+          getMinimumMovesForCurrentPosition() {
+              return this.positionData.min_length;
+          }
+
+          getPathsForCurrentPosition() {
+              return this.positionData.paths;
+          }
+
+          getRandomPathForCurrentPosition() {
+              return this.getRandomElement(this.getPathsForCurrentPosition());
+          }
+
+          processButton(id) {
+              const number = parseInt(id);
+              const minimum = this.getMinimumMovesForCurrentPosition();
+              const button = document.getElementById(id);
+              if (number === minimum) {
+                  this.correctCount += 1;
+                  this.animateElement(button, 'correctAnswer');
+                  this.updateResultText(`${number} was correct!`, 'correct');
+                  this.updateScores();
+                  this.newPosition();
+              } else {
+                  this.incorrectCount += 1;
+                  this.animateElement(button, 'incorrectAnswer');
+                  if (this.gameRunning) {
+                      this.endGame();
+                  } else {
+                      this.updateResultText(`${number} was incorrect. The correct answer was ${minimum}: `, 'incorrect');
+                  }
+                  const randomValidPath = this.getRandomPathForCurrentPosition();
+                  const movePairs = randomValidPath.slice(0, -1).map((value, index) => `${value}-${randomValidPath[index + 1]}`);
+                  movePairs.forEach((pair, index) => {
+                      setTimeout(() => {
+                          this.board.move(pair);
+                          this.moveCounter.innerText = index + 1;
+                          if (index === movePairs.length - 1) {
+                              setTimeout(() => {
+                                  this.moveCounter.innerText = '';
+                                  this.updateScores();
+                                  this.newPosition();
+                              }, 1000);
+                          }
+                      }, index * 1000); // Delay increases by 1000ms for each move
+                  });
+              }
+          }
+
+          updateScores() {
+              document.getElementById('incorrectCount').innerHTML = this.incorrectCount;
+              document.getElementById('correctCount').innerHTML = this.correctCount;
+          }
+
+          updateTimerDisplay(seconds) {
+              document.getElementById('timer').innerHTML = `${seconds}`;
+              if (seconds > 0 && this.gameRunning) {
+                  setTimeout(() => {
+                      if (this.gameRunning) {
+                          this.updateTimerDisplay(seconds - 1);
+                      }
+                  }, 1000);
+              }
+          }
+
+          updateResultText(message = '', className = '') {
+              const resultTextElement = document.getElementById('resultText');
+              resultTextElement.innerText = message;
+              resultTextElement.className = '';
+              resultTextElement.className = className;
+          }
+
+          newPosition() {
+              const keys = Object.keys(this.jsonData);
+              const index = this.getRandomIndex(keys.length);
+              const key = keys[index];
+              [this.knightSquare, this.kingSquare] = key.split('.');
+              this.positionData = this.jsonData[key];
+              const position = {};
+              position[this.kingSquare] = 'bK';
+              position[this.knightSquare] = 'wN';
+              this.board.position(position);
+          }
+
+          animateElement(element, animationClass)  {
+              element.classList.add(animationClass);
+
+              // Listen for the animationend event
+              element.addEventListener('animationend', function() {
+                  // Once the animation ends, remove the class
+                  element.classList.remove(animationClass);
+              }, {once: true}); // The listener is removed after it's invoked once
+          }
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+          window.game = new ChessGame();
+      });
+  </script>
+<% end %>
+
+<div class="container pt-5">
+  <div class="row justify-content-center">
+    <div class="col-12 col-xl-8 order-xl-2">
+      <div id="game">
+        <div id="board"></div>
+        <div id="button-container" class="mt-3">
+          <div class="row">
+            <div class="col"><button class="btn btn-primary" id="1">1</button></div>
+            <div class="col"><button class="btn btn-primary" id="2">2</button></div>
+            <div class="col"><button class="btn btn-primary" id="3">3</button></div>
+          </div>
+          <div class="row mt-3">
+            <div class="col"><button class="btn btn-primary" id="4">4</button></div>
+            <div class="col"><button class="btn btn-primary" id="5">5</button></div>
+            <div class="col"><button class="btn btn-primary" id="6">6</button></div>
+          </div>
+        </div>
+        <div id="results">
+          <div id="resultText"></div>
+          <div id="move-counter"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-xl-3 order-xl-1">
+      <div id="score-container" class="floatingThing">
+        <dl class="row">
+          <dt class="col-sm-5">Correct:</dt>
+          <dd class="col-sm-7"><span id="correctCount">0</span></dd>
+          <dt class="col-sm-5">Incorrect:</dt>
+          <dd class="col-sm-7"><span id="incorrectCount">0</span></dd>
+        </dl>
+      </div>
+      <div id="game-controls" class="floatingThing">
+        <button id="startTimedGame" class="btn btn-primary">Start Timed Game</button>
+        <div id="timer"></div>
+        <dl class="row">
+          <dt class="col-sm-5">High Score:</dt>
+          <dd class="col-sm-7"><span id="highScoreCount">0</span></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
