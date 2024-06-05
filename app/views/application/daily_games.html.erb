@@ -15,7 +15,7 @@
   <script type="module">
       import { Chessground } from 'https://cdn.jsdelivr.net/npm/chessground@9.1.1/dist/chessground.min.js';
 
-      const playerName = 'ham_sammy';
+      const playerName = '<%= @username %>';
 
       async function fetchGames() {
           const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
