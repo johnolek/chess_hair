@@ -1,18 +1,18 @@
 <%= content_for :head do %>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.base.css"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.brown.css"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.cburnett.css"/>
   <style>
-      .chessground {
-          width: 600px;
-          height: 600px;
-      }
       .game {
           margin-right: 20px;
           display: inline-block;
+          width: 600px;
+          max-width: 90vw;
+
       }
   </style>
-  <link rel="stylesheet" href="/css/lichess_pgn_viewer.css">
+<!--  <link rel="stylesheet" href="/css/lichess_pgn_viewer.css">-->
+  <link id="piece-sprite" href="/piece-css/cburnett.css" rel="stylesheet">
+  <link href="/css/lichess_site.css" rel="stylesheet">
+  <link href="/css/lichess_theme_light.css" rel="stylesheet">
+  <link href="/css/lichess_pgn_viewer.css" rel="stylesheet">
   <script type="module">
       import LichessPgnViewer from 'https://cdn.jsdelivr.net/npm/lichess-pgn-viewer@2.1.0/dist/lichess-pgn-viewer.min.js';
 
@@ -72,8 +72,8 @@
               const lineBreak = document.createElement('br');
 
               const board = document.createElement('div');
+              board.classList.add('is2d');
               board.id = game.url;
-              board.classList.add('chessground');
 
               gameContainer.appendChild(link);
               gameContainer.appendChild(board);
