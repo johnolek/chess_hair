@@ -14,14 +14,17 @@
   </style>
   <script type="module">
       import { Chessground } from 'https://cdn.jsdelivr.net/npm/chessground@9.1.1/dist/chessground.min.js';
+
+      const playerName = 'ham_sammy';
+
       async function fetchGames() {
-          const response = await fetch('https://api.chess.com/pub/player/ham_sammy/games');
+          const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
           const data = await response.json();
           return data.games;
       }
 
       function filterMyTurnGames(games) {
-          return games.filter(game => (game.turn === 'white' && game.white.includes('ham_sammy')) || (game.turn === 'black' && game.black.includes('ham_sammy')));
+          return games.filter(game => (game.turn === 'white' && game.white.includes(playerName)) || (game.turn === 'black' && game.black.includes(playerName)));
       }
 
       function generateGameLinks(games) {
@@ -36,8 +39,9 @@
               link.target = '_blank';
 
               const moveNumber = game.fen.split(' ')[5];
-              const myColor = game.turn === 'white' ? 'black' : 'white';
-              const opponent = game[myColor].split('/').pop();
+              const myColor = game.white.includes(playerName) ? 'white' : 'black';
+              const opponentColor = myColor === 'white' ? 'black' : 'white';
+              const opponent = game[opponentColor].split('/').pop();
 
               link.textContent = `Game against ${opponent}, playing as ${myColor}, move number ${moveNumber}`;
 
