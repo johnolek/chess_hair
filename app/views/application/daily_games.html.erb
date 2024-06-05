@@ -29,11 +29,25 @@
 
       function generateGameLinks(games) {
           const gameLinksContainer = document.getElementById('gameLinks');
-          gameLinksContainer.innerHTML = ''; // Clear the container
 
           games.forEach(game => {
+              const lastActivity = game.last_activity;
+              const url = game.url;
+              const existingGame = document.getElementById(url);
+              console.log({existingGame})
+              if (existingGame) {
+                  if (parseInt(existingGame.dataset.lastActivity) === lastActivity) {
+                      console.log(`No update for ${url}`)
+                      return;
+                  } else {
+                      console.log(`Update found for ${url}, removing from DOM to create again`)
+                      existingGame.parentNode.removeChild(existingGame);
+                  }
+              }
               const gameContainer = document.createElement('div');
               gameContainer.classList.add('game');
+              gameContainer.id = game.url;
+              gameContainer.dataset.lastActivity = lastActivity;
               const link = document.createElement('a');
               link.href = game.url;
               link.target = '_blank';
