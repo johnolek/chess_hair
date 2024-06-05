@@ -79,6 +79,7 @@ test:
 #
 production:
   <<: *default
-  database: chess_hair_production
-  username: chess_hair
-  password: <%= ENV["CHESS_HAIR_DATABASE_PASSWORD"] %>
+  adapter: sqlite3
+  database: db/production.sqlite3
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  timeout: 5000
