@@ -4,16 +4,17 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.cburnett.css"/>
   <style>
       .chessground {
-          width: 400px;
-          height: 400px;
+          width: 600px;
+          height: 600px;
       }
       .game {
           margin-right: 20px;
           display: inline-block;
       }
   </style>
+  <link rel="stylesheet" href="/css/lichess_pgn_viewer.css">
   <script type="module">
-      import { Chessground } from 'https://cdn.jsdelivr.net/npm/chessground@9.1.1/dist/chessground.min.js';
+      import LichessPgnViewer from 'https://cdn.jsdelivr.net/npm/lichess-pgn-viewer@2.1.0/dist/lichess-pgn-viewer.min.js';
 
       const playerName = '<%= @username %>';
 
@@ -60,25 +61,15 @@
               link.href = game.url;
               link.target = '_blank';
 
-              const moveNumber = game.fen.split(' ')[5];
               const myColor = game.white.includes(playerName) ? 'white' : 'black';
-              const opponentColor = myColor === 'white' ? 'black' : 'white';
-              const opponent = game[opponentColor].split('/').pop();
 
-              link.textContent = `Game against ${opponent}, playing as ${myColor}, move number ${moveNumber}`;
+              link.textContent = `chess.com`;
 
               const lineBreak = document.createElement('br');
 
               const board = document.createElement('div');
               board.id = game.url;
               board.classList.add('chessground');
-              const boardConfig = {
-                  orientation: myColor,
-                  fen: game.fen,
-                  moveable: {
-                      free: false
-                  },
-              };
 
               gameContainer.appendChild(link);
               gameContainer.appendChild(board);
@@ -86,7 +77,11 @@
               container.appendChild(gameContainer);
 
               setTimeout(() => {
-                  Chessground(board, boardConfig);
+                  LichessPgnViewer(board, {
+                      pgn: game.pgn,
+                      initialPly: 'last',
+                      orientation: myColor
+                  });
               });
           });
       }
@@ -107,6 +102,8 @@
       document.addEventListener('DOMContentLoaded', async () => {
           await updateGames();
       });
+
+      document.body.dataset.board = 'brown';
   </script>
 <% end %>
 <h1>Daily Games</h1>
