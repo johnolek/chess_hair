@@ -3,3 +3,14 @@ PassengerEnabled On
 PassengerBaseURI /var/www/chess_hair/public
 PassengerAppRoot /var/www/chess_hair
 PassengerAppEnv production
+
+# Enable mod_rewrite, required for the .htaccess rewrites
+RewriteEngine On
+
+# Serve static assets directly
+RewriteCond %{DOCUMENT_ROOT}/public/assets/$1 -f
+RewriteRule ^assets/(.*) %{DOCUMENT_ROOT}/public/assets/$1 [L]
+
+# Serve error pages directly
+RewriteCond %{DOCUMENT_ROOT}/public/$1.html -f
+RewriteRule ^(.*)$ %{DOCUMENT_ROOT}/public/$1.html [L]
