@@ -1,2 +1,5 @@
 PassengerRuby /home/inimical/.rbenv-usergems/shims/ruby
 PassengerEnabled On
+PassengerBaseURI /var/www/chess_hair/public
+PassengerAppRoot /var/www/chess_hair
+PassengerAppEnv production
