@@ -28,6 +28,10 @@
           return games.filter(game => (game.turn === 'white' && game.white.includes(playerName)) || (game.turn === 'black' && game.black.includes(playerName)));
       }
 
+      function sortGamesByMostRecentActivity(games) {
+          return games.sort((a, b) => b.last_activity - a.last_activity);
+      }
+
       function filterTheirTurnGames(games) {
           const myTurnGames = filterMyTurnGames(games)
           const myTurnUrls = myTurnGames.map((game) => game.url);
@@ -80,7 +84,8 @@
                   LichessPgnViewer(board, {
                       pgn: game.pgn,
                       initialPly: 'last',
-                      orientation: myColor
+                      orientation: myColor,
+                      scrollToMove: false,
                   });
               });
           });
@@ -90,10 +95,10 @@
           const games = await fetchGames();
           const myTurnGames = filterMyTurnGames(games);
           const myTurnContainer = document.getElementById('gameLinks_myTurn')
-          generateGameLinks(myTurnGames, myTurnContainer);
+          generateGameLinks(sortGamesByMostRecentActivity(myTurnGames), myTurnContainer);
           const theirTurnGames = filterTheirTurnGames(games);
           const theirTurnContainer = document.getElementById('gameLinks_theirTurn')
-          generateGameLinks(theirTurnGames, theirTurnContainer);
+          generateGameLinks(sortGamesByMostRecentActivity(theirTurnGames), theirTurnContainer);
           document.title = `${myTurnGames.length} Games`;
           setTimeout(updateGames, 5 * 1000);
       }
