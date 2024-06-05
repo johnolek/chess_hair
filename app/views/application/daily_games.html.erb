@@ -1,3 +1,4 @@
+<%= content_for :title, 'Loading games...' %>
 <%= content_for :head do %>
   <style>
       .game {
@@ -6,6 +7,9 @@
           width: 600px;
           max-width: 90vw;
 
+      }
+      body {
+          margin: 10px 20px;
       }
   </style>
 <!--  <link rel="stylesheet" href="/css/lichess_pgn_viewer.css">-->
@@ -17,6 +21,7 @@
       import LichessPgnViewer from 'https://cdn.jsdelivr.net/npm/lichess-pgn-viewer@2.1.0/dist/lichess-pgn-viewer.min.js';
 
       const playerName = '<%= @username %>';
+      let gameCount = null;
 
       async function fetchGames() {
           const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
@@ -47,13 +52,10 @@
               const lastActivity = game.last_activity;
               const url = game.url;
               const existingGame = document.getElementById(url);
-              console.log({existingGame})
               if (existingGame) {
                   if (parseInt(existingGame.dataset.lastActivity) === lastActivity) {
-                      console.log(`No update for ${url}`)
                       return;
                   } else {
-                      console.log(`Update found for ${url}, removing from DOM to create again`)
                       existingGame.parentNode.removeChild(existingGame);
                   }
               }
@@ -91,18 +93,30 @@
           });
       }
 
+      function updateGameCount(count) {
+          if (gameCount === count) {
+              return;
+          }
+
+          document.title = `${count} ${chessSymbols(count)}`;
+      }
+
+      function chessSymbols(count) {
+          const pawn = '\u2658';
+          return pawn.repeat(count);
+      }
+
       async function updateGames() {
           const games = await fetchGames();
           const myTurnGames = filterMyTurnGames(games);
+          updateGameCount(myTurnGames.length);
           const myTurnContainer = document.getElementById('gameLinks_myTurn')
           generateGameLinks(sortGamesByMostRecentActivity(myTurnGames), myTurnContainer);
           const theirTurnGames = filterTheirTurnGames(games);
           const theirTurnContainer = document.getElementById('gameLinks_theirTurn')
           generateGameLinks(sortGamesByMostRecentActivity(theirTurnGames), theirTurnContainer);
-          document.title = `${myTurnGames.length} Games`;
           setTimeout(updateGames, 5 * 1000);
       }
-
 
       document.addEventListener('DOMContentLoaded', async () => {
           await updateGames();
