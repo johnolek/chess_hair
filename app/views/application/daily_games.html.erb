@@ -93,12 +93,33 @@
           });
       }
 
-      function updateGameCount(count) {
+      function animateTitle(string1, string2, finalTitle, interval, duration) {
+          // Start the animation
+          let animationInterval = setInterval(function() {
+              document.title = document.title === string1 ? string2 : string1;
+          }, interval);
+
+          // Stop the animation and replace the title after the specified duration
+          setTimeout(function() {
+              clearInterval(animationInterval);
+              document.title = finalTitle;
+          }, duration);
+      }
+
+      function updateGameCount(games) {
+          const count = games.length;
           if (gameCount === count) {
               return;
           }
 
-          document.title = `${count} ${chessSymbols(count)}`;
+          const newTitle = `${count} ${chessSymbols(count)}`;
+
+          if (gameCount === null || count < gameCount) {
+              document.title = newTitle
+          } else {
+              animateTitle("♘♞♘ New Move ♘♞♘", "♞♘♞ New Move ♞♘♞", newTitle, 300, 3000)
+          }
+          gameCount = count;
       }
 
       function chessSymbols(count) {
@@ -109,7 +130,7 @@
       async function updateGames() {
           const games = await fetchGames();
           const myTurnGames = filterMyTurnGames(games);
-          updateGameCount(myTurnGames.length);
+          updateGameCount(myTurnGames);
           const myTurnContainer = document.getElementById('gameLinks_myTurn')
           generateGameLinks(sortGamesByMostRecentActivity(myTurnGames), myTurnContainer);
           const theirTurnGames = filterTheirTurnGames(games);
