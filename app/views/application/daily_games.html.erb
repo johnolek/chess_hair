@@ -19,8 +19,38 @@
   <script type="module">
       import LichessPgnViewer from 'https://cdn.jsdelivr.net/npm/lichess-pgn-viewer@2.1.0/dist/lichess-pgn-viewer.min.js';
       import Config from "/js/local_config.js";
+      import { ConfigForm } from "/js/local_config.js";
 
       const config = new Config();
+      const configForm = new ConfigForm(config);
+
+      const updateFrequencyOption = config.getConfigOption('Update frequency in seconds', 5);
+
+      const boardOption = config.getConfigOption('Board', 'brown');
+      const allBoardOptions = JSON.parse('<%= @board_options %>')
+      boardOption.setAllowedValues(allBoardOptions);
+      boardOption.addObserver(board => {
+          document.body.dataset.board = board;
+          boardOption.setValue(board);
+      });
+
+      const pieceSetOption = config.getConfigOption('Piece set', 'merida');
+      const allPieceSets = JSON.parse('<%= @piece_options %>');
+      pieceSetOption.setAllowedValues(allPieceSets);
+      const spriteStylesheet = document.getElementById('piece-sprite');
+      pieceSetOption.addObserver(set => {
+          spriteStylesheet.href = `/piece-css/${set}.css`;
+          pieceSetOption.setValue(set);
+      });
+
+      const titleAnimationSpeedOption = config.getConfigOption('Title animation speed in ms', 250);
+      const titleAnimationLength = config.getConfigOption('Title animation length in ms', 3000);
+
+      const firstTitleAnimationText = config.getConfigOption('Title animation 1',  '♘♞♘ New Move ♘♞♘');
+      const secondTitleAnimationText = config.getConfigOption('Title animation 2',   '♞♘♞ New Move ♞♘♞');
+
+      const themeOption = config.getConfigOption('Theme', 'system');
+      themeOption.setAllowedValues(['system', 'dark', 'light']);
 
       const playerName = '<%= @username %>';
       let gameCount = null;
@@ -95,17 +125,18 @@
           });
       }
 
-      function animateTitle(string1, string2, finalTitle, interval, duration) {
-          // Start the animation
+      function animateTitle(finalTitle) {
+          const string1 = firstTitleAnimationText.getValue();
+          const string2 = secondTitleAnimationText.getValue();
+
           let animationInterval = setInterval(function() {
               document.title = document.title === string1 ? string2 : string1;
-          }, interval);
+          }, titleAnimationSpeedOption.getValue());
 
-          // Stop the animation and replace the title after the specified duration
           setTimeout(function() {
               clearInterval(animationInterval);
               document.title = finalTitle;
-          }, duration);
+          }, titleAnimationLength.getValue());
       }
 
       function updateGameCount(games) {
@@ -119,11 +150,7 @@
           if (gameCount === null || count < gameCount) {
               document.title = newTitle
           } else {
-              const animatedTitle1 = config.get('Animated Title 1');
-              const animatedTitle2 = config.get('Animated Title 2');
-              const animationSpeed = config.get('Title Animation Toggle Speed');
-              const animationLength = config.get('Title Animation Length');
-              animateTitle(animatedTitle1, animatedTitle2, newTitle, animationSpeed, animationLength)
+              animateTitle(newTitle);
           }
           gameCount = count;
       }
@@ -142,37 +169,15 @@
           const theirTurnGames = filterTheirTurnGames(games);
           const theirTurnContainer = document.getElementById('gameLinks_theirTurn')
           generateGameLinks(sortGamesByMostRecentActivity(theirTurnGames), theirTurnContainer);
-          const updateFrequency = config.get('Update frequency in seconds');
-          setTimeout(updateGames, updateFrequency * 1000);
+          setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
       }
 
       document.addEventListener('DOMContentLoaded', async () => {
-          const animatedTitle1 = config.get('Animated Title 1', '♘♞♘ New Move ♘♞♘');
-          const animatedTitle2 = config.get('Animated Title 2', '♞♘♞ New Move ♞♘♞');
-          const animationSpeed = config.get('Title Animation Toggle Speed', 250);
-          const animationLength = config.get('Title Animation Length', 3000);
-          const updateFrequencyInSeconds = config.get('Update frequency in seconds', 5);
-          const theme = config.get('Theme', 'system');
-          const pieceSet = config.get('Piece Set', 'cburnett');
-          const board = config.get('board', 'brown');
-          config.setAllowedValuesForKey('Theme', ['system', 'light', 'dark']);
-          const pieceSets = JSON.parse('<%= @piece_options %>');
-          const boardOptions = JSON.parse('<%= @board_options %>')
-          config.setAllowedValuesForKey('Piece Set', pieceSets);
-          config.setAllowedValuesForKey('board', boardOptions);
-          config.addConfigLink('config');
-          config.addObserver('Piece Set', set => {
-              const stylesheet = document.getElementById('piece-sprite');
-              stylesheet.href = `/piece-css/${set}.css`;
-          });
-          config.addObserver('board', (board) => document.body.dataset.board = board);
           await updateGames();
-          const stylesheet = document.getElementById('piece-sprite');
-          stylesheet.href = `/piece-css/${pieceSet}.css`;
-          document.body.dataset.board = board;
+          configForm.addLinkToDOM('config');
+          spriteStylesheet.href = `/piece-css/${pieceSetOption.getValue()}.css`;
+          document.body.dataset.board = boardOption.getValue();
       });
-
-      document.body.dataset.board = 'brown';
   </script>
 <% end %>
 <h1>Daily Games</h1>

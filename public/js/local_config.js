@@ -1,33 +1,26 @@
 class Config {
     constructor(namespace = 'config') {
         this.namespace = namespace;
-        this.typeData = {}
-        this.observers = {};
+        this.configOptions = {};
         if (!localStorage.getItem(this.namespace)) {
             localStorage.setItem(this.namespace, JSON.stringify({}));
         }
     }
 
-    get(key, defaultValue = null) {
+    getConfigOption(key, defaultValue = null) {
+        if (this.configOptions[key]) {
+            return this.configOptions[key];
+        }
+        this.configOptions[key] = new ConfigOption(key, this, defaultValue);
+        return this.configOptions[key];
+    }
+
+    get(key) {
         const storedData = JSON.parse(localStorage.getItem(this.namespace));
-        if (!this.typeData[key]) {
-            this.typeData[key] = {
-                type: 'text',
-                values: null
-            }
-        }
         if (key in storedData) {
-            const storedValue = storedData[key];
-            if (typeof defaultValue === 'number') {
-                this.typeData[key].type = 'number';
-                return Number(storedValue);
-            } else {
-                return storedValue;
-            }
-        } else {
-            this.set(key, defaultValue);
-            return defaultValue;
+            return storedData[key];
         }
+        return null;
     }
 
     set(key, value) {
@@ -39,62 +32,121 @@ class Config {
         localStorage.setItem(this.namespace, JSON.stringify(storedData));
     }
 
-    setAllowedValuesForKey(key, values) {
-        this.typeData[key].values = values;
+}
+
+class ConfigOption {
+    constructor(key, config, defaultValue) {
+        this.key = key;
+        /** @var Config */
+        this.config = config;
+        this.defaultValue = defaultValue;
+        this.allowedValues = [];
+        this.observers = [];
+        this.type = 'text';
+        if (typeof this.defaultValue === 'number') {
+            this.type = 'number'
+        }
     }
 
-    addConfigLink(linkText) {
+    getType() {
+        return this.type;
+    }
+
+    setAllowedValues(array) {
+        this.allowedValues = array;
+    }
+
+    getAllowedValues() {
+        return this.allowedValues;
+    }
+
+    getValue() {
+        const storedValue = this.config.get(this.key);
+
+        if (storedValue !== null && storedValue !== "") {
+            if (this.type === 'number') {
+                return parseInt(storedValue);
+            }
+            return storedValue;
+        }
+
+        this.config.set(this.key, this.defaultValue);
+        return this.defaultValue;
+    }
+
+    setValue(newValue) {
+        this.config.set(this.key, newValue);
+    }
+
+    getLabel() {
+        return this.key;
+    }
+
+    addObserver(callback) {
+        this.observers.push(callback);
+    }
+
+    getObservers() {
+        return this.observers;
+    }
+}
+
+class ConfigForm {
+    constructor(config) {
+        this.config = config;
+    }
+
+    addLinkToDOM(text = null) {
+        this.link = this.generateConfigLink(text)
+        document.body.appendChild(this.link);
+    }
+
+    generateConfigLink(linkText = null) {
         const link = document.createElement('a');
-        link.textContent = linkText;
+        link.textContent = linkText || 'config';
         link.style.position = 'absolute';
         link.style.top = '0';
         link.style.right = '0';
         link.addEventListener('click', (event) => {
             event.preventDefault();
             link.style.display = 'none';
-            const form = this.generateForm();
-            form.style.position = 'absolute';
-            form.style.top = '0';
-            form.style.right = '0';
-            document.body.appendChild(form);
+            this.form = this.generateForm();
+            this.form.style.position = 'absolute';
+            this.form.style.top = '0';
+            this.form.style.right = '0';
+            document.body.appendChild(this.form);
         });
-        document.body.appendChild(link);
-    }
-
-    addObserver(key, callback) {
-        if (!this.observers[key]) {
-            this.observers[key] = [];
-        }
-        this.observers[key].push(callback);
+        return link;
     }
 
     generateForm() {
         const form = document.createElement('form');
-        const storedData = JSON.parse(localStorage.getItem(this.namespace));
-        for (const key in this.typeData) {
+        for (const key in this.config.configOptions) {
+            const option = this.config.getConfigOption(key);
             const container = document.createElement('div');
             const label = document.createElement('label');
-            label.textContent = key;
+            label.textContent = option.getLabel();
             container.appendChild(label);
             let input;
-            if (this.typeData[key].values && this.typeData[key].values.length > 0) {
+            if (option.getAllowedValues().length > 0) {
                 input = document.createElement('select');
-                this.typeData[key].values.forEach(value => {
-                    const option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = value;
-                    input.appendChild(option);
+                option.getAllowedValues().forEach(value => {
+                    const selectOption = document.createElement('option');
+                    selectOption.value = value;
+                    selectOption.textContent = value;
+                    selectOption.selected = value === option.getValue();
+                    input.appendChild(selectOption);
                 });
             } else {
                 input = document.createElement('input');
-                input.type = this.typeData[key].type;
+                input.type = option.getType();
             }
-            input.value = storedData[key] || '';
-            input.name = key;
+            input.name = option.getLabel();
+            input.value = option.getValue();
             container.appendChild(input);
             form.appendChild(container);
             input.addEventListener('change', (event) => {
-                (this.observers[key] || []).forEach((callback) => callback(event.target.value));
+                (option.getObservers()).forEach((callback) => callback(event.target.value));
             });
         }
         const submitButton = document.createElement('input');
@@ -105,10 +157,11 @@ class Config {
             event.preventDefault();
             const formData = new FormData(form);
             for (const [key, value] of formData.entries()) {
-                this.set(key, value);
+                const option = this.config.getConfigOption(key);
+                option.setValue(value);
             }
             form.parentNode.removeChild(form);
-            this.addConfigLink('config');
+            this.link.style.display = null;
         });
         form.style.backgroundColor = 'black';
         form.style.zIndex = '99999';
@@ -116,4 +169,5 @@ class Config {
     }
 }
 
+export { ConfigForm };
 export default Config;
