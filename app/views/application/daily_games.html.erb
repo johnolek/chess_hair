@@ -19,6 +19,9 @@
   <link href="/css/lichess_pgn_viewer.css" rel="stylesheet">
   <script type="module">
       import LichessPgnViewer from 'https://cdn.jsdelivr.net/npm/lichess-pgn-viewer@2.1.0/dist/lichess-pgn-viewer.min.js';
+      import Config from "/js/local_config.js";
+
+      const config = new Config();
 
       const playerName = '<%= @username %>';
       let gameCount = null;
@@ -117,7 +120,11 @@
           if (gameCount === null || count < gameCount) {
               document.title = newTitle
           } else {
-              animateTitle("♘♞♘ New Move ♘♞♘", "♞♘♞ New Move ♞♘♞", newTitle, 300, 3000)
+              const animatedTitle1 = config.get('Animated Title 1');
+              const animatedTitle2 = config.get('Animated Title 2');
+              const animationSpeed = config.get('Title Animation Toggle Speed');
+              const animationLength = config.get('Title Animation Length');
+              animateTitle(animatedTitle1, animatedTitle2, newTitle, animationSpeed, animationLength)
           }
           gameCount = count;
       }
@@ -136,10 +143,17 @@
           const theirTurnGames = filterTheirTurnGames(games);
           const theirTurnContainer = document.getElementById('gameLinks_theirTurn')
           generateGameLinks(sortGamesByMostRecentActivity(theirTurnGames), theirTurnContainer);
-          setTimeout(updateGames, 5 * 1000);
+          const updateFrequency = config.get('Update frequency in seconds');
+          setTimeout(updateGames, updateFrequency * 1000);
       }
 
       document.addEventListener('DOMContentLoaded', async () => {
+          const animatedTitle1 = config.get('Animated Title 1', '♘♞♘ New Move ♘♞♘');
+          const animatedTitle2 = config.get('Animated Title 2', '♞♘♞ New Move ♞♘♞');
+          const animationSpeed = config.get('Title Animation Toggle Speed', 250);
+          const animationLength = config.get('Title Animation Length', 3000);
+          const updateFrequencyInSeconds = config.get('Update frequency in seconds', 5);
+          config.addConfigLink('config');
           await updateGames();
       });
 
