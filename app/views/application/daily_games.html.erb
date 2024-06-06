@@ -12,7 +12,6 @@
           margin: 10px 20px;
       }
   </style>
-<!--  <link rel="stylesheet" href="/css/lichess_pgn_viewer.css">-->
   <link id="piece-sprite" href="/piece-css/cburnett.css" rel="stylesheet">
   <link href="/css/lichess_site.css" rel="stylesheet">
   <link href="/css/lichess_theme_light.css" rel="stylesheet">
@@ -153,8 +152,24 @@
           const animationSpeed = config.get('Title Animation Toggle Speed', 250);
           const animationLength = config.get('Title Animation Length', 3000);
           const updateFrequencyInSeconds = config.get('Update frequency in seconds', 5);
+          const theme = config.get('Theme', 'system');
+          const pieceSet = config.get('Piece Set', 'cburnett');
+          const board = config.get('board', 'brown');
+          config.setAllowedValuesForKey('Theme', ['system', 'light', 'dark']);
+          const pieceSets = JSON.parse('<%= @piece_options %>');
+          const boardOptions = JSON.parse('<%= @board_options %>')
+          config.setAllowedValuesForKey('Piece Set', pieceSets);
+          config.setAllowedValuesForKey('board', boardOptions);
           config.addConfigLink('config');
+          config.addObserver('Piece Set', set => {
+              const stylesheet = document.getElementById('piece-sprite');
+              stylesheet.href = `/piece-css/${set}.css`;
+          });
+          config.addObserver('board', (board) => document.body.dataset.board = board);
           await updateGames();
+          const stylesheet = document.getElementById('piece-sprite');
+          stylesheet.href = `/piece-css/${pieceSet}.css`;
+          document.body.dataset.board = board;
       });
 
       document.body.dataset.board = 'brown';

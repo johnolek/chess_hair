@@ -2,6 +2,7 @@ class Config {
     constructor(namespace = 'config') {
         this.namespace = namespace;
         this.typeData = {}
+        this.observers = {};
         if (!localStorage.getItem(this.namespace)) {
             localStorage.setItem(this.namespace, JSON.stringify({}));
         }
@@ -60,6 +61,13 @@ class Config {
         document.body.appendChild(link);
     }
 
+    addObserver(key, callback) {
+        if (!this.observers[key]) {
+            this.observers[key] = [];
+        }
+        this.observers[key].push(callback);
+    }
+
     generateForm() {
         const form = document.createElement('form');
         const storedData = JSON.parse(localStorage.getItem(this.namespace));
@@ -85,6 +93,9 @@ class Config {
             input.name = key;
             container.appendChild(input);
             form.appendChild(container);
+            input.addEventListener('change', (event) => {
+                (this.observers[key] || []).forEach((callback) => callback(event.target.value));
+            });
         }
         const submitButton = document.createElement('input');
         submitButton.type = 'submit';
@@ -99,6 +110,8 @@ class Config {
             form.parentNode.removeChild(form);
             this.addConfigLink('config');
         });
+        form.style.backgroundColor = 'black';
+        form.style.zIndex = '99999';
         return form;
     }
 }

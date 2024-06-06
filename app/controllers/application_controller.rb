@@ -4,8 +4,8 @@ class ApplicationController < ActionController::Base
 
   def daily_games
     @username = params[:username].gsub(/[^a-zA-Z0-9_-]/, '')
-    @board_options = board_options
-    @piece_options = directory_names(Rails.root.join('public', 'piece', '*'))
+    @board_options = board_options.sort.to_json.html_safe
+    @piece_options = directory_names(Rails.root.join('public', 'piece', '*')).sort.to_json.html_safe
   end
 
 
