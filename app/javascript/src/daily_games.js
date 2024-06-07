@@ -1,4 +1,4 @@
-import LichessPgnViewer from 'https://cdn.jsdelivr.net/npm/lichess-pgn-viewer@2.1.0/dist/lichess-pgn-viewer.min.js';
+import LichessPgnViewer from 'lichess-pgn-viewer';
 import Config from "./local_config";
 import { ConfigForm } from "./local_config.js";
 import { boardOptions, pieceSetOptions} from "./board/options";
