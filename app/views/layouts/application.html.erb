@@ -11,7 +11,7 @@
     <%= yield :head %>
   </head>
 
-  <body data-sound-set="silent">
+  <body <%= tag.attributes(body_data_attributes(@body_attributes || {})) %>>
     <%= yield %>
   </body>
 </html>
