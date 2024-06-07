@@ -13,9 +13,9 @@
       }
   </style>
   <link id="piece-sprite" href="/piece-css/cburnett.css" rel="stylesheet">
-  <link href="/css/lichess_site.css" rel="stylesheet">
-  <link href="/css/lichess_theme_light.css" rel="stylesheet">
-  <link href="/css/lichess_pgn_viewer.css" rel="stylesheet">
+  <%= stylesheet_link_tag 'lichess_site' %>
+  <%= stylesheet_link_tag 'lichess_theme_light' %>
+  <%= stylesheet_link_tag 'lichess_pgn_viewer' %>
   <%= javascript_import_module_tag 'src/daily_games' %>
 <% end %>
 <h1>Daily Games</h1>
