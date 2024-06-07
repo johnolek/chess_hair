@@ -1,3 +1,5 @@
+import { knightMovesData } from './knight_moves'
+
 class ChessGame {
     constructor() {
         this.board = Chessboard('board', {
@@ -11,7 +13,7 @@ class ChessGame {
         this.startTimedGameButton.addEventListener('click', () => {
             this.startTimedGame();
         });
-        this.jsonData = window.knightMovesData;
+        this.jsonData = knightMovesData;
         this.positionData = null;
         this.reset();
         this.newPosition();
