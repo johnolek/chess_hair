@@ -1,0 +1,69 @@
+:root {
+    --bs-primary: #0d6efd;
+    --bs-secondary: #6c757d;
+    --bs-success: #198754;
+    --bs-danger: #dc3545;
+    --bs-warning: #ffc107;
+    --bs-info: #0dcaf0;
+    --bs-light: #f8f9fa;
+    --bs-dark: #212529;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    font-size: 24px;
+    background-color: rgba(83, 83, 83, 0.02);
+}
+
+#score-container, #game-controls {
+    width: 100%;
+}
+
+.correct {
+    color: green;
+}
+
+.incorrect {
+    color: red;
+}
+
+#startTimedGame, #timer {
+    display: inline-block;
+}
+
+#button-container button {
+    width: 100%;
+    height: 120px;
+}
+
+@keyframes incorrectAnswer {
+    25% { background-color: red; transform: translateX(-10px); }
+    50% { background-color: red; transform: translateX(10px); }
+    75% { background-color: red; transform: translateX(-10px); }
+    100% { transform: translateX(0px); }
+}
+
+.incorrectAnswer {
+    animation: incorrectAnswer 1s linear;
+}
+
+@keyframes correctAnswer {
+    50% { background-color: green; transform: scale(1.01); }
+    100% { transform: scale(1); }
+}
+
+.correctAnswer {
+    animation: correctAnswer 0.75s linear;
+}
+
+.floatingThing {
+    border-radius: 10px; /* This will give the elements rounded corners */
+    box-shadow: 0px 10px 15px rgba(0, 0, 0, 0.1); /* This will give the elements a shadow, creating a "floating" effect */
+    background-color: #ffffff; /* This will give the elements a background color */
+    padding: 20px; /* This will give some space between the content of the elements and their borders */
+    margin: 10px;
+}
+
+#results > * {
+    display: inline-block;
+}
