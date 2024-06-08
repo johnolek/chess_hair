@@ -1,10 +1,13 @@
 <% content_for :title, 'Knight Moves' %>
 <% content_for :head do %>
   <%= javascript_import_module_tag 'bootstrap' %>
-  <%= javascript_import_module_tag 'src/knight_moves' %>
   <%= javascript_import_module_tag 'src/knight_moves_game' %>
   <%= stylesheet_link_tag 'knight_moves' %>
   <%= stylesheet_link_tag 'bootstrap.min.css' %>
+  <%= stylesheet_link_tag 'chessground.base.css' %>
+  <%= stylesheet_link_tag 'chessground.brown.css' %>
+  <%= stylesheet_link_tag 'chessground.cburnett.css' %>
+  <%= stylesheet_link_tag 'lichess_theme_light' %>
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">

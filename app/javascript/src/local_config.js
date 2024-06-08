@@ -7,6 +7,12 @@ class Config {
         }
     }
 
+    /**
+     *
+     * @param key
+     * @param defaultValue
+     * @returns ConfigOption
+     */
     getConfigOption(key, defaultValue = null) {
         if (this.configOptions[key]) {
             return this.configOptions[key];

@@ -1,15 +1,26 @@
-import { knightMovesData } from './knight_moves'
+import {knightMovesData} from './knight_moves_data'
+import {Chessground} from "chessground";
+import Config from "./local_config";
+import { ConfigForm } from "./local_config";
 
 class ChessGame {
     constructor() {
-        this.board = Chessboard('board', {
-            pieceTheme: '/piece/cburnett/{piece}.svg'
+        this.initConfig();
+        this.chessground = Chessground(document.getElementById('board'), {
+            fen: '8/8/8/8/8/8/8/8',
+            animation: {
+                enabled: true,
+                duration: this.animationLengthOption.getValue(),
+            },
+            highlight: {
+                lastMove: false,
+            },
+            draggable: false,
+            selectable: false,
         });
         this.initKeyboardShortcuts();
-        this.initResizeListener();
         this.highScore = 0;
         this.startTimedGameButton = document.getElementById('startTimedGame');
-        this.moveCounter = document.getElementById('move-counter');
         this.startTimedGameButton.addEventListener('click', () => {
             this.startTimedGame();
         });
@@ -17,12 +28,6 @@ class ChessGame {
         this.positionData = null;
         this.reset();
         this.newPosition();
-    }
-
-    initResizeListener() {
-        window.addEventListener('resize', () => {
-            this.board.resize();
-        });
     }
 
     startTimedGame() {
@@ -105,11 +110,10 @@ class ChessGame {
         return this.positionData.paths;
     }
 
-    getRandomPathForCurrentPosition() {
-        return this.getRandomElement(this.getPathsForCurrentPosition());
-    }
-
     processButton(id) {
+        if (this.animating) {
+            return;
+        }
         const number = parseInt(id);
         const minimum = this.getMinimumMovesForCurrentPosition();
         const button = document.getElementById(id);
@@ -127,22 +131,87 @@ class ChessGame {
             } else {
                 this.updateResultText(`${number} was incorrect. The correct answer was ${minimum}: `, 'incorrect');
             }
-            const randomValidPath = this.getRandomPathForCurrentPosition();
-            const movePairs = randomValidPath.slice(0, -1).map((value, index) => `${value}-${randomValidPath[index + 1]}`);
-            movePairs.forEach((pair, index) => {
-                setTimeout(() => {
-                    this.board.move(pair);
-                    this.moveCounter.innerText = index + 1;
-                    if (index === movePairs.length - 1) {
-                        setTimeout(() => {
-                            this.moveCounter.innerText = '';
-                            this.updateScores();
-                            this.newPosition();
-                        }, 1000);
-                    }
-                }, index * 1000); // Delay increases by 1000ms for each move
+            const correctPaths = this.positionData.paths;
+            const randomlySorted = this.sortRandomly(correctPaths);
+            const pathToAnimate = randomlySorted[0];
+            const movePairs = this.getMovePairsFromPath(pathToAnimate);
+            this.drawCorrectArrows(randomlySorted);
+            this.makeSequentialMoves(movePairs, () => {
+                this.newPosition();
             });
+            setTimeout(() => console.log(this.chessground.state), 500);
         }
+    }
+
+    sortRandomly(array) {
+        return array.sort(() => Math.random() - 0.5);
+    }
+
+    getCssVariableValue(variableName) {
+        let element = document.body;
+        let cssVariableValue = getComputedStyle(element).getPropertyValue(variableName);
+        return cssVariableValue.trim();
+    }
+
+    drawCorrectArrows(validPaths) {
+        const shapes = [];
+        const brushes = this.chessground.state.drawable.brushes;
+        const brushKeys = Object.keys(brushes);
+        let maxPathsToShow = this.maxPathsToDisplayOption.getValue();
+        if (maxPathsToShow < 1) {
+            maxPathsToShow = 1;
+        }
+
+        validPaths.forEach((path, index) => {
+            if (index + 1 > maxPathsToShow) {
+                return;
+            }
+            const movePairs = this.getMovePairsFromPath(path);
+            const brushKey = brushKeys[index % brushKeys.length];
+            movePairs.forEach((pair) => {
+                const shape = {orig: pair[0], dest: pair[1], brush: brushKey, modifiers: {hilite: false, lineWidth: 5}}
+                shapes.push(shape);
+            });
+        });
+
+        const mainPath = validPaths[0];
+        const mainMovePairs = this.getMovePairsFromPath(mainPath);
+        mainMovePairs.forEach((pair, index) => {
+            const shape = {orig: pair[0], dest: pair[1], brush: 'green', modifiers: {ineWidth: 10}}
+            shapes.push(shape);
+        });
+
+        this.chessground.set({
+           drawable: {
+               shapes: shapes
+           }
+        });
+    }
+
+    getMovePairsFromPath(path) {
+        const pairs = [];
+        for (let i = 0; i < path.length - 1; i++) {
+            pairs.push([path[i], path[i + 1]]);
+        }
+        return pairs;
+    }
+
+    makeSequentialMoves(movePairs = [], callback = null) {
+        this.animating = true;
+        if (movePairs.length < 1) {
+            this.animating = false;
+            if (callback) {
+                callback();
+            }
+            return;
+        }
+
+        // shift mutates the array
+        const move = movePairs.shift();
+
+        this.chessground.move(move[0], move[1]);
+
+        setTimeout(() => this.makeSequentialMoves(movePairs, callback), this.animationLengthOption.getValue());
     }
 
     updateScores() {
@@ -168,16 +237,42 @@ class ChessGame {
         resultTextElement.className = className;
     }
 
+    clearDrawings() {
+        this.chessground.set({
+            drawable: {
+                shapes: []
+            }
+        });
+    }
+
     newPosition() {
+        this.clearDrawings();
         const keys = Object.keys(this.jsonData);
         const index = this.getRandomIndex(keys.length);
         const key = keys[index];
-        [this.knightSquare, this.kingSquare] = key.split('.');
+        const previousKnightSquare = this.knightSquare;
+        const previousKingSquare = this.kingSquare;
+        const squares = key.split('.');
+        this.knightSquare = squares[0];
+        this.kingSquare = squares[1];
         this.positionData = this.jsonData[key];
-        const position = {};
-        position[this.kingSquare] = 'bK';
-        position[this.knightSquare] = 'wN';
-        this.board.position(position);
+        const king = {
+            role: 'king',
+            color: 'black',
+        }
+        const knight = {
+            role: 'knight',
+            color: 'white',
+        }
+        const piecesDiff = new Map();
+        if (previousKnightSquare && previousKingSquare) {
+            piecesDiff.set(previousKnightSquare, undefined);
+            piecesDiff.set(previousKingSquare, undefined);
+        }
+        piecesDiff.set(this.kingSquare, king);
+        piecesDiff.set(this.knightSquare, knight);
+        this.chessground.setPieces(piecesDiff);
+        this.chessground.setPieces(new Map());
     }
 
     animateElement(element, animationClass) {
@@ -188,6 +283,16 @@ class ChessGame {
             // Once the animation ends, remove the class
             element.classList.remove(animationClass);
         }, {once: true}); // The listener is removed after it's invoked once
+    }
+
+    initConfig() {
+        this.config = new Config('knight_moves_game');
+        this.animationLengthOption = this.config.getConfigOption('Animation length (ms)', 300);
+
+        this.maxPathsToDisplayOption = this.config.getConfigOption('Max paths to show', 6);
+
+        this.configForm = new ConfigForm(this.config);
+        this.configForm.addLinkToDOM('config');
     }
 }
 

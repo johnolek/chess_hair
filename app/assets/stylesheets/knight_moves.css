@@ -67,3 +67,8 @@ body {
 #results > * {
     display: inline-block;
 }
+
+#board {
+    width: 750px;
+    height: 750px;
+}

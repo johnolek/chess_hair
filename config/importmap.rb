@@ -8,3 +8,4 @@ pin_all_from "app/javascript/controllers", under: "controllers"
 pin_all_from 'app/javascript/src', under: 'src', to: 'src'
 pin "lichess-pgn-viewer", to: 'lichess-pgn-viewer.min.js'
 pin 'bootstrap', to: 'bootstrap.bundle.min.js'
+pin 'chessground', to: 'chessground/chessground.js'
