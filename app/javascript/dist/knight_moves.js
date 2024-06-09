@@ -3002,7 +3002,7 @@ class ConfigForm {
 const { Object: Object_1 } = globals;
 const file = "svelte/knight_moves.svelte";
 
-// (297:24) {#if resultText !== ''}
+// (334:24) {#if resultText !== ''}
 function create_if_block_1(ctx) {
 	let div;
 	let t;
@@ -3013,7 +3013,7 @@ function create_if_block_1(ctx) {
 			t = text(/*resultText*/ ctx[5]);
 			attr_dev(div, "id", "resultText");
 			attr_dev(div, "class", /*resultTextClass*/ ctx[6]);
-			add_location(div, file, 297, 28, 8835);
+			add_location(div, file, 334, 28, 9720);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -3037,14 +3037,14 @@ function create_if_block_1(ctx) {
 		block,
 		id: create_if_block_1.name,
 		type: "if",
-		source: "(297:24) {#if resultText !== ''}",
+		source: "(334:24) {#if resultText !== ''}",
 		ctx
 	});
 
 	return block;
 }
 
-// (315:20) {#if timeRemaining > 0}
+// (354:20) {#if timeRemaining > 0}
 function create_if_block(ctx) {
 	let div;
 	let t;
@@ -3054,7 +3054,7 @@ function create_if_block(ctx) {
 			div = element("div");
 			t = text(/*timeRemaining*/ ctx[2]);
 			attr_dev(div, "id", "timer");
-			add_location(div, file, 315, 24, 9867);
+			add_location(div, file, 354, 24, 10801);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -3074,7 +3074,7 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(315:20) {#if timeRemaining > 0}",
+		source: "(354:20) {#if timeRemaining > 0}",
 		ctx
 	});
 
@@ -3095,20 +3095,20 @@ function create_fragment(ctx) {
 	let button0;
 	let t2;
 	let div2;
-	let button1;
+	let button1_1;
 	let t4;
 	let div3;
-	let button2;
+	let button2_1;
 	let t6;
 	let div8;
 	let div5;
-	let button3;
+	let button3_1;
 	let t8;
 	let div6;
-	let button4;
+	let button4_1;
 	let t10;
 	let div7;
-	let button5;
+	let button5_1;
 	let t12;
 	let div11;
 	let t13;
@@ -3127,7 +3127,7 @@ function create_fragment(ctx) {
 	let t18;
 	let t19;
 	let div15;
-	let button6;
+	let button6_1;
 	let t20;
 	let t21;
 	let t22;
@@ -3157,25 +3157,25 @@ function create_fragment(ctx) {
 			button0.textContent = "1";
 			t2 = space();
 			div2 = element("div");
-			button1 = element("button");
-			button1.textContent = "2";
+			button1_1 = element("button");
+			button1_1.textContent = "2";
 			t4 = space();
 			div3 = element("div");
-			button2 = element("button");
-			button2.textContent = "3";
+			button2_1 = element("button");
+			button2_1.textContent = "3";
 			t6 = space();
 			div8 = element("div");
 			div5 = element("div");
-			button3 = element("button");
-			button3.textContent = "4";
+			button3_1 = element("button");
+			button3_1.textContent = "4";
 			t8 = space();
 			div6 = element("div");
-			button4 = element("button");
-			button4.textContent = "5";
+			button4_1 = element("button");
+			button4_1.textContent = "5";
 			t10 = space();
 			div7 = element("div");
-			button5 = element("button");
-			button5.textContent = "6";
+			button5_1 = element("button");
+			button5_1.textContent = "6";
 			t12 = space();
 			div11 = element("div");
 			if (if_block0) if_block0.c();
@@ -3197,7 +3197,7 @@ function create_fragment(ctx) {
 			t18 = text(/*incorrectCount*/ ctx[1]);
 			t19 = space();
 			div15 = element("div");
-			button6 = element("button");
+			button6_1 = element("button");
 			t20 = text("Start Timed Game");
 			t21 = space();
 			if (if_block1) if_block1.c();
@@ -3209,91 +3209,91 @@ function create_fragment(ctx) {
 			span2 = element("span");
 			t24 = text(/*highScore*/ ctx[3]);
 			attr_dev(div0, "id", "board");
-			add_location(div0, file, 282, 20, 7636);
+			add_location(div0, file, 307, 20, 8028);
 			attr_dev(button0, "class", "btn btn-primary");
 			attr_dev(button0, "id", "1");
-			add_location(button0, file, 285, 45, 7807);
+			add_location(button0, file, 311, 32, 8232);
 			attr_dev(div1, "class", "col");
-			add_location(div1, file, 285, 28, 7790);
-			attr_dev(button1, "class", "btn btn-primary");
-			attr_dev(button1, "id", "2");
-			add_location(button1, file, 286, 45, 7944);
+			add_location(div1, file, 310, 28, 8182);
+			attr_dev(button1_1, "class", "btn btn-primary");
+			attr_dev(button1_1, "id", "2");
+			add_location(button1_1, file, 314, 32, 8451);
 			attr_dev(div2, "class", "col");
-			add_location(div2, file, 286, 28, 7927);
-			attr_dev(button2, "class", "btn btn-primary");
-			attr_dev(button2, "id", "3");
-			add_location(button2, file, 287, 45, 8081);
+			add_location(div2, file, 313, 28, 8401);
+			attr_dev(button2_1, "class", "btn btn-primary");
+			attr_dev(button2_1, "id", "3");
+			add_location(button2_1, file, 317, 32, 8670);
 			attr_dev(div3, "class", "col");
-			add_location(div3, file, 287, 28, 8064);
+			add_location(div3, file, 316, 28, 8620);
 			attr_dev(div4, "class", "row");
-			add_location(div4, file, 284, 24, 7744);
-			attr_dev(button3, "class", "btn btn-primary");
-			attr_dev(button3, "id", "4");
-			add_location(button3, file, 290, 45, 8296);
+			add_location(div4, file, 309, 24, 8136);
+			attr_dev(button3_1, "class", "btn btn-primary");
+			attr_dev(button3_1, "id", "4");
+			add_location(button3_1, file, 322, 32, 8968);
 			attr_dev(div5, "class", "col");
-			add_location(div5, file, 290, 28, 8279);
-			attr_dev(button4, "class", "btn btn-primary");
-			attr_dev(button4, "id", "5");
-			add_location(button4, file, 291, 45, 8433);
+			add_location(div5, file, 321, 28, 8918);
+			attr_dev(button4_1, "class", "btn btn-primary");
+			attr_dev(button4_1, "id", "5");
+			add_location(button4_1, file, 325, 32, 9187);
 			attr_dev(div6, "class", "col");
-			add_location(div6, file, 291, 28, 8416);
-			attr_dev(button5, "class", "btn btn-primary");
-			attr_dev(button5, "id", "6");
-			add_location(button5, file, 292, 45, 8570);
+			add_location(div6, file, 324, 28, 9137);
+			attr_dev(button5_1, "class", "btn btn-primary");
+			attr_dev(button5_1, "id", "6");
+			add_location(button5_1, file, 328, 32, 9406);
 			attr_dev(div7, "class", "col");
-			add_location(div7, file, 292, 28, 8553);
+			add_location(div7, file, 327, 28, 9356);
 			attr_dev(div8, "class", "row mt-3");
-			add_location(div8, file, 289, 24, 8228);
+			add_location(div8, file, 320, 24, 8867);
 			attr_dev(div9, "id", "button-container");
 			attr_dev(div9, "class", "mt-3");
-			add_location(div9, file, 283, 20, 7679);
+			add_location(div9, file, 308, 20, 8071);
 			attr_dev(div10, "id", "move-counter");
-			add_location(div10, file, 299, 24, 8953);
+			add_location(div10, file, 336, 24, 9838);
 			attr_dev(div11, "id", "results");
-			add_location(div11, file, 295, 20, 8740);
+			add_location(div11, file, 332, 20, 9625);
 			attr_dev(div12, "id", "game");
-			add_location(div12, file, 281, 16, 7600);
+			add_location(div12, file, 306, 16, 7992);
 			attr_dev(div13, "class", "col-12 col-xl-8 order-xl-2");
-			add_location(div13, file, 280, 12, 7543);
+			add_location(div13, file, 305, 12, 7935);
 			attr_dev(dt0, "class", "col-sm-5");
-			add_location(dt0, file, 306, 24, 9231);
+			add_location(dt0, file, 343, 24, 10116);
 			attr_dev(span0, "id", "correctCount");
-			add_location(span0, file, 307, 45, 9311);
+			add_location(span0, file, 344, 45, 10196);
 			attr_dev(dd0, "class", "col-sm-7");
-			add_location(dd0, file, 307, 24, 9290);
+			add_location(dd0, file, 344, 24, 10175);
 			attr_dev(dt1, "class", "col-sm-5");
-			add_location(dt1, file, 308, 24, 9386);
+			add_location(dt1, file, 345, 24, 10271);
 			attr_dev(span1, "id", "incorrectCount");
-			add_location(span1, file, 309, 45, 9468);
+			add_location(span1, file, 346, 45, 10353);
 			attr_dev(dd1, "class", "col-sm-7");
-			add_location(dd1, file, 309, 24, 9447);
+			add_location(dd1, file, 346, 24, 10332);
 			attr_dev(dl0, "class", "row");
-			add_location(dl0, file, 305, 20, 9190);
+			add_location(dl0, file, 342, 20, 10075);
 			attr_dev(div14, "id", "score-container");
 			attr_dev(div14, "class", "floatingThing");
-			add_location(div14, file, 304, 16, 9121);
-			attr_dev(button6, "id", "startTimedGame");
-			button6.disabled = /*startTimedGameButtonDisabled*/ ctx[4];
-			attr_dev(button6, "class", "btn btn-primary");
-			add_location(button6, file, 313, 20, 9655);
+			add_location(div14, file, 341, 16, 10006);
+			attr_dev(button6_1, "id", "startTimedGame");
+			button6_1.disabled = /*startTimedGameButtonDisabled*/ ctx[4];
+			attr_dev(button6_1, "class", "btn btn-primary");
+			add_location(button6_1, file, 350, 20, 10540);
 			attr_dev(dt2, "class", "col-sm-5");
-			add_location(dt2, file, 318, 24, 9992);
+			add_location(dt2, file, 357, 24, 10926);
 			attr_dev(span2, "id", "highScoreCount");
-			add_location(span2, file, 319, 45, 10075);
+			add_location(span2, file, 358, 45, 11009);
 			attr_dev(dd2, "class", "col-sm-7");
-			add_location(dd2, file, 319, 24, 10054);
+			add_location(dd2, file, 358, 24, 10988);
 			attr_dev(dl1, "class", "row");
-			add_location(dl1, file, 317, 20, 9951);
+			add_location(dl1, file, 356, 20, 10885);
 			attr_dev(div15, "id", "game-controls");
 			attr_dev(div15, "class", "floatingThing");
-			add_location(div15, file, 312, 16, 9588);
+			add_location(div15, file, 349, 16, 10473);
 			attr_dev(div16, "class", "col-12 col-xl-3 order-xl-1");
-			add_location(div16, file, 303, 12, 9064);
+			add_location(div16, file, 340, 12, 9949);
 			attr_dev(div17, "class", "row justify-content-center");
-			add_location(div17, file, 279, 8, 7490);
+			add_location(div17, file, 304, 8, 7882);
 			attr_dev(div18, "class", "container pt-5");
-			add_location(div18, file, 278, 4, 7453);
-			add_location(main, file, 277, 0, 7442);
+			add_location(div18, file, 303, 4, 7845);
+			add_location(main, file, 302, 0, 7834);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3310,22 +3310,28 @@ function create_fragment(ctx) {
 			append_dev(div9, div4);
 			append_dev(div4, div1);
 			append_dev(div1, button0);
+			/*button0_binding*/ ctx[16](button0);
 			append_dev(div4, t2);
 			append_dev(div4, div2);
-			append_dev(div2, button1);
+			append_dev(div2, button1_1);
+			/*button1_1_binding*/ ctx[18](button1_1);
 			append_dev(div4, t4);
 			append_dev(div4, div3);
-			append_dev(div3, button2);
+			append_dev(div3, button2_1);
+			/*button2_1_binding*/ ctx[20](button2_1);
 			append_dev(div9, t6);
 			append_dev(div9, div8);
 			append_dev(div8, div5);
-			append_dev(div5, button3);
+			append_dev(div5, button3_1);
+			/*button3_1_binding*/ ctx[22](button3_1);
 			append_dev(div8, t8);
 			append_dev(div8, div6);
-			append_dev(div6, button4);
+			append_dev(div6, button4_1);
+			/*button4_1_binding*/ ctx[24](button4_1);
 			append_dev(div8, t10);
 			append_dev(div8, div7);
-			append_dev(div7, button5);
+			append_dev(div7, button5_1);
+			/*button5_1_binding*/ ctx[26](button5_1);
 			append_dev(div12, t12);
 			append_dev(div12, div11);
 			if (if_block0) if_block0.m(div11, null);
@@ -3345,8 +3351,8 @@ function create_fragment(ctx) {
 			append_dev(span1, t18);
 			append_dev(div16, t19);
 			append_dev(div16, div15);
-			append_dev(div15, button6);
-			append_dev(button6, t20);
+			append_dev(div15, button6_1);
+			append_dev(button6_1, t20);
 			append_dev(div15, t21);
 			if (if_block1) if_block1.m(div15, null);
 			append_dev(div15, t22);
@@ -3358,13 +3364,13 @@ function create_fragment(ctx) {
 
 			if (!mounted) {
 				dispose = [
-					listen_dev(button0, "click", /*click_handler*/ ctx[9], false),
-					listen_dev(button1, "click", /*click_handler_1*/ ctx[10], false),
-					listen_dev(button2, "click", /*click_handler_2*/ ctx[11], false),
-					listen_dev(button3, "click", /*click_handler_3*/ ctx[12], false),
-					listen_dev(button4, "click", /*click_handler_4*/ ctx[13], false),
-					listen_dev(button5, "click", /*click_handler_5*/ ctx[14], false),
-					listen_dev(button6, "click", /*startTimedGame*/ ctx[7], false)
+					listen_dev(button0, "click", /*click_handler*/ ctx[15], false),
+					listen_dev(button1_1, "click", /*click_handler_1*/ ctx[17], false),
+					listen_dev(button2_1, "click", /*click_handler_2*/ ctx[19], false),
+					listen_dev(button3_1, "click", /*click_handler_3*/ ctx[21], false),
+					listen_dev(button4_1, "click", /*click_handler_4*/ ctx[23], false),
+					listen_dev(button5_1, "click", /*click_handler_5*/ ctx[25], false),
+					listen_dev(button6_1, "click", /*startTimedGame*/ ctx[13], false)
 				];
 
 				mounted = true;
@@ -3388,7 +3394,7 @@ function create_fragment(ctx) {
 			if (dirty[0] & /*incorrectCount*/ 2) set_data_dev(t18, /*incorrectCount*/ ctx[1]);
 
 			if (dirty[0] & /*startTimedGameButtonDisabled*/ 16) {
-				prop_dev(button6, "disabled", /*startTimedGameButtonDisabled*/ ctx[4]);
+				prop_dev(button6_1, "disabled", /*startTimedGameButtonDisabled*/ ctx[4]);
 			}
 
 			if (/*timeRemaining*/ ctx[2] > 0) {
@@ -3413,6 +3419,12 @@ function create_fragment(ctx) {
 				detach_dev(main);
 			}
 
+			/*button0_binding*/ ctx[16](null);
+			/*button1_1_binding*/ ctx[18](null);
+			/*button2_1_binding*/ ctx[20](null);
+			/*button3_1_binding*/ ctx[22](null);
+			/*button4_1_binding*/ ctx[24](null);
+			/*button5_1_binding*/ ctx[26](null);
 			if (if_block0) if_block0.d();
 			if (if_block1) if_block1.d();
 			mounted = false;
@@ -3429,17 +3441,6 @@ function create_fragment(ctx) {
 	});
 
 	return block;
-}
-
-function initKeyboardShortcuts() {
-	window.addEventListener('keydown', event => {
-		const key = event.key;
-
-		if (key >= '1' && key <= '6') {
-			// Trigger click event on corresponding button
-			document.getElementById(key).click();
-		}
-	});
 }
 
 function getRandomIndex(max) {
@@ -3500,6 +3501,12 @@ function instance($$self, $$props, $$invalidate) {
 	let startTimedGameButtonDisabled = false;
 	let resultText = '';
 	let resultTextClass = '';
+	let button1;
+	let button2;
+	let button3;
+	let button4;
+	let button5;
+	let button6;
 
 	onMount(() => {
 		initConfig();
@@ -3519,6 +3526,36 @@ function instance($$self, $$props, $$invalidate) {
 		reset();
 		newPosition();
 	});
+
+	function getButton(id) {
+		switch (id) {
+			case 1:
+				return button1;
+			case 2:
+				return button2;
+			case 3:
+				return button3;
+			case 4:
+				return button4;
+			case 5:
+				return button5;
+			case 6:
+				return button6;
+		}
+	}
+
+	function initKeyboardShortcuts() {
+		window.addEventListener('keydown', event => {
+			const key = event.key;
+
+			if (key >= '1' && key <= '6') {
+				// Trigger click event on corresponding button
+				const button = getButton(parseInt(key));
+
+				button.click();
+			}
+		});
+	}
 
 	function startTimedGame() {
 		reset();
@@ -3590,7 +3627,7 @@ function instance($$self, $$props, $$invalidate) {
 
 		const number = parseInt(id);
 		const minimum = getMinimumMovesForCurrentPosition();
-		const button = document.getElementById(id);
+		const button = getButton(number);
 
 		if (number === minimum) {
 			$$invalidate(0, correctCount += 1);
@@ -3733,11 +3770,58 @@ function instance($$self, $$props, $$invalidate) {
 	});
 
 	const click_handler = () => processButton('1');
+
+	function button0_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button1 = $$value;
+			$$invalidate(7, button1);
+		});
+	}
+
 	const click_handler_1 = () => processButton('2');
+
+	function button1_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button2 = $$value;
+			$$invalidate(8, button2);
+		});
+	}
+
 	const click_handler_2 = () => processButton('3');
+
+	function button2_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button3 = $$value;
+			$$invalidate(9, button3);
+		});
+	}
+
 	const click_handler_3 = () => processButton('4');
+
+	function button3_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button4 = $$value;
+			$$invalidate(10, button4);
+		});
+	}
+
 	const click_handler_4 = () => processButton('5');
+
+	function button4_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button5 = $$value;
+			$$invalidate(11, button5);
+		});
+	}
+
 	const click_handler_5 = () => processButton('6');
+
+	function button5_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button6 = $$value;
+			$$invalidate(12, button6);
+		});
+	}
 
 	$$self.$capture_state = () => ({
 		onMount,
@@ -3763,6 +3847,13 @@ function instance($$self, $$props, $$invalidate) {
 		startTimedGameButtonDisabled,
 		resultText,
 		resultTextClass,
+		button1,
+		button2,
+		button3,
+		button4,
+		button5,
+		button6,
+		getButton,
 		initKeyboardShortcuts,
 		startTimedGame,
 		endGame,
@@ -3801,6 +3892,12 @@ function instance($$self, $$props, $$invalidate) {
 		if ('startTimedGameButtonDisabled' in $$props) $$invalidate(4, startTimedGameButtonDisabled = $$props.startTimedGameButtonDisabled);
 		if ('resultText' in $$props) $$invalidate(5, resultText = $$props.resultText);
 		if ('resultTextClass' in $$props) $$invalidate(6, resultTextClass = $$props.resultTextClass);
+		if ('button1' in $$props) $$invalidate(7, button1 = $$props.button1);
+		if ('button2' in $$props) $$invalidate(8, button2 = $$props.button2);
+		if ('button3' in $$props) $$invalidate(9, button3 = $$props.button3);
+		if ('button4' in $$props) $$invalidate(10, button4 = $$props.button4);
+		if ('button5' in $$props) $$invalidate(11, button5 = $$props.button5);
+		if ('button6' in $$props) $$invalidate(12, button6 = $$props.button6);
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -3815,14 +3912,26 @@ function instance($$self, $$props, $$invalidate) {
 		startTimedGameButtonDisabled,
 		resultText,
 		resultTextClass,
+		button1,
+		button2,
+		button3,
+		button4,
+		button5,
+		button6,
 		startTimedGame,
 		processButton,
 		click_handler,
+		button0_binding,
 		click_handler_1,
+		button1_1_binding,
 		click_handler_2,
+		button2_1_binding,
 		click_handler_3,
+		button3_1_binding,
 		click_handler_4,
-		click_handler_5
+		button4_1_binding,
+		click_handler_5,
+		button5_1_binding
 	];
 }
 

@@ -25,6 +25,13 @@
   let resultText = '';
   let resultTextClass = '';
 
+  let button1;
+  let button2;
+  let button3;
+  let button4;
+  let button5;
+  let button6;
+
   onMount(() => {
     initConfig();
 
@@ -46,12 +53,30 @@
     newPosition();
   });
 
+  function getButton(id) {
+    switch (id) {
+      case 1:
+        return button1;
+      case 2:
+        return button2;
+      case 3:
+        return button3;
+      case 4:
+        return button4;
+      case 5:
+        return button5;
+      case 6:
+        return button6;
+    }
+  }
+
   function initKeyboardShortcuts() {
     window.addEventListener('keydown', (event) => {
       const key = event.key;
       if (key >= '1' && key <= '6') {
         // Trigger click event on corresponding button
-        document.getElementById(key).click();
+        const button = getButton(parseInt(key));
+        button.click();
       }
     });
   }
@@ -128,7 +153,7 @@
     }
     const number = parseInt(id);
     const minimum = getMinimumMovesForCurrentPosition();
-    const button = document.getElementById(id);
+    const button = getButton(number);
     if (number === minimum) {
       correctCount += 1;
       animateElement(button, 'correctAnswer');
@@ -283,14 +308,26 @@
                     <div id="board"></div>
                     <div id="button-container" class="mt-3">
                         <div class="row">
-                            <div class="col"><button class="btn btn-primary" id="1" on:click={() => processButton('1')}>1</button></div>
-                            <div class="col"><button class="btn btn-primary" id="2" on:click={() => processButton('2')}>2</button></div>
-                            <div class="col"><button class="btn btn-primary" id="3" on:click={() => processButton('3')}>3</button></div>
+                            <div class="col">
+                                <button class="btn btn-primary" id="1" on:click={() => processButton('1')} bind:this={button1}>1</button>
+                            </div>
+                            <div class="col">
+                                <button class="btn btn-primary" id="2" on:click={() => processButton('2')} bind:this={button2}>2</button>
+                            </div>
+                            <div class="col">
+                                <button class="btn btn-primary" id="3" on:click={() => processButton('3')} bind:this={button3} >3</button>
+                            </div>
                         </div>
                         <div class="row mt-3">
-                            <div class="col"><button class="btn btn-primary" id="4" on:click={() => processButton('4')}>4</button></div>
-                            <div class="col"><button class="btn btn-primary" id="5" on:click={() => processButton('5')}>5</button></div>
-                            <div class="col"><button class="btn btn-primary" id="6" on:click={() => processButton('6')}>6</button></div>
+                            <div class="col">
+                                <button class="btn btn-primary" id="4" on:click={() => processButton('4')} bind:this={button4}>4</button>
+                            </div>
+                            <div class="col">
+                                <button class="btn btn-primary" id="5" on:click={() => processButton('5')} bind:this={button5}>5</button>
+                            </div>
+                            <div class="col">
+                                <button class="btn btn-primary" id="6" on:click={() => processButton('6')} bind:this={button6}>6</button>
+                            </div>
                         </div>
                     </div>
                     <div id="results">
@@ -311,7 +348,9 @@
                     </dl>
                 </div>
                 <div id="game-controls" class="floatingThing">
-                    <button id="startTimedGame" disabled={startTimedGameButtonDisabled} on:click={startTimedGame} class="btn btn-primary">Start Timed Game</button>
+                    <button id="startTimedGame" disabled={startTimedGameButtonDisabled} on:click={startTimedGame}
+                            class="btn btn-primary">Start Timed Game
+                    </button>
                     {#if timeRemaining > 0}
                         <div id="timer">{timeRemaining}</div>
                     {/if}
