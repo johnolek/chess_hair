@@ -54,12 +54,6 @@
         document.getElementById(key).click();
       }
     });
-    // Add click event listener to each button
-    for (let i = 1; i <= 6; i++) {
-      document.getElementById(String(i)).addEventListener('click', (event) => {
-        processButton(event.target.id);
-      });
-    }
   }
 
   function startTimedGame() {
@@ -289,14 +283,14 @@
                     <div id="board"></div>
                     <div id="button-container" class="mt-3">
                         <div class="row">
-                            <div class="col"><button class="btn btn-primary" id="1">1</button></div>
-                            <div class="col"><button class="btn btn-primary" id="2">2</button></div>
-                            <div class="col"><button class="btn btn-primary" id="3">3</button></div>
+                            <div class="col"><button class="btn btn-primary" id="1" on:click={() => processButton('1')}>1</button></div>
+                            <div class="col"><button class="btn btn-primary" id="2" on:click={() => processButton('2')}>2</button></div>
+                            <div class="col"><button class="btn btn-primary" id="3" on:click={() => processButton('3')}>3</button></div>
                         </div>
                         <div class="row mt-3">
-                            <div class="col"><button class="btn btn-primary" id="4">4</button></div>
-                            <div class="col"><button class="btn btn-primary" id="5">5</button></div>
-                            <div class="col"><button class="btn btn-primary" id="6">6</button></div>
+                            <div class="col"><button class="btn btn-primary" id="4" on:click={() => processButton('4')}>4</button></div>
+                            <div class="col"><button class="btn btn-primary" id="5" on:click={() => processButton('5')}>5</button></div>
+                            <div class="col"><button class="btn btn-primary" id="6" on:click={() => processButton('6')}>6</button></div>
                         </div>
                     </div>
                     <div id="results">
