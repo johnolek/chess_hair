@@ -1,59 +1,20 @@
 <% content_for :title, 'Knight Moves' %>
 <% content_for :head do %>
-  <%= javascript_import_module_tag 'bootstrap' %>
-  <%= javascript_import_module_tag 'src/knight_moves_game' %>
+  <%= javascript_import_module_tag 'dist/knight_moves' %>
   <%= stylesheet_link_tag 'knight_moves.css' %>
   <%= stylesheet_link_tag 'bootstrap.min.css' %>
   <%= stylesheet_link_tag 'chessground.base.css' %>
   <%= stylesheet_link_tag 'chessground.brown.css' %>
   <%= stylesheet_link_tag 'chessground.cburnett.css' %>
   <%= stylesheet_link_tag 'lichess_theme_light.css' %>
-
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script type=module>
+    import KnightMoves from 'dist/knight_moves';
+    document.addEventListener('DOMContentLoaded', () => {
+      new KnightMoves({
+        target: document.getElementById('main'),
+      })
+    });
+  </script>
 <% end %>
 
-<div class="container pt-5">
-  <div class="row justify-content-center">
-    <div class="col-12 col-xl-8 order-xl-2">
-      <div id="game">
-        <div id="board"></div>
-        <div id="button-container" class="mt-3">
-          <div class="row">
-            <div class="col"><button class="btn btn-primary" id="1">1</button></div>
-            <div class="col"><button class="btn btn-primary" id="2">2</button></div>
-            <div class="col"><button class="btn btn-primary" id="3">3</button></div>
-          </div>
-          <div class="row mt-3">
-            <div class="col"><button class="btn btn-primary" id="4">4</button></div>
-            <div class="col"><button class="btn btn-primary" id="5">5</button></div>
-            <div class="col"><button class="btn btn-primary" id="6">6</button></div>
-          </div>
-        </div>
-        <div id="results">
-          <div id="resultText"></div>
-          <div id="move-counter"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-xl-3 order-xl-1">
-      <div id="score-container" class="floatingThing">
-        <dl class="row">
-          <dt class="col-sm-5">Correct:</dt>
-          <dd class="col-sm-7"><span id="correctCount">0</span></dd>
-          <dt class="col-sm-5">Incorrect:</dt>
-          <dd class="col-sm-7"><span id="incorrectCount">0</span></dd>
-        </dl>
-      </div>
-      <div id="game-controls" class="floatingThing">
-        <button id="startTimedGame" class="btn btn-primary">Start Timed Game</button>
-        <div id="timer"></div>
-        <dl class="row">
-          <dt class="col-sm-5">High Score:</dt>
-          <dd class="col-sm-7"><span id="highScoreCount">0</span></dd>
-        </dl>
-      </div>
-    </div>
-  </div>
-</div>
+<div id="main"></div>

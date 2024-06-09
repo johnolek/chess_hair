@@ -1,7 +1,7 @@
 import LichessPgnViewer from 'lichess-pgn-viewer';
 import Config from "./local_config";
 import { ConfigForm } from "./local_config.js";
-import { boardOptions, pieceSetOptions} from "./board/options";
+import { boardOptions, pieceSetOptions } from "./board/options";
 
 const config = new Config();
 const configForm = new ConfigForm(config);
@@ -26,8 +26,8 @@ pieceSetOption.addObserver(set => {
 const titleAnimationSpeedOption = config.getConfigOption('Title animation speed in ms', 250);
 const titleAnimationLength = config.getConfigOption('Title animation length in ms', 3000);
 
-const firstTitleAnimationText = config.getConfigOption('Title animation 1',  '♘♞♘ New Move ♘♞♘');
-const secondTitleAnimationText = config.getConfigOption('Title animation 2',   '♞♘♞ New Move ♞♘♞');
+const firstTitleAnimationText = config.getConfigOption('Title animation 1', '♘♞♘ New Move ♘♞♘');
+const secondTitleAnimationText = config.getConfigOption('Title animation 2', '♞♘♞ New Move ♞♘♞');
 
 const themeOption = config.getConfigOption('Theme', 'system');
 themeOption.setAllowedValues(['system', 'dark', 'light']);
@@ -123,11 +123,11 @@ function animateTitle(finalTitle) {
     const string1 = firstTitleAnimationText.getValue();
     const string2 = secondTitleAnimationText.getValue();
 
-    let animationInterval = setInterval(function() {
+    let animationInterval = setInterval(function () {
         document.title = document.title === string1 ? string2 : string1;
     }, titleAnimationSpeedOption.getValue());
 
-    setTimeout(function() {
+    setTimeout(function () {
         clearInterval(animationInterval);
         document.title = finalTitle;
     }, titleAnimationLength.getValue());

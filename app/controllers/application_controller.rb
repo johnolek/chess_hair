@@ -9,7 +9,6 @@ class ApplicationController < ActionController::Base
     }
   end
 
-
   private
 
   def directory_names(path)
