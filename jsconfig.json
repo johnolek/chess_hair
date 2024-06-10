@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "src/*": ["app/javascript/src/*"]
+    }
+  },
+  "include": ["app/javascript/**/*", "**/*.svelte"]
+}
