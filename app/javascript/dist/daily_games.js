@@ -7242,25 +7242,25 @@ const file = "svelte/DailyGames.svelte";
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[22] = list[i];
+	child_ctx[23] = list[i];
 	return child_ctx;
 }
 
 function get_each_context_1(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[22] = list[i];
+	child_ctx[23] = list[i];
 	return child_ctx;
 }
 
-// (106:0) {#each myGames as game}
+// (103:0) {#each myGames as game}
 function create_each_block_1(ctx) {
 	let dailygame;
 	let current;
 
 	dailygame = new DailyGame({
 			props: {
-				game: /*game*/ ctx[22],
-				myColor: /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
+				game: /*game*/ ctx[23],
+				myColor: /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7277,9 +7277,9 @@ function create_each_block_1(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const dailygame_changes = {};
-			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[22];
+			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[23];
 
-			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
+			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7303,22 +7303,22 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(106:0) {#each myGames as game}",
+		source: "(103:0) {#each myGames as game}",
 		ctx
 	});
 
 	return block;
 }
 
-// (111:0) {#each theirGames as game}
+// (108:0) {#each theirGames as game}
 function create_each_block(ctx) {
 	let dailygame;
 	let current;
 
 	dailygame = new DailyGame({
 			props: {
-				game: /*game*/ ctx[22],
-				myColor: /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
+				game: /*game*/ ctx[23],
+				myColor: /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7335,9 +7335,9 @@ function create_each_block(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const dailygame_changes = {};
-			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[22];
+			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[23];
 
-			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
+			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7361,7 +7361,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(111:0) {#each theirGames as game}",
+		source: "(108:0) {#each theirGames as game}",
 		ctx
 	});
 
@@ -7435,11 +7435,11 @@ function create_fragment(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 102, 0, 3448);
-			add_location(h1, file, 103, 0, 3523);
-			add_location(h20, file, 104, 0, 3544);
-			add_location(hr, file, 108, 0, 3679);
-			add_location(h21, file, 109, 0, 3685);
+			add_location(link, file, 99, 0, 3415);
+			add_location(h1, file, 100, 0, 3490);
+			add_location(h20, file, 101, 0, 3511);
+			add_location(hr, file, 105, 0, 3646);
+			add_location(h21, file, 106, 0, 3652);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7592,11 +7592,6 @@ function create_fragment(ctx) {
 	return block;
 }
 
-function knightSymbols(count) {
-	const knight = '♘';
-	return knight.repeat(count);
-}
-
 function instance($$self, $$props, $$invalidate) {
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('DailyGames', slots, []);
@@ -7647,10 +7642,14 @@ function instance($$self, $$props, $$invalidate) {
 		setTimeout(
 			function () {
 				clearInterval(animationInterval);
-				$$invalidate(4, title = finalTitle);
+				setTitle(finalTitle);
 			},
 			titleAnimationLength.getValue()
 		);
+	}
+
+	function setTitle(newTitle) {
+		$$invalidate(4, title = `${newTitle} | Daily Games`);
 	}
 
 	async function updateGames() {
@@ -7714,8 +7713,8 @@ function instance($$self, $$props, $$invalidate) {
 		firstTitleAnimationText,
 		secondTitleAnimationText,
 		themeOption,
-		knightSymbols,
 		animateTitle,
+		setTitle,
 		updateGames,
 		fetchGames,
 		filterMyTurnGames,
@@ -7743,7 +7742,7 @@ function instance($$self, $$props, $$invalidate) {
 		if ($$self.$$.dirty & /*previousGameCount, gameCount*/ 96) {
 			{
 				if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
-					const newTitle = `${knightSymbols(gameCount.length)}`;
+					const newTitle = ('♘').repeat(gameCount);
 					animateTitle(newTitle);
 				}
 			}

@@ -15,7 +15,7 @@
 
   $: {
     if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
-      const newTitle = `${knightSymbols(gameCount.length)}`;
+      const newTitle = '♘'.repeat(gameCount);
       animateTitle(newTitle);
     }
   }
@@ -41,17 +41,11 @@
 
   const titleAnimationSpeedOption = config.getConfigOption('Title animation speed in ms', 250);
   const titleAnimationLength = config.getConfigOption('Title animation length in ms', 3000);
-
   const firstTitleAnimationText = config.getConfigOption('Title animation 1', '♘♞♘ New Move ♘♞♘');
   const secondTitleAnimationText = config.getConfigOption('Title animation 2', '♞♘♞ New Move ♞♘♞');
 
   const themeOption = config.getConfigOption('Theme', 'system');
   themeOption.setAllowedValues(['system', 'dark', 'light']);
-
-  function knightSymbols(count) {
-    const knight = '♘';
-    return knight.repeat(count);
-  }
 
   function animateTitle(finalTitle) {
     const string1 = firstTitleAnimationText.getValue();
@@ -63,8 +57,12 @@
 
     setTimeout(function () {
       clearInterval(animationInterval);
-      title = finalTitle;
+      setTitle(finalTitle);
     }, titleAnimationLength.getValue());
+  }
+
+  function setTitle(newTitle) {
+    title = `${newTitle} | Daily Games`;
   }
 
   async function updateGames() {
@@ -91,7 +89,6 @@
     const myTurnUrls = myTurnGames.map((game) => game.url);
     return games.filter((game) => !myTurnUrls.includes(game.url));
   }
-
 
   onMount(async () => {
     await updateGames();
