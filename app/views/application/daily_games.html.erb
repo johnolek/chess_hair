@@ -16,11 +16,14 @@
   <%= stylesheet_link_tag 'lichess_site' %>
   <%= stylesheet_link_tag 'lichess_theme_light' %>
   <%= stylesheet_link_tag 'lichess_pgn_viewer' %>
-  <%= javascript_import_module_tag 'src/daily_games' %>
+  <script type=module>
+    import DailyGames from 'dist/daily_games';
+    document.addEventListener('DOMContentLoaded', () => {
+      new DailyGames({
+        target: document.getElementById('main'),
+      })
+    });
+  </script>
 <% end %>
-<h1>Daily Games</h1>
-<h2>My Turn</h2>
-<div id="gameLinks_myTurn"></div>
-<hr/>
-<h2>Their Turn</h2>
-<div id="gameLinks_theirTurn"></div>
+
+<div id="main"></div>
