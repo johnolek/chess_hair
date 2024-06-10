@@ -1,3 +1,6 @@
+import Config, { ConfigForm } from 'src/local_config';
+import { boardOptions, pieceSetOptions } from 'src/board/options';
+
 /** @returns {void} */
 function noop() {}
 
@@ -774,187 +777,6 @@ class SvelteComponentDev extends SvelteComponent {
 if (typeof window !== 'undefined')
 	// @ts-ignore
 	(window.__svelte || (window.__svelte = { v: new Set() })).v.add(PUBLIC_VERSION);
-
-class Config {
-    constructor(namespace = 'config') {
-        this.namespace = namespace;
-        this.configOptions = {};
-        if (!localStorage.getItem(this.namespace)) {
-            localStorage.setItem(this.namespace, JSON.stringify({}));
-        }
-    }
-
-    /**
-     *
-     * @param key
-     * @param defaultValue
-     * @returns ConfigOption
-     */
-    getConfigOption(key, defaultValue = null) {
-        if (this.configOptions[key]) {
-            return this.configOptions[key];
-        }
-        this.configOptions[key] = new ConfigOption(key, this, defaultValue);
-        return this.configOptions[key];
-    }
-
-    get(key) {
-        const storedData = JSON.parse(localStorage.getItem(this.namespace));
-        if (key in storedData) {
-            return storedData[key];
-        }
-        return null;
-    }
-
-    set(key, value) {
-        if (typeof key !== 'string') {
-            throw new Error('Key must be a string');
-        }
-        const storedData = JSON.parse(localStorage.getItem(this.namespace));
-        storedData[key] = value;
-        localStorage.setItem(this.namespace, JSON.stringify(storedData));
-    }
-
-}
-
-class ConfigOption {
-    constructor(key, config, defaultValue) {
-        this.key = key;
-        /** @var Config */
-        this.config = config;
-        this.defaultValue = defaultValue;
-        this.allowedValues = [];
-        this.observers = [];
-        this.type = 'text';
-        if (typeof this.defaultValue === 'number') {
-            this.type = 'number';
-        }
-    }
-
-    getType() {
-        return this.type;
-    }
-
-    setAllowedValues(array) {
-        this.allowedValues = array;
-    }
-
-    getAllowedValues() {
-        return this.allowedValues;
-    }
-
-    getValue() {
-        const storedValue = this.config.get(this.key);
-
-        if (storedValue !== null && storedValue !== "") {
-            if (this.type === 'number') {
-                return parseInt(storedValue);
-            }
-            return storedValue;
-        }
-
-        this.config.set(this.key, this.defaultValue);
-        return this.defaultValue;
-    }
-
-    setValue(newValue) {
-        this.config.set(this.key, newValue);
-    }
-
-    getLabel() {
-        return this.key;
-    }
-
-    addObserver(callback) {
-        this.observers.push(callback);
-    }
-
-    getObservers() {
-        return this.observers;
-    }
-}
-
-class ConfigForm {
-    constructor(config) {
-        this.config = config;
-    }
-
-    addLinkToDOM(text = null) {
-        this.link = this.generateConfigLink(text);
-        document.body.appendChild(this.link);
-    }
-
-    generateConfigLink(linkText = null) {
-        const link = document.createElement('a');
-        link.textContent = linkText || 'config';
-        link.style.position = 'absolute';
-        link.style.top = '0';
-        link.style.right = '0';
-        link.addEventListener('click', (event) => {
-            event.preventDefault();
-            link.style.display = 'none';
-            this.form = this.generateForm();
-            this.form.style.position = 'absolute';
-            this.form.style.top = '0';
-            this.form.style.right = '0';
-            document.body.appendChild(this.form);
-        });
-        return link;
-    }
-
-    generateForm() {
-        const form = document.createElement('form');
-        for (const key in this.config.configOptions) {
-            const option = this.config.getConfigOption(key);
-            const container = document.createElement('div');
-            const label = document.createElement('label');
-            label.textContent = option.getLabel();
-            container.appendChild(label);
-            let input;
-            if (option.getAllowedValues().length > 0) {
-                input = document.createElement('select');
-                option.getAllowedValues().forEach(value => {
-                    const selectOption = document.createElement('option');
-                    selectOption.value = value;
-                    selectOption.textContent = value;
-                    selectOption.selected = value === option.getValue();
-                    input.appendChild(selectOption);
-                });
-            } else {
-                input = document.createElement('input');
-                input.type = option.getType();
-            }
-            input.name = option.getLabel();
-            input.value = option.getValue();
-            container.appendChild(input);
-            form.appendChild(container);
-            input.addEventListener('change', (event) => {
-                (option.getObservers()).forEach((callback) => callback(event.target.value));
-            });
-        }
-        const submitButton = document.createElement('input');
-        submitButton.type = 'submit';
-        submitButton.value = 'Submit';
-        form.appendChild(submitButton);
-        form.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const formData = new FormData(form);
-            for (const [key, value] of formData.entries()) {
-                const option = this.config.getConfigOption(key);
-                option.setValue(value);
-            }
-            form.parentNode.removeChild(form);
-            this.link.style.display = null;
-        });
-        form.style.backgroundColor = 'black';
-        form.style.zIndex = '99999';
-        return form;
-    }
-}
-
-const boardOptions = ["blue","blue2","blue3","brown","canvas","cocoa","green","grey","horsey","ic","leather","maple","maple2","marble","metal","newspaper","olive","parchment","pink","purple","wood","wood2","wood3","wood4"];
-
-const pieceSetOptions =  ["alpha","anarcandy","caliente","california","cardinal","cburnett","celtic","chess7","chessnut","companion","disguised","dubrovny","fantasy","fresca","gioco","governor","horsey","icpieces","kiwen-suwi","kosal","leipzig","letter","libra","maestro","merida","mono","mpchess","pirouetti","pixel","reillycraig","riohacha","shapes","spatial","staunty","tatiana"];
 
 const FILE_NAMES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANK_NAMES = ['1', '2', '3', '4', '5', '6', '7', '8'];
@@ -7268,14 +7090,14 @@ function create_fragment$1(ctx) {
 			div0 = element("div");
 			attr_dev(a, "href", a_href_value = /*game*/ ctx[0].url);
 			attr_dev(a, "target", "_blank");
-			add_location(a, file$1, 21, 2, 478);
+			add_location(a, file$1, 24, 2, 540);
 			attr_dev(div0, "class", "is2d");
 			attr_dev(div0, "id", div0_id_value = /*game*/ ctx[0].url);
-			add_location(div0, file$1, 22, 2, 529);
+			add_location(div0, file$1, 25, 2, 591);
 			attr_dev(div1, "class", "game");
 			attr_dev(div1, "id", div1_id_value = /*game*/ ctx[0].url);
 			attr_dev(div1, "data-last-activity", div1_data_last_activity_value = parseInt(/*game*/ ctx[0].last_activity));
-			add_location(div1, file$1, 20, 0, 393);
+			add_location(div1, file$1, 23, 0, 455);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7340,7 +7162,8 @@ function instance$1($$self, $$props, $$invalidate) {
 				pgn: game.pgn,
 				initialPly: 'last',
 				orientation: myColor,
-				scrollToMove: false
+				scrollToMove: false,
+				chessground: { moveable: myColor }
 			});
 		});
 	});
@@ -7419,25 +7242,25 @@ const file = "svelte/DailyGames.svelte";
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[18] = list[i];
+	child_ctx[22] = list[i];
 	return child_ctx;
 }
 
 function get_each_context_1(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[18] = list[i];
+	child_ctx[22] = list[i];
 	return child_ctx;
 }
 
-// (119:0) {#each myGames as game}
+// (106:0) {#each myGames as game}
 function create_each_block_1(ctx) {
 	let dailygame;
 	let current;
 
 	dailygame = new DailyGame({
 			props: {
-				game: /*game*/ ctx[18],
-				myColor: /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
+				game: /*game*/ ctx[22],
+				myColor: /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7454,9 +7277,9 @@ function create_each_block_1(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const dailygame_changes = {};
-			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[18];
+			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[22];
 
-			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
+			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7480,22 +7303,22 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(119:0) {#each myGames as game}",
+		source: "(106:0) {#each myGames as game}",
 		ctx
 	});
 
 	return block;
 }
 
-// (124:0) {#each theirGames as game}
+// (111:0) {#each theirGames as game}
 function create_each_block(ctx) {
 	let dailygame;
 	let current;
 
 	dailygame = new DailyGame({
 			props: {
-				game: /*game*/ ctx[18],
-				myColor: /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
+				game: /*game*/ ctx[22],
+				myColor: /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7512,9 +7335,9 @@ function create_each_block(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const dailygame_changes = {};
-			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[18];
+			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[22];
 
-			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
+			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[22].white.includes(/*playerName*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7538,7 +7361,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(124:0) {#each theirGames as game}",
+		source: "(111:0) {#each theirGames as game}",
 		ctx
 	});
 
@@ -7612,11 +7435,11 @@ function create_fragment(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 115, 0, 4038);
-			add_location(h1, file, 116, 0, 4113);
-			add_location(h20, file, 117, 0, 4134);
-			add_location(hr, file, 121, 0, 4269);
-			add_location(h21, file, 122, 0, 4275);
+			add_location(link, file, 102, 0, 3448);
+			add_location(h1, file, 103, 0, 3523);
+			add_location(h20, file, 104, 0, 3544);
+			add_location(hr, file, 108, 0, 3679);
+			add_location(h21, file, 109, 0, 3685);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7830,32 +7653,32 @@ function instance($$self, $$props, $$invalidate) {
 		);
 	}
 
+	async function updateGames() {
+		const games = await fetchGames();
+		$$invalidate(0, myGames = filterMyTurnGames(games));
+		$$invalidate(1, theirGames = filterTheirTurnGames(games));
+		$$invalidate(6, previousGameCount = gameCount);
+		$$invalidate(5, gameCount = myGames.length);
+		setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
+	}
+
+	async function fetchGames() {
+		const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
+		const data = await response.json();
+		return data.games;
+	}
+
+	function filterMyTurnGames(games) {
+		return games.filter(game => game.turn === 'white' && game.white.includes(playerName) || game.turn === 'black' && game.black.includes(playerName));
+	}
+
+	function filterTheirTurnGames(games) {
+		const myTurnGames = filterMyTurnGames(games);
+		const myTurnUrls = myTurnGames.map(game => game.url);
+		return games.filter(game => !myTurnUrls.includes(game.url));
+	}
+
 	onMount(async () => {
-		async function fetchGames() {
-			const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
-			const data = await response.json();
-			return data.games;
-		}
-
-		function filterMyTurnGames(games) {
-			return games.filter(game => game.turn === 'white' && game.white.includes(playerName) || game.turn === 'black' && game.black.includes(playerName));
-		}
-
-		function filterTheirTurnGames(games) {
-			const myTurnGames = filterMyTurnGames(games);
-			const myTurnUrls = myTurnGames.map(game => game.url);
-			return games.filter(game => !myTurnUrls.includes(game.url));
-		}
-
-		async function updateGames() {
-			const games = await fetchGames();
-			$$invalidate(0, myGames = filterMyTurnGames(games));
-			$$invalidate(6, previousGameCount = gameCount);
-			$$invalidate(5, gameCount = myGames.length);
-			$$invalidate(1, theirGames = filterTheirTurnGames(games));
-			setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
-		}
-
 		await updateGames();
 		configForm.addLinkToDOM('config');
 		document.body.dataset.board = boardOption.getValue();
@@ -7892,7 +7715,11 @@ function instance($$self, $$props, $$invalidate) {
 		secondTitleAnimationText,
 		themeOption,
 		knightSymbols,
-		animateTitle
+		animateTitle,
+		updateGames,
+		fetchGames,
+		filterMyTurnGames,
+		filterTheirTurnGames
 	});
 
 	$$self.$inject_state = $$props => {

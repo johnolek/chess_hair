@@ -13,6 +13,9 @@
         initialPly: 'last',
         orientation: myColor,
         scrollToMove: false,
+        chessground: {
+          moveable: myColor,
+        }
       });
     });
   });

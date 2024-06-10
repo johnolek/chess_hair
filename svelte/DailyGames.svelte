@@ -1,8 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import Config from "../app/javascript/src/local_config";
-  import { ConfigForm } from "../app/javascript/src/local_config";
-  import { boardOptions, pieceSetOptions } from "../app/javascript/src/board/options";
+  import Config from "src/local_config";
+  import { ConfigForm } from "src/local_config";
+  import { boardOptions, pieceSetOptions } from "src/board/options";
   import DailyGame from "./DailyGame.svelte";
 
   let myGames = [];
@@ -10,7 +10,6 @@
   let title = 'Daily Games';
   $: document.title = title;
   let pieceSet;
-
   let gameCount = null;
   let previousGameCount = null;
 
@@ -68,45 +67,33 @@
     }, titleAnimationLength.getValue());
   }
 
+  async function updateGames() {
+    const games = await fetchGames();
+    myGames = filterMyTurnGames(games);
+    theirGames = filterTheirTurnGames(games);
+    previousGameCount = gameCount;
+    gameCount = myGames.length;
+    setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
+  }
+
+  async function fetchGames() {
+    const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
+    const data = await response.json();
+    return data.games;
+  }
+
+  function filterMyTurnGames(games) {
+    return games.filter(game => (game.turn === 'white' && game.white.includes(playerName)) || (game.turn === 'black' && game.black.includes(playerName)));
+  }
+
+  function filterTheirTurnGames(games) {
+    const myTurnGames = filterMyTurnGames(games)
+    const myTurnUrls = myTurnGames.map((game) => game.url);
+    return games.filter((game) => !myTurnUrls.includes(game.url));
+  }
+
+
   onMount(async () => {
-    async function fetchGames() {
-      const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
-      const data = await response.json();
-      return data.games;
-    }
-
-    function filterMyTurnGames(games) {
-      return games.filter(game => (game.turn === 'white' && game.white.includes(playerName)) || (game.turn === 'black' && game.black.includes(playerName)));
-    }
-
-    function sortGamesByMostRecentActivity(games) {
-      return games.sort((a, b) => b.last_activity - a.last_activity);
-    }
-
-    function filterTheirTurnGames(games) {
-      const myTurnGames = filterMyTurnGames(games)
-      const myTurnUrls = myTurnGames.map((game) => game.url);
-      return games.filter((game) => !myTurnUrls.includes(game.url));
-    }
-
-    function removeAllUndesiredLinks() {
-      const analysisLinks = [...document.querySelectorAll('.lpv__menu__analysis')];
-      const practiceLinks = [...document.querySelectorAll('.lpv__menu__practice')];
-      const allLinks = [...analysisLinks, ...practiceLinks];
-      allLinks.forEach((link) => {
-        link.parentNode.removeChild(link);
-      });
-    }
-
-    async function updateGames() {
-      const games = await fetchGames();
-      myGames = filterMyTurnGames(games);
-      previousGameCount = gameCount;
-      gameCount = myGames.length;
-      theirGames = filterTheirTurnGames(games);
-      setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
-    }
-
     await updateGames();
     configForm.addLinkToDOM('config');
     document.body.dataset.board = boardOption.getValue();
