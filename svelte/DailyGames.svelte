@@ -7,8 +7,21 @@
 
   let myGames = [];
   let theirGames = [];
-  const playerName = document.body.dataset.chessDotComUsername;
+  let title = 'Daily Games';
+  $: document.title = title;
+  let pieceSet;
 
+  let gameCount = null;
+  let previousGameCount = null;
+
+  $: {
+    if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
+      const newTitle = `${knightSymbols(gameCount.length)}`;
+      animateTitle(newTitle);
+    }
+  }
+
+  const playerName = document.body.dataset.chessDotComUsername;
   const config = new Config();
   const configForm = new ConfigForm(config);
   const updateFrequencyOption = config.getConfigOption('Update frequency in seconds', 5);
@@ -22,11 +35,10 @@
 
   const pieceSetOption = config.getConfigOption('Piece set', 'merida');
   pieceSetOption.setAllowedValues(pieceSetOptions);
-  const spriteStylesheet = document.getElementById('piece-sprite');
   pieceSetOption.addObserver(set => {
-    spriteStylesheet.href = `/piece-css/${set}.css`;
-    pieceSetOption.setValue(set);
+    pieceSet = set;
   });
+  pieceSet = pieceSetOption.getValue();
 
   const titleAnimationSpeedOption = config.getConfigOption('Title animation speed in ms', 250);
   const titleAnimationLength = config.getConfigOption('Title animation length in ms', 3000);
@@ -37,8 +49,24 @@
   const themeOption = config.getConfigOption('Theme', 'system');
   themeOption.setAllowedValues(['system', 'dark', 'light']);
 
+  function knightSymbols(count) {
+    const knight = '♘';
+    return knight.repeat(count);
+  }
 
-  let gameCount = null;
+  function animateTitle(finalTitle) {
+    const string1 = firstTitleAnimationText.getValue();
+    const string2 = secondTitleAnimationText.getValue();
+
+    let animationInterval = setInterval(function () {
+      title = title === string1 ? string2 : string1;
+    }, titleAnimationSpeedOption.getValue());
+
+    setTimeout(function () {
+      clearInterval(animationInterval);
+      title = finalTitle;
+    }, titleAnimationLength.getValue());
+  }
 
   onMount(async () => {
     async function fetchGames() {
@@ -61,24 +89,6 @@
       return games.filter((game) => !myTurnUrls.includes(game.url));
     }
 
-    function generateGameLinks(games, container) {
-      if (games.length === 0) {
-        return;
-      }
-      games.forEach(game => {
-        const lastActivity = game.last_activity;
-        const url = game.url;
-        const existingGame = document.getElementById(url);
-        if (existingGame) {
-          if (parseInt(existingGame.dataset.lastActivity) === lastActivity) {
-            return;
-          } else {
-            existingGame.parentNode.removeChild(existingGame);
-          }
-        }
-      });
-    }
-
     function removeAllUndesiredLinks() {
       const analysisLinks = [...document.querySelectorAll('.lpv__menu__analysis')];
       const practiceLinks = [...document.querySelectorAll('.lpv__menu__practice')];
@@ -88,64 +98,29 @@
       });
     }
 
-    function animateTitle(finalTitle) {
-      const string1 = firstTitleAnimationText.getValue();
-      const string2 = secondTitleAnimationText.getValue();
-
-      let animationInterval = setInterval(function () {
-        document.title = document.title === string1 ? string2 : string1;
-      }, titleAnimationSpeedOption.getValue());
-
-      setTimeout(function () {
-        clearInterval(animationInterval);
-        document.title = finalTitle;
-      }, titleAnimationLength.getValue());
-    }
-
-    function updateGameCount(games) {
-      const count = games.length;
-      if (gameCount === count) {
-        return;
-      }
-
-      const newTitle = `${count} ${chessSymbols(count)}`;
-
-      if (gameCount === null || count < gameCount) {
-        document.title = newTitle
-      } else {
-        animateTitle(newTitle);
-      }
-      gameCount = count;
-    }
-
-    function chessSymbols(count) {
-      const knight = '♘';
-      return knight.repeat(count);
-    }
-
     async function updateGames() {
       const games = await fetchGames();
       myGames = filterMyTurnGames(games);
+      previousGameCount = gameCount;
+      gameCount = myGames.length;
       theirGames = filterTheirTurnGames(games);
       setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
     }
 
     await updateGames();
     configForm.addLinkToDOM('config');
-    spriteStylesheet.href = `/piece-css/${pieceSetOption.getValue()}.css`;
     document.body.dataset.board = boardOption.getValue();
   });
 </script>
 
-<main>
-  <h1>Daily Games</h1>
-  <h2>My Turn</h2>
-  {#each myGames as game}
-    <DailyGame {game} myColor="{game.white.includes(playerName) ? 'white' : 'black'}"/>
-  {/each}
-  <hr/>
-  <h2>Their Turn</h2>
-  {#each theirGames as game}
-    <DailyGame {game} myColor="{game.white.includes(playerName) ? 'white' : 'black'}"/>
-  {/each}
-</main>
+<link id="piece-sprite" href="/piece-css/{pieceSet}.css" rel="stylesheet">
+<h1>Daily Games</h1>
+<h2>My Turn</h2>
+{#each myGames as game}
+  <DailyGame {game} myColor="{game.white.includes(playerName) ? 'white' : 'black'}"/>
+{/each}
+<hr/>
+<h2>Their Turn</h2>
+{#each theirGames as game}
+  <DailyGame {game} myColor="{game.white.includes(playerName) ? 'white' : 'black'}"/>
+{/each}

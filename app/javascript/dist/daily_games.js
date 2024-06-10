@@ -103,6 +103,12 @@ function space() {
 }
 
 /**
+ * @returns {Text} */
+function empty() {
+	return text('');
+}
+
+/**
  * @param {Element} node
  * @param {string} attribute
  * @param {string} [value]
@@ -7413,25 +7419,25 @@ const file = "svelte/DailyGames.svelte";
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[15] = list[i];
+	child_ctx[18] = list[i];
 	return child_ctx;
 }
 
 function get_each_context_1(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[15] = list[i];
+	child_ctx[18] = list[i];
 	return child_ctx;
 }
 
-// (143:2) {#each myGames as game}
+// (119:0) {#each myGames as game}
 function create_each_block_1(ctx) {
 	let dailygame;
 	let current;
 
 	dailygame = new DailyGame({
 			props: {
-				game: /*game*/ ctx[15],
-				myColor: /*game*/ ctx[15].white.includes(/*playerName*/ ctx[2])
+				game: /*game*/ ctx[18],
+				myColor: /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7448,9 +7454,9 @@ function create_each_block_1(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const dailygame_changes = {};
-			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[15];
+			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[18];
 
-			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[15].white.includes(/*playerName*/ ctx[2])
+			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7474,22 +7480,22 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(143:2) {#each myGames as game}",
+		source: "(119:0) {#each myGames as game}",
 		ctx
 	});
 
 	return block;
 }
 
-// (148:2) {#each theirGames as game}
+// (124:0) {#each theirGames as game}
 function create_each_block(ctx) {
 	let dailygame;
 	let current;
 
 	dailygame = new DailyGame({
 			props: {
-				game: /*game*/ ctx[15],
-				myColor: /*game*/ ctx[15].white.includes(/*playerName*/ ctx[2])
+				game: /*game*/ ctx[18],
+				myColor: /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7506,9 +7512,9 @@ function create_each_block(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const dailygame_changes = {};
-			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[15];
+			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[18];
 
-			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[15].white.includes(/*playerName*/ ctx[2])
+			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[18].white.includes(/*playerName*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7532,7 +7538,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(148:2) {#each theirGames as game}",
+		source: "(124:0) {#each theirGames as game}",
 		ctx
 	});
 
@@ -7540,16 +7546,19 @@ function create_each_block(ctx) {
 }
 
 function create_fragment(ctx) {
-	let main;
+	let link;
+	let link_href_value;
+	let t0;
 	let h1;
-	let t1;
+	let t2;
 	let h20;
-	let t3;
 	let t4;
-	let hr;
 	let t5;
+	let hr;
+	let t6;
 	let h21;
-	let t7;
+	let t8;
+	let each1_anchor;
 	let current;
 	let each_value_1 = ensure_array_like_dev(/*myGames*/ ctx[0]);
 	let each_blocks_1 = [];
@@ -7575,67 +7584,78 @@ function create_fragment(ctx) {
 
 	const block = {
 		c: function create() {
-			main = element("main");
+			link = element("link");
+			t0 = space();
 			h1 = element("h1");
 			h1.textContent = "Daily Games";
-			t1 = space();
+			t2 = space();
 			h20 = element("h2");
 			h20.textContent = "My Turn";
-			t3 = space();
+			t4 = space();
 
 			for (let i = 0; i < each_blocks_1.length; i += 1) {
 				each_blocks_1[i].c();
 			}
 
-			t4 = space();
-			hr = element("hr");
 			t5 = space();
+			hr = element("hr");
+			t6 = space();
 			h21 = element("h2");
 			h21.textContent = "Their Turn";
-			t7 = space();
+			t8 = space();
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				each_blocks[i].c();
 			}
 
-			add_location(h1, file, 140, 2, 4780);
-			add_location(h20, file, 141, 2, 4803);
-			add_location(hr, file, 145, 2, 4946);
-			add_location(h21, file, 146, 2, 4954);
-			add_location(main, file, 139, 0, 4771);
+			each1_anchor = empty();
+			attr_dev(link, "id", "piece-sprite");
+			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
+			attr_dev(link, "rel", "stylesheet");
+			add_location(link, file, 115, 0, 4038);
+			add_location(h1, file, 116, 0, 4113);
+			add_location(h20, file, 117, 0, 4134);
+			add_location(hr, file, 121, 0, 4269);
+			add_location(h21, file, 122, 0, 4275);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, main, anchor);
-			append_dev(main, h1);
-			append_dev(main, t1);
-			append_dev(main, h20);
-			append_dev(main, t3);
+			insert_dev(target, link, anchor);
+			insert_dev(target, t0, anchor);
+			insert_dev(target, h1, anchor);
+			insert_dev(target, t2, anchor);
+			insert_dev(target, h20, anchor);
+			insert_dev(target, t4, anchor);
 
 			for (let i = 0; i < each_blocks_1.length; i += 1) {
 				if (each_blocks_1[i]) {
-					each_blocks_1[i].m(main, null);
+					each_blocks_1[i].m(target, anchor);
 				}
 			}
 
-			append_dev(main, t4);
-			append_dev(main, hr);
-			append_dev(main, t5);
-			append_dev(main, h21);
-			append_dev(main, t7);
+			insert_dev(target, t5, anchor);
+			insert_dev(target, hr, anchor);
+			insert_dev(target, t6, anchor);
+			insert_dev(target, h21, anchor);
+			insert_dev(target, t8, anchor);
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				if (each_blocks[i]) {
-					each_blocks[i].m(main, null);
+					each_blocks[i].m(target, anchor);
 				}
 			}
 
+			insert_dev(target, each1_anchor, anchor);
 			current = true;
 		},
 		p: function update(ctx, [dirty]) {
-			if (dirty & /*myGames, playerName*/ 5) {
+			if (!current || dirty & /*pieceSet*/ 4 && link_href_value !== (link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css")) {
+				attr_dev(link, "href", link_href_value);
+			}
+
+			if (dirty & /*myGames, playerName*/ 9) {
 				each_value_1 = ensure_array_like_dev(/*myGames*/ ctx[0]);
 				let i;
 
@@ -7649,7 +7669,7 @@ function create_fragment(ctx) {
 						each_blocks_1[i] = create_each_block_1(child_ctx);
 						each_blocks_1[i].c();
 						transition_in(each_blocks_1[i], 1);
-						each_blocks_1[i].m(main, t4);
+						each_blocks_1[i].m(t5.parentNode, t5);
 					}
 				}
 
@@ -7662,7 +7682,7 @@ function create_fragment(ctx) {
 				check_outros();
 			}
 
-			if (dirty & /*theirGames, playerName*/ 6) {
+			if (dirty & /*theirGames, playerName*/ 10) {
 				each_value = ensure_array_like_dev(/*theirGames*/ ctx[1]);
 				let i;
 
@@ -7676,7 +7696,7 @@ function create_fragment(ctx) {
 						each_blocks[i] = create_each_block(child_ctx);
 						each_blocks[i].c();
 						transition_in(each_blocks[i], 1);
-						each_blocks[i].m(main, null);
+						each_blocks[i].m(each1_anchor.parentNode, each1_anchor);
 					}
 				}
 
@@ -7719,7 +7739,18 @@ function create_fragment(ctx) {
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(main);
+				detach_dev(link);
+				detach_dev(t0);
+				detach_dev(h1);
+				detach_dev(t2);
+				detach_dev(h20);
+				detach_dev(t4);
+				detach_dev(t5);
+				detach_dev(hr);
+				detach_dev(t6);
+				detach_dev(h21);
+				detach_dev(t8);
+				detach_dev(each1_anchor);
 			}
 
 			destroy_each(each_blocks_1, detaching);
@@ -7738,11 +7769,20 @@ function create_fragment(ctx) {
 	return block;
 }
 
+function knightSymbols(count) {
+	const knight = '♘';
+	return knight.repeat(count);
+}
+
 function instance($$self, $$props, $$invalidate) {
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('DailyGames', slots, []);
 	let myGames = [];
 	let theirGames = [];
+	let title = 'Daily Games';
+	let pieceSet;
+	let gameCount = null;
+	let previousGameCount = null;
 	const playerName = document.body.dataset.chessDotComUsername;
 	const config = new Config();
 	const configForm = new ConfigForm(config);
@@ -7757,20 +7797,38 @@ function instance($$self, $$props, $$invalidate) {
 
 	const pieceSetOption = config.getConfigOption('Piece set', 'merida');
 	pieceSetOption.setAllowedValues(pieceSetOptions);
-	const spriteStylesheet = document.getElementById('piece-sprite');
 
 	pieceSetOption.addObserver(set => {
-		spriteStylesheet.href = `/piece-css/${set}.css`;
-		pieceSetOption.setValue(set);
+		$$invalidate(2, pieceSet = set);
 	});
 
+	pieceSet = pieceSetOption.getValue();
 	const titleAnimationSpeedOption = config.getConfigOption('Title animation speed in ms', 250);
 	const titleAnimationLength = config.getConfigOption('Title animation length in ms', 3000);
 	const firstTitleAnimationText = config.getConfigOption('Title animation 1', '♘♞♘ New Move ♘♞♘');
 	const secondTitleAnimationText = config.getConfigOption('Title animation 2', '♞♘♞ New Move ♞♘♞');
 	const themeOption = config.getConfigOption('Theme', 'system');
 	themeOption.setAllowedValues(['system', 'dark', 'light']);
-	let gameCount = null;
+
+	function animateTitle(finalTitle) {
+		const string1 = firstTitleAnimationText.getValue();
+		const string2 = secondTitleAnimationText.getValue();
+
+		let animationInterval = setInterval(
+			function () {
+				$$invalidate(4, title = title === string1 ? string2 : string1);
+			},
+			titleAnimationSpeedOption.getValue()
+		);
+
+		setTimeout(
+			function () {
+				clearInterval(animationInterval);
+				$$invalidate(4, title = finalTitle);
+			},
+			titleAnimationLength.getValue()
+		);
+	}
 
 	onMount(async () => {
 		async function fetchGames() {
@@ -7792,13 +7850,14 @@ function instance($$self, $$props, $$invalidate) {
 		async function updateGames() {
 			const games = await fetchGames();
 			$$invalidate(0, myGames = filterMyTurnGames(games));
+			$$invalidate(6, previousGameCount = gameCount);
+			$$invalidate(5, gameCount = myGames.length);
 			$$invalidate(1, theirGames = filterTheirTurnGames(games));
 			setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
 		}
 
 		await updateGames();
 		configForm.addLinkToDOM('config');
-		spriteStylesheet.href = `/piece-css/${pieceSetOption.getValue()}.css`;
 		document.body.dataset.board = boardOption.getValue();
 	});
 
@@ -7817,32 +7876,54 @@ function instance($$self, $$props, $$invalidate) {
 		DailyGame,
 		myGames,
 		theirGames,
+		title,
+		pieceSet,
+		gameCount,
+		previousGameCount,
 		playerName,
 		config,
 		configForm,
 		updateFrequencyOption,
 		boardOption,
 		pieceSetOption,
-		spriteStylesheet,
 		titleAnimationSpeedOption,
 		titleAnimationLength,
 		firstTitleAnimationText,
 		secondTitleAnimationText,
 		themeOption,
-		gameCount
+		knightSymbols,
+		animateTitle
 	});
 
 	$$self.$inject_state = $$props => {
 		if ('myGames' in $$props) $$invalidate(0, myGames = $$props.myGames);
 		if ('theirGames' in $$props) $$invalidate(1, theirGames = $$props.theirGames);
-		if ('gameCount' in $$props) gameCount = $$props.gameCount;
+		if ('title' in $$props) $$invalidate(4, title = $$props.title);
+		if ('pieceSet' in $$props) $$invalidate(2, pieceSet = $$props.pieceSet);
+		if ('gameCount' in $$props) $$invalidate(5, gameCount = $$props.gameCount);
+		if ('previousGameCount' in $$props) $$invalidate(6, previousGameCount = $$props.previousGameCount);
 	};
 
 	if ($$props && "$$inject" in $$props) {
 		$$self.$inject_state($$props.$$inject);
 	}
 
-	return [myGames, theirGames, playerName];
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*title*/ 16) {
+			document.title = title;
+		}
+
+		if ($$self.$$.dirty & /*previousGameCount, gameCount*/ 96) {
+			{
+				if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
+					const newTitle = `${knightSymbols(gameCount.length)}`;
+					animateTitle(newTitle);
+				}
+			}
+		}
+	};
+
+	return [myGames, theirGames, pieceSet, playerName, title, gameCount, previousGameCount];
 }
 
 class DailyGames extends SvelteComponentDev {
