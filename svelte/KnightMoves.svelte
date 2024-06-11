@@ -1,9 +1,9 @@
 <script>
   import { onMount } from 'svelte';
   import { Chessground } from "chessground";
-  import { knightMovesData } from '../app/javascript/src/knight_moves_data';
-  import Config from "../app/javascript/src/local_config";
-  import { ConfigForm } from "../app/javascript/src/local_config";
+  import { knightMovesData } from 'src/knight_moves_data';
+  import Config from "src/local_config";
+  import { ConfigForm } from "src/local_config";
 
   let chessground;
   let jsonData = knightMovesData;
