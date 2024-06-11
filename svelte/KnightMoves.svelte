@@ -10,8 +10,13 @@
   let positionData = null;
   let correctCount = 0;
   let incorrectCount = 0;
+
   let gameRunning = false;
   let timeRemaining = null;
+  let timeElapsed = null;
+  let gameStartTime = null;
+
+  let progressClass = 'is-success';
   let animating = false;
 
   let highScore = 0;
@@ -25,6 +30,10 @@
   let resultText = '';
   let resultTextClass = '';
 
+  let boardWidth = 512;
+  let boardHeight = 512;
+  let padding = 80;
+
   let button1;
   let button2;
   let button3;
@@ -32,10 +41,46 @@
   let button5;
   let button6;
 
+  let mainColumn;
+  let boardContainer;
+  let boardWrapper;
+
+  $: {
+    if (gameRunning) {
+      const percentDone = timeElapsed / 60;
+      if (percentDone < 0.7) {
+        progressClass = 'is-success';
+      } else if (percentDone < 0.9) {
+        progressClass = 'is-warning';
+      } else {
+        progressClass = 'is-danger';
+      }
+    } else {
+      progressClass = 'is-success';
+    }
+  }
+
+  $: {
+    const totalHeight = window.innerHeight;
+    const remainingHeight = totalHeight - boardHeight;
+
+    if (button1) {
+      const maxHeight = button1.offsetWidth;
+      const calculatedHeight = (remainingHeight / 2) - padding;
+      const buttonHeight = Math.min(maxHeight, calculatedHeight);
+      button1.style.height = `${buttonHeight}px`;
+      button2.style.height = `${buttonHeight}px`;
+      button3.style.height = `${buttonHeight}px`;
+      button4.style.height = `${buttonHeight}px`;
+      button5.style.height = `${buttonHeight}px`;
+      button6.style.height = `${buttonHeight}px`;
+    }
+  }
+
   onMount(() => {
     initConfig();
 
-    chessground = Chessground(document.getElementById('board'), {
+    chessground = Chessground(boardContainer, {
       fen: '8/8/8/8/8/8/8/8',
       animation: {
         enabled: true,
@@ -48,10 +93,23 @@
       selectable: false,
     });
 
+    resize();
+    window.addEventListener('resize', resize);
+
     initKeyboardShortcuts();
-    reset();
+    resize();
     newPosition();
   });
+
+  function resize() {
+    const width = boardWrapper.offsetWidth;
+    const totalHeight = window.innerHeight;
+    const minButtonHeight = 30;
+    const maxHeight = totalHeight - (2 * minButtonHeight) - padding;
+    const boardDimensions = Math.min(width, maxHeight);
+    boardHeight = boardDimensions;
+    boardWidth = boardDimensions;
+  }
 
   function getButton(id) {
     switch (id) {
@@ -86,6 +144,8 @@
     startTimedGameButtonDisabled = true;
     gameRunning = true;
     timeRemaining = 60;
+    timeElapsed = 0;
+    gameStartTime = performance.now() / 1000;
     newPosition();
     setTimeout(() => {
       endGame();
@@ -96,6 +156,12 @@
       }
       timeRemaining -= 1;
     }, 1000);
+    const progressInterval = setInterval(() => {
+      if (timeRemaining === 0) {
+        clearInterval(progressInterval);
+      }
+      timeElapsed = (performance.now() / 1000) - gameStartTime;
+    }, 10);
   }
 
   function endGame() {
@@ -112,6 +178,7 @@
 
     gameRunning = false;
     timeRemaining = null;
+    timeElapsed = null;
     correctCount = 0;
     incorrectCount = 0;
     startTimedGameButtonDisabled = false;
@@ -300,66 +367,89 @@
   }
 </script>
 
-<main>
-    <div class="container pt-5">
-        <div class="row justify-content-center">
-            <div class="col-12 col-xl-8 order-xl-2">
-                <div id="game">
-                    <div id="board"></div>
-                    <div id="button-container" class="mt-3">
-                        <div class="row">
-                            <div class="col">
-                                <button class="btn btn-primary" id="1" on:click={() => processButton('1')} bind:this={button1}>1</button>
-                            </div>
-                            <div class="col">
-                                <button class="btn btn-primary" id="2" on:click={() => processButton('2')} bind:this={button2}>2</button>
-                            </div>
-                            <div class="col">
-                                <button class="btn btn-primary" id="3" on:click={() => processButton('3')} bind:this={button3} >3</button>
-                            </div>
-                        </div>
-                        <div class="row mt-3">
-                            <div class="col">
-                                <button class="btn btn-primary" id="4" on:click={() => processButton('4')} bind:this={button4}>4</button>
-                            </div>
-                            <div class="col">
-                                <button class="btn btn-primary" id="5" on:click={() => processButton('5')} bind:this={button5}>5</button>
-                            </div>
-                            <div class="col">
-                                <button class="btn btn-primary" id="6" on:click={() => processButton('6')} bind:this={button6}>6</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="results">
-                        {#if resultText !== ''}
-                            <div id="resultText" class={resultTextClass}>{resultText}</div>
-                        {/if}
-                        <div id="move-counter"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-12 col-xl-3 order-xl-1">
-                <div id="score-container" class="floatingThing">
-                    <dl class="row">
-                        <dt class="col-sm-5">Correct:</dt>
-                        <dd class="col-sm-7"><span id="correctCount">{correctCount}</span></dd>
-                        <dt class="col-sm-5">Incorrect:</dt>
-                        <dd class="col-sm-7"><span id="incorrectCount">{incorrectCount}</span></dd>
-                    </dl>
-                </div>
-                <div id="game-controls" class="floatingThing">
-                    <button id="startTimedGame" disabled={startTimedGameButtonDisabled} on:click={startTimedGame}
-                            class="btn btn-primary">Start Timed Game
-                    </button>
-                    {#if timeRemaining > 0}
-                        <div id="timer">{timeRemaining}</div>
-                    {/if}
-                    <dl class="row">
-                        <dt class="col-sm-5">High Score:</dt>
-                        <dd class="col-sm-7"><span id="highScoreCount">{highScore}</span></dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
+<link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet">
+
+<div class="columns">
+  <div class="column is-3-desktop">
+    <div class="box score-container">
+      <div class="container has-text-centered">
+        <h2 class="is-size-5">Correct</h2>
+        <div class="score is-size-2">{correctCount}</div>
+        <h2 class="is-size-5">Incorrect</h2>
+        <div class="score is-size-2">{incorrectCount}</div>
+      </div>
     </div>
-</main>
+    <div class="box">
+      <div class="container has-text-centered">
+        <h2 class="is-size-5">High Score</h2>
+        <div class="score is-size-2">{highScore}</div>
+        <button id="startTimedGame" disabled={startTimedGameButtonDisabled} on:click={startTimedGame}
+                class="button is-primary">Start Timed Game
+        </button>
+        {#if timeRemaining > 0}
+          <div id="timer">{timeRemaining}</div>
+        {/if}
+      </div>
+    </div>
+  </div>
+
+
+  <div class="column is-6-desktop" bind:this={mainColumn}>
+    <div class="board-wrapper mb-3" bind:this={boardWrapper}>
+      <div class="board-container is2d" bind:this={boardContainer}
+           style="width: {boardWidth}px; height: {boardHeight}px; position: relative;">
+      </div>
+    </div>
+
+    {#if gameRunning}
+      <progress class="progress {progressClass}" value="{timeElapsed}" max="60"></progress>
+    {/if}
+
+    <div class="fixed-grid has-3-cols" style="width: {boardWidth}px">
+      <div class="grid">
+        <div class="cell">
+          <button class="button is-primary" id="1" on:click={() => processButton('1')} bind:this={button1}>1</button>
+        </div>
+        <div class="cell">
+          <button class="button is-primary" id="2" on:click={() => processButton('2')} bind:this={button2}>2</button>
+        </div>
+        <div class="cell">
+          <button class="button is-primary" id="3" on:click={() => processButton('3')} bind:this={button3}>3</button>
+        </div>
+        <div class="cell">
+          <button class="button is-primary" id="4" on:click={() => processButton('4')} bind:this={button4}>4</button>
+        </div>
+        <div class="cell">
+          <button class="button is-primary" id="5" on:click={() => processButton('5')} bind:this={button5}>5</button>
+        </div>
+        <div class="cell">
+          <button class="button is-primary" id="6" on:click={() => processButton('6')} bind:this={button6}>6</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="column is-3-desktop">
+    <div class="box">
+      {#if resultText !== ''}
+        <div id="resultText" class={resultTextClass}>{resultText}</div>
+      {/if}
+    </div>
+  </div>
+
+</div>
+
+<style>
+  .cell button {
+    width: 100%;
+    display: inline-block;
+  }
+  .board-wrapper {
+    width: 100%;
+  }
+</style>
+
+
+
+
+
