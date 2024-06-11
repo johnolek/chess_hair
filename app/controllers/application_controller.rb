@@ -1,15 +1,21 @@
 class ApplicationController < ActionController::Base
+  before_action :set_default_body_attributes
+
   def knight_moves
   end
 
   def daily_games
     @username = params[:username].gsub(/[^a-zA-Z0-9_-]/, '')
-    @body_attributes = {
-      'chess-dot-com-username': @username
-    }
+    @body_attributes['chess-dot-com-username'] = @username
   end
 
   private
+
+  def set_default_body_attributes
+    @body_attributes = {
+      board: 'brown'
+    }
+  end
 
   def directory_names(path)
     Dir.glob(path).select do |path|
