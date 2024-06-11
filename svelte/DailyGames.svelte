@@ -18,6 +18,9 @@
       const newTitle = '♘'.repeat(gameCount);
       animateTitle(newTitle);
     }
+    if (gameCount === 0) {
+      setTitle('Not your turn');
+    }
   }
 
   const playerName = document.body.dataset.chessDotComUsername;
