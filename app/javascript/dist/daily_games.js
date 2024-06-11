@@ -7252,7 +7252,7 @@ function get_each_context_1(ctx, list, i) {
 	return child_ctx;
 }
 
-// (103:0) {#each myGames as game}
+// (106:0) {#each myGames as game}
 function create_each_block_1(ctx) {
 	let dailygame;
 	let current;
@@ -7303,14 +7303,14 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(103:0) {#each myGames as game}",
+		source: "(106:0) {#each myGames as game}",
 		ctx
 	});
 
 	return block;
 }
 
-// (108:0) {#each theirGames as game}
+// (111:0) {#each theirGames as game}
 function create_each_block(ctx) {
 	let dailygame;
 	let current;
@@ -7361,7 +7361,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(108:0) {#each theirGames as game}",
+		source: "(111:0) {#each theirGames as game}",
 		ctx
 	});
 
@@ -7435,11 +7435,11 @@ function create_fragment(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 99, 0, 3415);
-			add_location(h1, file, 100, 0, 3490);
-			add_location(h20, file, 101, 0, 3511);
-			add_location(hr, file, 105, 0, 3646);
-			add_location(h21, file, 106, 0, 3652);
+			add_location(link, file, 102, 0, 3481);
+			add_location(h1, file, 103, 0, 3556);
+			add_location(h20, file, 104, 0, 3577);
+			add_location(hr, file, 108, 0, 3712);
+			add_location(h21, file, 109, 0, 3718);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7744,6 +7744,10 @@ function instance($$self, $$props, $$invalidate) {
 				if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
 					const newTitle = ('♘').repeat(gameCount);
 					animateTitle(newTitle);
+				}
+
+				if (gameCount === 0) {
+					setTitle('Not your turn');
 				}
 			}
 		}
