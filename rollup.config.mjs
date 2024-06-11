@@ -12,6 +12,7 @@ const sharedPlugins = [
       dev: true,
     },
     include: './svelte/**/*.svelte',
+    emitCss: false
   }),
   resolve({
     browser: true,
