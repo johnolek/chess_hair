@@ -1,13 +1,7 @@
 <% content_for :title, 'Knight Moves' %>
 <% content_for :head do %>
   <%= javascript_import_module_tag 'dist/knight_moves' %>
-  <%= stylesheet_link_tag 'knight_moves.css' %>
-  <%= stylesheet_link_tag 'bootstrap.min.css' %>
-  <%= stylesheet_link_tag 'chessground.base.css' %>
-  <%= stylesheet_link_tag 'chessground.brown.css' %>
-  <%= stylesheet_link_tag 'chessground.cburnett.css' %>
-  <%= stylesheet_link_tag 'lichess_theme_light.css' %>
-  <script type=module>
+  <script type="module">
     import KnightMoves from 'dist/knight_moves';
     document.addEventListener('DOMContentLoaded', () => {
       new KnightMoves({
