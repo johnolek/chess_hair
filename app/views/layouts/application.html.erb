@@ -10,10 +10,15 @@
   <%= javascript_importmap_tags %>
   <%= stylesheet_link_tag 'theme_all' %>
   <%= stylesheet_link_tag 'lichess_site' %>
+  <%= stylesheet_link_tag 'bulma.min.css' %>
   <%= yield :head %>
 </head>
 
 <body <%= tag.attributes(body_data_attributes(@body_attributes || {})) %>>
-  <%= yield %>
+<section class="section">
+  <div class="container">
+    <%= yield %>
+  </div>
+</section>
 </body>
 </html>
