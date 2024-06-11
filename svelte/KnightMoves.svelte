@@ -18,6 +18,7 @@
 
   let progressClass = 'is-success';
   let animating = false;
+  let arrowsShown;
 
   let highScore = 0;
   let maxPathsToDisplayOption;
@@ -255,6 +256,7 @@
     if (maxPathsToShow < 1) {
       maxPathsToShow = 1;
     }
+    maxPathsToShow = 100;
 
     validPaths.forEach((path, index) => {
       if (index + 1 > maxPathsToShow) {
@@ -309,6 +311,7 @@
   }
 
   function clearDrawings() {
+    arrowsShown = false;
     chessground.set({
       drawable: {
         shapes: []
@@ -391,6 +394,39 @@
         {/if}
       </div>
     </div>
+    <div class="box">
+      <div class="container has-text-centered">
+        <div class="block">
+          <button class="button is-info" disabled={arrowsShown || gameRunning} on:click|preventDefault={() => {
+          if (positionData) {
+            arrowsShown = true;
+            const correctPaths = positionData.paths;
+            const randomlySorted = sortRandomly(correctPaths);
+            drawCorrectArrows(randomlySorted);
+          }
+        }}>Show answer
+          </button>
+        </div>
+
+        {#if arrowsShown}
+          <div class="block has-text-left">
+            <div>
+              Minimum # of moves: {getMinimumMovesForCurrentPosition()}
+            </div>
+            <div>
+              Total unique paths: {positionData.paths.length}
+            </div>
+          </div>
+        {/if}
+        <div class="block">
+          <button class="button is-link" on:click={() => {
+          clearDrawings();
+        }}>
+            Clear
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
 
@@ -444,6 +480,7 @@
     width: 100%;
     display: inline-block;
   }
+
   .board-wrapper {
     width: 100%;
   }
