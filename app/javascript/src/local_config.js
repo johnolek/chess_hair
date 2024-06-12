@@ -70,6 +70,9 @@ class ConfigOption {
         const storedValue = this.config.get(this.key);
 
         if (storedValue !== null && storedValue !== "") {
+            if (this.getAllowedValues().length > 0 && !this.getAllowedValues().includes(storedValue)) {
+                return this.defaultValue;
+            }
             if (this.type === 'number') {
                 return parseInt(storedValue);
             }
