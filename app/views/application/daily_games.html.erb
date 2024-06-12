@@ -1,19 +1,6 @@
 <%= content_for :title, 'Loading games...' %>
 <%= content_for :head do %>
   <% if @has_username %>
-    <style>
-      .game {
-        margin-right: 20px;
-        display: inline-block;
-        width: 600px;
-        max-width: 90vw;
-
-      }
-
-      body {
-        margin: 10px 20px;
-      }
-    </style>
     <%= stylesheet_link_tag 'lichess_pgn_viewer' %>
     <script type=module>
       import DailyGames from 'dist/daily_games';

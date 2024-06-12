@@ -25,3 +25,13 @@
   <a href={game.url} target="_blank">chess.com</a>
   <div class="is2d" id={game.url} bind:this={boardDiv}></div>
 </div>
+
+<style>
+  .game {
+    margin-right: 20px;
+    display: inline-block;
+    width: 600px;
+    max-width: 90vw;
+
+  }
+</style>
