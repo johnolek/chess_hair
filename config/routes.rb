@@ -5,7 +5,7 @@ Rails.application.routes.draw do
   get 'knight_moves', to: 'application#knight_moves'
   get 'knight-moves', to: 'application#knight_moves'
 
-  get 'daily-games/:username', to: 'application#daily_games'
+  get 'daily-games', to: 'application#daily_games'
 
   root "application#knight_moves"
 end

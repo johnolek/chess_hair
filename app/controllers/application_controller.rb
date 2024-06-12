@@ -5,8 +5,12 @@ class ApplicationController < ActionController::Base
   end
 
   def daily_games
-    @username = params[:username].gsub(/[^a-zA-Z0-9_-]/, '')
-    @body_attributes['chess-dot-com-username'] = @username
+    username_regex = /[^a-zA-Z0-9_-]/
+    @chess_com_username = params[:chess_com_username].gsub(username_regex, '') if params[:chess_com_username]
+    @lichess_username = params[:lichess_username].gsub(username_regex, '') if params[:lichess_username]
+    @body_attributes['chess-dot-com-username'] = @chess_com_username unless @chess_com_username.blank?
+    @body_attributes['lichess-username'] = @lichess_username unless @lichess_username.blank?
+    @has_username = (@chess_com_username.present? || @lichess_username.present?)
   end
 
   private
