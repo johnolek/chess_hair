@@ -256,7 +256,6 @@
     if (maxPathsToShow < 1) {
       maxPathsToShow = 1;
     }
-    maxPathsToShow = 100;
 
     validPaths.forEach((path, index) => {
       if (index + 1 > maxPathsToShow) {
