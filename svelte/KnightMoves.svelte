@@ -417,14 +417,14 @@
               Total unique paths: {positionData.paths.length}
             </div>
           </div>
+          <div class="block">
+            <button class="button is-link" on:click={() => {
+              clearDrawings();
+            }}>
+              Clear
+            </button>
+          </div>
         {/if}
-        <div class="block">
-          <button class="button is-link" on:click={() => {
-          clearDrawings();
-        }}>
-            Clear
-          </button>
-        </div>
       </div>
     </div>
   </div>
