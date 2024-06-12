@@ -18,7 +18,7 @@
 
   let progressClass = 'is-success';
   let animating = false;
-  let arrowsShown;
+  let answerShown;
 
   let highScore = 0;
   let maxPathsToDisplayOption;
@@ -310,7 +310,7 @@
   }
 
   function clearDrawings() {
-    arrowsShown = false;
+    answerShown = false;
     chessground.set({
       drawable: {
         shapes: []
@@ -372,64 +372,7 @@
 <link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet">
 
 <div class="columns">
-  <div class="column is-3-desktop">
-    <div class="box score-container">
-      <div class="container has-text-centered">
-        <h2 class="is-size-5">Correct</h2>
-        <div class="score is-size-2">{correctCount}</div>
-        <h2 class="is-size-5">Incorrect</h2>
-        <div class="score is-size-2">{incorrectCount}</div>
-      </div>
-    </div>
-    <div class="box">
-      <div class="container has-text-centered">
-        <h2 class="is-size-5">High Score</h2>
-        <div class="score is-size-2">{highScore}</div>
-        <button id="startTimedGame" disabled={startTimedGameButtonDisabled} on:click={startTimedGame}
-                class="button is-primary">Start Timed Game
-        </button>
-        {#if timeRemaining > 0}
-          <div id="timer">{timeRemaining}</div>
-        {/if}
-      </div>
-    </div>
-    <div class="box">
-      <div class="container has-text-centered">
-        <div class="block">
-          <button class="button is-info" disabled={arrowsShown || gameRunning} on:click|preventDefault={() => {
-          if (positionData) {
-            arrowsShown = true;
-            const correctPaths = positionData.paths;
-            const randomlySorted = sortRandomly(correctPaths);
-            drawCorrectArrows(randomlySorted);
-          }
-        }}>Show answer
-          </button>
-        </div>
-
-        {#if arrowsShown}
-          <div class="block has-text-left">
-            <div>
-              Minimum # of moves: {getMinimumMovesForCurrentPosition()}
-            </div>
-            <div>
-              Total unique paths: {positionData.paths.length}
-            </div>
-          </div>
-          <div class="block">
-            <button class="button is-link" on:click={() => {
-              clearDrawings();
-            }}>
-              Clear
-            </button>
-          </div>
-        {/if}
-      </div>
-    </div>
-  </div>
-
-
-  <div class="column is-6-desktop" bind:this={mainColumn}>
+  <div class="column column2 is-6-desktop" bind:this={mainColumn}>
     <div class="board-wrapper mb-3" bind:this={boardWrapper}>
       <div class="board-container is2d" bind:this={boardContainer}
            style="width: {boardWidth}px; height: {boardHeight}px; position: relative;">
@@ -437,7 +380,7 @@
     </div>
 
     {#if gameRunning}
-      <progress class="progress {progressClass}" value="{timeElapsed}" max="60"></progress>
+      <progress class="progress {progressClass}" value="{timeElapsed}" max="60" style="width: {boardWidth}px;"></progress>
     {/if}
 
     <div class="fixed-grid has-3-cols" style="width: {boardWidth}px">
@@ -464,13 +407,63 @@
     </div>
   </div>
 
-  <div class="column is-3-desktop">
+  <div class="column column1 is-3-desktop">
+    <div class="box score-container">
+      <div class="container has-text-centered">
+        <h2 class="is-size-5">Correct</h2>
+        <div class="score is-size-2">{correctCount}</div>
+        <h2 class="is-size-5">Incorrect</h2>
+        <div class="score is-size-2">{incorrectCount}</div>
+      </div>
+    </div>
     <div class="box">
-      {#if resultText !== ''}
-        <div id="resultText" class={resultTextClass}>{resultText}</div>
-      {/if}
+      <div class="container has-text-centered">
+        <h2 class="is-size-5">High Score</h2>
+        <div class="score is-size-2">{highScore}</div>
+        <button id="startTimedGame" disabled={startTimedGameButtonDisabled} on:click={startTimedGame}
+                class="button is-primary">Start Timed Game
+        </button>
+        {#if timeRemaining > 0}
+          <div id="timer">{timeRemaining}</div>
+        {/if}
+      </div>
+    </div>
+    <div class="box">
+      <div class="container has-text-centered">
+        {#if !answerShown}
+          <div class="block">
+            <button class="button is-info" disabled={answerShown || gameRunning} on:click|preventDefault={() => {
+          if (positionData) {
+            answerShown = true;
+            const correctPaths = positionData.paths;
+            const randomlySorted = sortRandomly(correctPaths);
+            drawCorrectArrows(randomlySorted);
+          }
+        }}>Show answer
+            </button>
+          </div>
+        {:else}
+          <div class="block">
+            <button class="button is-link" on:click={() => {
+              clearDrawings();
+            }}>
+              Clear
+            </button>
+          </div>
+          <div class="block has-text-left">
+            <div>
+              Minimum # of moves: {getMinimumMovesForCurrentPosition()}
+            </div>
+            <div>
+              Total unique paths: {positionData.paths.length}
+            </div>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
+
+
 
 </div>
 
@@ -482,6 +475,33 @@
 
   .board-wrapper {
     width: 100%;
+  }
+  .correct {
+    color: green;
+  }
+
+  .incorrect {
+    color: red;
+  }
+
+  @keyframes incorrectAnswer {
+    25% { background-color: red; transform: translateX(-10px); }
+    50% { background-color: red; transform: translateX(10px); }
+    75% { background-color: red; transform: translateX(-10px); }
+    100% { transform: translateX(0px); }
+  }
+
+  .incorrectAnswer {
+    animation: incorrectAnswer 1s linear;
+  }
+
+  @keyframes correctAnswer {
+    50% { background-color: green; transform: scale(1.01); }
+    100% { transform: scale(1); }
+  }
+
+  .correctAnswer {
+    animation: correctAnswer 0.75s linear;
   }
 </style>
 

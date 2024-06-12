@@ -1,7 +1,6 @@
 <% content_for :title, 'Knight Moves' %>
 <% content_for :head do %>
   <%= javascript_import_module_tag 'dist/knight_moves' %>
-  <%= stylesheet_link_tag 'knight_moves.css' %>
   <script type="module">
     import KnightMoves from 'dist/knight_moves';
     document.addEventListener('DOMContentLoaded', () => {
