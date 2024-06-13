@@ -1,6 +1,14 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, afterUpdate } from 'svelte';
   import LichessPgnViewer from 'lichess-pgn-viewer';
+
+  import { crossfade } from 'svelte/transition';
+  import { quintOut } from 'svelte/easing';
+
+  const [send, receive] = crossfade({
+    duration: 1500,
+    easing: quintOut
+  });
 
   export let game = {};
   let boardDiv;
@@ -17,9 +25,18 @@
       });
     });
   });
+
+  afterUpdate(() => {
+    if (pgnViewer) {
+      pgnViewer.redraw();
+    }
+  })
 </script>
 
-<div class="game" id={game.url} data-last-activity={parseInt(game.last_activity)}>
+<div
+  in:receive={{ key: game.url }}
+  out:send={{ key: game.url }}
+  class="game" id={game.url} data-last-activity={parseInt(game.last_activity)}>
   <a href={game.url} target="_blank">chess.com</a>
   <div class="is2d" id={game.url} bind:this={boardDiv}></div>
 </div>

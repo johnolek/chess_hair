@@ -77,6 +77,27 @@
     setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
   }
 
+  /**
+   * @typedef {Object} Game
+   * @property {string} url
+   * @property {number} move_by
+   * @property {string} pgn
+   * @property {string} time_control
+   * @property {number} last_activity
+   * @property {boolean} rated
+   * @property {string} turn
+   * @property {string} fen
+   * @property {number} start_time
+   * @property {string} time_class
+   * @property {string} rules
+   * @property {string} white
+   * @property {string} black
+   */
+
+  /**
+   * Fetch games
+   * @returns {Promise<Game[]>} The games
+   */
   async function fetchGames() {
     const response = await fetch(`https://api.chess.com/pub/player/${chessDotComUsername}/games`);
     const data = await response.json();
@@ -101,13 +122,17 @@
 </script>
 
 <link id="piece-sprite" href="/piece-css/{pieceSet}.css" rel="stylesheet">
-<h1>Daily Games</h1>
+
+<h1 class="title">Daily Games</h1>
 <h2>My Turn</h2>
-{#each myGames as game}
-  <DailyGame {game} myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"/>
+{#each myGames as game (game.url)}
+  <DailyGame
+    {game}
+    myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"
+  />
 {/each}
 <hr/>
 <h2>Their Turn</h2>
-{#each theirGames as game}
+{#each theirGames as game (game.url)}
   <DailyGame {game} myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"/>
 {/each}

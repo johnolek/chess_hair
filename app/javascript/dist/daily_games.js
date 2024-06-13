@@ -4,6 +4,21 @@ import { boardOptions, pieceSetOptions } from 'src/board/options';
 /** @returns {void} */
 function noop() {}
 
+const identity = (x) => x;
+
+/**
+ * @template T
+ * @template S
+ * @param {T} tar
+ * @param {S} src
+ * @returns {T & S}
+ */
+function assign(tar, src) {
+	// @ts-ignore
+	for (const k in src) tar[k] = src[k];
+	return /** @type {T & S} */ (tar);
+}
+
 /** @returns {void} */
 function add_location(element, file, line, column, char) {
 	element.__svelte_meta = {
@@ -45,6 +60,49 @@ function is_empty(obj) {
 	return Object.keys(obj).length === 0;
 }
 
+const is_client = typeof window !== 'undefined';
+
+/** @type {() => number} */
+let now = is_client ? () => window.performance.now() : () => Date.now();
+
+let raf = is_client ? (cb) => requestAnimationFrame(cb) : noop;
+
+const tasks = new Set();
+
+/**
+ * @param {number} now
+ * @returns {void}
+ */
+function run_tasks(now) {
+	tasks.forEach((task) => {
+		if (!task.c(now)) {
+			tasks.delete(task);
+			task.f();
+		}
+	});
+	if (tasks.size !== 0) raf(run_tasks);
+}
+
+/**
+ * Creates a new task that runs on each raf frame
+ * until it returns a falsy value or is aborted
+ * @param {import('./private.js').TaskCallback} callback
+ * @returns {import('./private.js').Task}
+ */
+function loop(callback) {
+	/** @type {import('./private.js').TaskEntry} */
+	let task;
+	if (tasks.size === 0) raf(run_tasks);
+	return {
+		promise: new Promise((fulfill) => {
+			tasks.add((task = { c: callback, f: fulfill }));
+		}),
+		abort() {
+			tasks.delete(task);
+		}
+	};
+}
+
 /**
  * @param {Node} target
  * @param {Node} node
@@ -84,6 +142,22 @@ function get_root_for_style(node) {
 }
 
 /**
+ * @param {Node} node
+ * @returns {CSSStyleSheet}
+ */
+function append_empty_stylesheet(node) {
+	const style_element = element('style');
+	// For transitions to work without 'style-src: unsafe-inline' Content Security Policy,
+	// these empty tags need to be allowed with a hash as a workaround until we move to the Web Animations API.
+	// Using the hash for the empty string (for an empty tag) works in all browsers except Safari.
+	// So as a workaround for the workaround, when we append empty style tags we set their content to /* empty */.
+	// The hash 'sha256-9OlNO0DNEeaVzHL4RZwCLsBHA8WBQ8toBp/4F5XV2nc=' will then work even in Safari.
+	style_element.textContent = '/* empty */';
+	append_stylesheet(get_root_for_style(node), style_element);
+	return style_element.sheet;
+}
+
+/**
  * @param {ShadowRoot | Document} node
  * @param {HTMLStyleElement} style
  * @returns {CSSStyleSheet}
@@ -110,14 +184,6 @@ function insert(target, node, anchor) {
 function detach(node) {
 	if (node.parentNode) {
 		node.parentNode.removeChild(node);
-	}
-}
-
-/**
- * @returns {void} */
-function destroy_each(iterations, detaching) {
-	for (let i = 0; i < iterations.length; i += 1) {
-		if (iterations[i]) iterations[i].d(detaching);
 	}
 }
 
@@ -202,6 +268,103 @@ function custom_event(type, detail, { bubbles = false, cancelable = false } = {}
  * }} ChildNodeArray
  */
 
+// we need to store the information for multiple documents because a Svelte application could also contain iframes
+// https://github.com/sveltejs/svelte/issues/3624
+/** @type {Map<Document | ShadowRoot, import('./private.d.ts').StyleInformation>} */
+const managed_styles = new Map();
+
+let active = 0;
+
+// https://github.com/darkskyapp/string-hash/blob/master/index.js
+/**
+ * @param {string} str
+ * @returns {number}
+ */
+function hash$1(str) {
+	let hash = 5381;
+	let i = str.length;
+	while (i--) hash = ((hash << 5) - hash) ^ str.charCodeAt(i);
+	return hash >>> 0;
+}
+
+/**
+ * @param {Document | ShadowRoot} doc
+ * @param {Element & ElementCSSInlineStyle} node
+ * @returns {{ stylesheet: any; rules: {}; }}
+ */
+function create_style_information(doc, node) {
+	const info = { stylesheet: append_empty_stylesheet(node), rules: {} };
+	managed_styles.set(doc, info);
+	return info;
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {number} a
+ * @param {number} b
+ * @param {number} duration
+ * @param {number} delay
+ * @param {(t: number) => number} ease
+ * @param {(t: number, u: number) => string} fn
+ * @param {number} uid
+ * @returns {string}
+ */
+function create_rule(node, a, b, duration, delay, ease, fn, uid = 0) {
+	const step = 16.666 / duration;
+	let keyframes = '{\n';
+	for (let p = 0; p <= 1; p += step) {
+		const t = a + (b - a) * ease(p);
+		keyframes += p * 100 + `%{${fn(t, 1 - t)}}\n`;
+	}
+	const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
+	const name = `__svelte_${hash$1(rule)}_${uid}`;
+	const doc = get_root_for_style(node);
+	const { stylesheet, rules } = managed_styles.get(doc) || create_style_information(doc, node);
+	if (!rules[name]) {
+		rules[name] = true;
+		stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
+	}
+	const animation = node.style.animation || '';
+	node.style.animation = `${
+		animation ? `${animation}, ` : ''
+	}${name} ${duration}ms linear ${delay}ms 1 both`;
+	active += 1;
+	return name;
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {string} [name]
+ * @returns {void}
+ */
+function delete_rule(node, name) {
+	const previous = (node.style.animation || '').split(', ');
+	const next = previous.filter(
+		name
+			? (anim) => anim.indexOf(name) < 0 // remove specific animation
+			: (anim) => anim.indexOf('__svelte') === -1 // remove all Svelte animations
+	);
+	const deleted = previous.length - next.length;
+	if (deleted) {
+		node.style.animation = next.join(', ');
+		active -= deleted;
+		if (!active) clear_rules();
+	}
+}
+
+/** @returns {void} */
+function clear_rules() {
+	raf(() => {
+		if (active) return;
+		managed_styles.forEach((info) => {
+			const { ownerNode } = info.stylesheet;
+			// there is no ownerNode if it runs on jsdom.
+			if (ownerNode) detach(ownerNode);
+		});
+		managed_styles.clear();
+	});
+}
+
 let current_component;
 
 /** @returns {void} */
@@ -230,6 +393,19 @@ function get_current_component() {
  */
 function onMount(fn) {
 	get_current_component().$$.on_mount.push(fn);
+}
+
+/**
+ * Schedules a callback to run immediately after the component has been updated.
+ *
+ * The first time the callback runs will be after the initial `onMount`
+ *
+ * https://svelte.dev/docs/svelte#afterupdate
+ * @param {() => any} fn
+ * @returns {void}
+ */
+function afterUpdate(fn) {
+	get_current_component().$$.after_update.push(fn);
 }
 
 const dirty_components = [];
@@ -353,6 +529,34 @@ function flush_render_callbacks(fns) {
 	render_callbacks = filtered;
 }
 
+/**
+ * @type {Promise<void> | null}
+ */
+let promise;
+
+/**
+ * @returns {Promise<void>}
+ */
+function wait() {
+	if (!promise) {
+		promise = Promise.resolve();
+		promise.then(() => {
+			promise = null;
+		});
+	}
+	return promise;
+}
+
+/**
+ * @param {Element} node
+ * @param {INTRO | OUTRO | boolean} direction
+ * @param {'start' | 'end'} kind
+ * @returns {void}
+ */
+function dispatch(node, direction, kind) {
+	node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
+}
+
 const outroing = new Set();
 
 /**
@@ -415,6 +619,177 @@ function transition_out(block, local, detach, callback) {
 	}
 }
 
+/**
+ * @type {import('../transition/public.js').TransitionConfig}
+ */
+const null_transition = { duration: 0 };
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {TransitionFn} fn
+ * @param {any} params
+ * @returns {{ start(): void; invalidate(): void; end(): void; }}
+ */
+function create_in_transition(node, fn, params) {
+	/**
+	 * @type {TransitionOptions} */
+	const options = { direction: 'in' };
+	let config = fn(node, params, options);
+	let running = false;
+	let animation_name;
+	let task;
+	let uid = 0;
+
+	/**
+	 * @returns {void} */
+	function cleanup() {
+		if (animation_name) delete_rule(node, animation_name);
+	}
+
+	/**
+	 * @returns {void} */
+	function go() {
+		const {
+			delay = 0,
+			duration = 300,
+			easing = identity,
+			tick = noop,
+			css
+		} = config || null_transition;
+		if (css) animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+		tick(0, 1);
+		const start_time = now() + delay;
+		const end_time = start_time + duration;
+		if (task) task.abort();
+		running = true;
+		add_render_callback(() => dispatch(node, true, 'start'));
+		task = loop((now) => {
+			if (running) {
+				if (now >= end_time) {
+					tick(1, 0);
+					dispatch(node, true, 'end');
+					cleanup();
+					return (running = false);
+				}
+				if (now >= start_time) {
+					const t = easing((now - start_time) / duration);
+					tick(t, 1 - t);
+				}
+			}
+			return running;
+		});
+	}
+	let started = false;
+	return {
+		start() {
+			if (started) return;
+			started = true;
+			delete_rule(node);
+			if (is_function(config)) {
+				config = config(options);
+				wait().then(go);
+			} else {
+				go();
+			}
+		},
+		invalidate() {
+			started = false;
+		},
+		end() {
+			if (running) {
+				cleanup();
+				running = false;
+			}
+		}
+	};
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {TransitionFn} fn
+ * @param {any} params
+ * @returns {{ end(reset: any): void; }}
+ */
+function create_out_transition(node, fn, params) {
+	/** @type {TransitionOptions} */
+	const options = { direction: 'out' };
+	let config = fn(node, params, options);
+	let running = true;
+	let animation_name;
+	const group = outros;
+	group.r += 1;
+	/** @type {boolean} */
+	let original_inert_value;
+
+	/**
+	 * @returns {void} */
+	function go() {
+		const {
+			delay = 0,
+			duration = 300,
+			easing = identity,
+			tick = noop,
+			css
+		} = config || null_transition;
+
+		if (css) animation_name = create_rule(node, 1, 0, duration, delay, easing, css);
+
+		const start_time = now() + delay;
+		const end_time = start_time + duration;
+		add_render_callback(() => dispatch(node, false, 'start'));
+
+		if ('inert' in node) {
+			original_inert_value = /** @type {HTMLElement} */ (node).inert;
+			node.inert = true;
+		}
+
+		loop((now) => {
+			if (running) {
+				if (now >= end_time) {
+					tick(0, 1);
+					dispatch(node, false, 'end');
+					if (!--group.r) {
+						// this will result in `end()` being called,
+						// so we don't need to clean up here
+						run_all(group.c);
+					}
+					return false;
+				}
+				if (now >= start_time) {
+					const t = easing((now - start_time) / duration);
+					tick(1 - t, t);
+				}
+			}
+			return running;
+		});
+	}
+
+	if (is_function(config)) {
+		wait().then(() => {
+			// @ts-ignore
+			config = config(options);
+			go();
+		});
+	} else {
+		go();
+	}
+
+	return {
+		end(reset) {
+			if (reset && 'inert' in node) {
+				node.inert = original_inert_value;
+			}
+			if (reset && config.tick) {
+				config.tick(1, 0);
+			}
+			if (running) {
+				if (animation_name) delete_rule(node, animation_name);
+				running = false;
+			}
+		}
+	};
+}
+
 /** @typedef {1} INTRO */
 /** @typedef {0} OUTRO */
 /** @typedef {{ direction: 'in' | 'out' | 'both' }} TransitionOptions */
@@ -451,6 +826,119 @@ function ensure_array_like(array_like_or_iterator) {
 	return array_like_or_iterator?.length !== undefined
 		? array_like_or_iterator
 		: Array.from(array_like_or_iterator);
+}
+
+/** @returns {void} */
+function outro_and_destroy_block(block, lookup) {
+	transition_out(block, 1, 1, () => {
+		lookup.delete(block.key);
+	});
+}
+
+/** @returns {any[]} */
+function update_keyed_each(
+	old_blocks,
+	dirty,
+	get_key,
+	dynamic,
+	ctx,
+	list,
+	lookup,
+	node,
+	destroy,
+	create_each_block,
+	next,
+	get_context
+) {
+	let o = old_blocks.length;
+	let n = list.length;
+	let i = o;
+	const old_indexes = {};
+	while (i--) old_indexes[old_blocks[i].key] = i;
+	const new_blocks = [];
+	const new_lookup = new Map();
+	const deltas = new Map();
+	const updates = [];
+	i = n;
+	while (i--) {
+		const child_ctx = get_context(ctx, list, i);
+		const key = get_key(child_ctx);
+		let block = lookup.get(key);
+		if (!block) {
+			block = create_each_block(key, child_ctx);
+			block.c();
+		} else {
+			// defer updates until all the DOM shuffling is done
+			updates.push(() => block.p(child_ctx, dirty));
+		}
+		new_lookup.set(key, (new_blocks[i] = block));
+		if (key in old_indexes) deltas.set(key, Math.abs(i - old_indexes[key]));
+	}
+	const will_move = new Set();
+	const did_move = new Set();
+	/** @returns {void} */
+	function insert(block) {
+		transition_in(block, 1);
+		block.m(node, next);
+		lookup.set(block.key, block);
+		next = block.first;
+		n--;
+	}
+	while (o && n) {
+		const new_block = new_blocks[n - 1];
+		const old_block = old_blocks[o - 1];
+		const new_key = new_block.key;
+		const old_key = old_block.key;
+		if (new_block === old_block) {
+			// do nothing
+			next = new_block.first;
+			o--;
+			n--;
+		} else if (!new_lookup.has(old_key)) {
+			// remove old block
+			destroy(old_block, lookup);
+			o--;
+		} else if (!lookup.has(new_key) || will_move.has(new_key)) {
+			insert(new_block);
+		} else if (did_move.has(old_key)) {
+			o--;
+		} else if (deltas.get(new_key) > deltas.get(old_key)) {
+			did_move.add(new_key);
+			insert(new_block);
+		} else {
+			will_move.add(old_key);
+			o--;
+		}
+	}
+	while (o--) {
+		const old_block = old_blocks[o];
+		if (!new_lookup.has(old_block.key)) destroy(old_block, lookup);
+	}
+	while (n) insert(new_blocks[n - 1]);
+	run_all(updates);
+	return new_blocks;
+}
+
+/** @returns {void} */
+function validate_each_keys(ctx, list, get_context, get_key) {
+	const keys = new Map();
+	for (let i = 0; i < list.length; i++) {
+		const key = get_key(get_context(ctx, list, i));
+		if (keys.has(key)) {
+			let value = '';
+			try {
+				value = `with value '${String(key)}' `;
+			} catch (e) {
+				// can't stringify
+			}
+			throw new Error(
+				`Cannot have duplicate keys in a keyed each: Keys at index ${keys.get(
+					key
+				)} and ${i} ${value}are duplicates`
+			);
+		}
+		keys.set(key, i);
+	}
 }
 
 /** @returns {void} */
@@ -7106,11 +7594,111 @@ function start(element, cfg) {
     return ctrl;
 }
 
+/*
+Adapted from https://github.com/mattdesl
+Distributed under MIT License https://github.com/mattdesl/eases/blob/master/LICENSE.md
+*/
+
+/**
+ * https://svelte.dev/docs/svelte-easing
+ * @param {number} t
+ * @returns {number}
+ */
+function cubicOut(t) {
+	const f = t - 1.0;
+	return f * f * f + 1.0;
+}
+
+/**
+ * https://svelte.dev/docs/svelte-easing
+ * @param {number} t
+ * @returns {number}
+ */
+function quintOut(t) {
+	return --t * t * t * t * t + 1;
+}
+
+/**
+ * The `crossfade` function creates a pair of [transitions](https://svelte.dev/docs#template-syntax-element-directives-transition-fn) called `send` and `receive`. When an element is 'sent', it looks for a corresponding element being 'received', and generates a transition that transforms the element to its counterpart's position and fades it out. When an element is 'received', the reverse happens. If there is no counterpart, the `fallback` transition is used.
+ *
+ * https://svelte.dev/docs/svelte-transition#crossfade
+ * @param {import('./public').CrossfadeParams & {
+ * 	fallback?: (node: Element, params: import('./public').CrossfadeParams, intro: boolean) => import('./public').TransitionConfig;
+ * }} params
+ * @returns {[(node: any, params: import('./public').CrossfadeParams & { key: any; }) => () => import('./public').TransitionConfig, (node: any, params: import('./public').CrossfadeParams & { key: any; }) => () => import('./public').TransitionConfig]}
+ */
+function crossfade({ fallback, ...defaults }) {
+	/** @type {Map<any, Element>} */
+	const to_receive = new Map();
+	/** @type {Map<any, Element>} */
+	const to_send = new Map();
+	/**
+	 * @param {Element} from_node
+	 * @param {Element} node
+	 * @param {import('./public').CrossfadeParams} params
+	 * @returns {import('./public').TransitionConfig}
+	 */
+	function crossfade(from_node, node, params) {
+		const {
+			delay = 0,
+			duration = (d) => Math.sqrt(d) * 30,
+			easing = cubicOut
+		} = assign(assign({}, defaults), params);
+		const from = from_node.getBoundingClientRect();
+		const to = node.getBoundingClientRect();
+		const dx = from.left - to.left;
+		const dy = from.top - to.top;
+		const dw = from.width / to.width;
+		const dh = from.height / to.height;
+		const d = Math.sqrt(dx * dx + dy * dy);
+		const style = getComputedStyle(node);
+		const transform = style.transform === 'none' ? '' : style.transform;
+		const opacity = +style.opacity;
+		return {
+			delay,
+			duration: is_function(duration) ? duration(d) : duration,
+			easing,
+			css: (t, u) => `
+				opacity: ${t * opacity};
+				transform-origin: top left;
+				transform: ${transform} translate(${u * dx}px,${u * dy}px) scale(${t + (1 - t) * dw}, ${
+				t + (1 - t) * dh
+			});
+			`
+		};
+	}
+
+	/**
+	 * @param {Map<any, Element>} items
+	 * @param {Map<any, Element>} counterparts
+	 * @param {boolean} intro
+	 * @returns {(node: any, params: import('./public').CrossfadeParams & { key: any; }) => () => import('./public').TransitionConfig}
+	 */
+	function transition(items, counterparts, intro) {
+		return (node, params) => {
+			items.set(params.key, node);
+			return () => {
+				if (counterparts.has(params.key)) {
+					const other_node = counterparts.get(params.key);
+					counterparts.delete(params.key);
+					return crossfade(other_node, node, params);
+				}
+				// if the node is disappearing altogether
+				// (i.e. wasn't claimed by the other list)
+				// then we need to supply an outro
+				items.delete(params.key);
+				return fallback && fallback(node, params, intro);
+			};
+		};
+	}
+	return [transition(to_send, to_receive, false), transition(to_receive, to_send, true)];
+}
+
 /* svelte/DailyGame.svelte generated by Svelte v4.2.18 */
 const file$1 = "svelte/DailyGame.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-1pg7cpa", ".game.svelte-1pg7cpa{margin-right:20px;display:inline-block;width:600px;max-width:90vw}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiRGFpbHlHYW1lLnN2ZWx0ZSIsInNvdXJjZXMiOlsiRGFpbHlHYW1lLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IExpY2hlc3NQZ25WaWV3ZXIgZnJvbSAnbGljaGVzcy1wZ24tdmlld2VyJztcblxuICBleHBvcnQgbGV0IGdhbWUgPSB7fTtcbiAgbGV0IGJvYXJkRGl2O1xuICBsZXQgcGduVmlld2VyO1xuICBleHBvcnQgbGV0IG15Q29sb3IgPSAnd2hpdGUnO1xuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgcGduVmlld2VyID0gTGljaGVzc1BnblZpZXdlcihib2FyZERpdiwge1xuICAgICAgICBwZ246IGdhbWUucGduLFxuICAgICAgICBpbml0aWFsUGx5OiAnbGFzdCcsXG4gICAgICAgIG9yaWVudGF0aW9uOiBteUNvbG9yLFxuICAgICAgICBzY3JvbGxUb01vdmU6IGZhbHNlLFxuICAgICAgfSk7XG4gICAgfSk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXYgY2xhc3M9XCJnYW1lXCIgaWQ9e2dhbWUudXJsfSBkYXRhLWxhc3QtYWN0aXZpdHk9e3BhcnNlSW50KGdhbWUubGFzdF9hY3Rpdml0eSl9PlxuICA8YSBocmVmPXtnYW1lLnVybH0gdGFyZ2V0PVwiX2JsYW5rXCI+Y2hlc3MuY29tPC9hPlxuICA8ZGl2IGNsYXNzPVwiaXMyZFwiIGlkPXtnYW1lLnVybH0gYmluZDp0aGlzPXtib2FyZERpdn0+PC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuZ2FtZSB7XG4gICAgbWFyZ2luLXJpZ2h0OiAyMHB4O1xuICAgIGRpc3BsYXk6IGlubGluZS1ibG9jaztcbiAgICB3aWR0aDogNjAwcHg7XG4gICAgbWF4LXdpZHRoOiA5MHZ3O1xuXG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBMkJFLG9CQUFNLENBQ0osWUFBWSxDQUFFLElBQUksQ0FDbEIsT0FBTyxDQUFFLFlBQVksQ0FDckIsS0FBSyxDQUFFLEtBQUssQ0FDWixTQUFTLENBQUUsSUFFYiJ9 */");
+	append_styles(target, "svelte-1pg7cpa", ".game.svelte-1pg7cpa{margin-right:20px;display:inline-block;width:600px;max-width:90vw}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiRGFpbHlHYW1lLnN2ZWx0ZSIsInNvdXJjZXMiOlsiRGFpbHlHYW1lLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50LCBhZnRlclVwZGF0ZSB9IGZyb20gJ3N2ZWx0ZSc7XG4gIGltcG9ydCBMaWNoZXNzUGduVmlld2VyIGZyb20gJ2xpY2hlc3MtcGduLXZpZXdlcic7XG5cbiAgaW1wb3J0IHsgY3Jvc3NmYWRlIH0gZnJvbSAnc3ZlbHRlL3RyYW5zaXRpb24nO1xuICBpbXBvcnQgeyBxdWludE91dCB9IGZyb20gJ3N2ZWx0ZS9lYXNpbmcnO1xuXG4gIGNvbnN0IFtzZW5kLCByZWNlaXZlXSA9IGNyb3NzZmFkZSh7XG4gICAgZHVyYXRpb246IDE1MDAsXG4gICAgZWFzaW5nOiBxdWludE91dFxuICB9KTtcblxuICBleHBvcnQgbGV0IGdhbWUgPSB7fTtcbiAgbGV0IGJvYXJkRGl2O1xuICBsZXQgcGduVmlld2VyO1xuICBleHBvcnQgbGV0IG15Q29sb3IgPSAnd2hpdGUnO1xuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgcGduVmlld2VyID0gTGljaGVzc1BnblZpZXdlcihib2FyZERpdiwge1xuICAgICAgICBwZ246IGdhbWUucGduLFxuICAgICAgICBpbml0aWFsUGx5OiAnbGFzdCcsXG4gICAgICAgIG9yaWVudGF0aW9uOiBteUNvbG9yLFxuICAgICAgICBzY3JvbGxUb01vdmU6IGZhbHNlLFxuICAgICAgfSk7XG4gICAgfSk7XG4gIH0pO1xuXG4gIGFmdGVyVXBkYXRlKCgpID0+IHtcbiAgICBpZiAocGduVmlld2VyKSB7XG4gICAgICBwZ25WaWV3ZXIucmVkcmF3KCk7XG4gICAgfVxuICB9KVxuPC9zY3JpcHQ+XG5cbjxkaXZcbiAgaW46cmVjZWl2ZT17eyBrZXk6IGdhbWUudXJsIH19XG4gIG91dDpzZW5kPXt7IGtleTogZ2FtZS51cmwgfX1cbiAgY2xhc3M9XCJnYW1lXCIgaWQ9e2dhbWUudXJsfSBkYXRhLWxhc3QtYWN0aXZpdHk9e3BhcnNlSW50KGdhbWUubGFzdF9hY3Rpdml0eSl9PlxuICA8YSBocmVmPXtnYW1lLnVybH0gdGFyZ2V0PVwiX2JsYW5rXCI+Y2hlc3MuY29tPC9hPlxuICA8ZGl2IGNsYXNzPVwiaXMyZFwiIGlkPXtnYW1lLnVybH0gYmluZDp0aGlzPXtib2FyZERpdn0+PC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuZ2FtZSB7XG4gICAgbWFyZ2luLXJpZ2h0OiAyMHB4O1xuICAgIGRpc3BsYXk6IGlubGluZS1ibG9jaztcbiAgICB3aWR0aDogNjAwcHg7XG4gICAgbWF4LXdpZHRoOiA5MHZ3O1xuXG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBNENFLG9CQUFNLENBQ0osWUFBWSxDQUFFLElBQUksQ0FDbEIsT0FBTyxDQUFFLFlBQVksQ0FDckIsS0FBSyxDQUFFLEtBQUssQ0FDWixTQUFTLENBQUUsSUFFYiJ9 */");
 }
 
 function create_fragment$1(ctx) {
@@ -7123,6 +7711,9 @@ function create_fragment$1(ctx) {
 	let div0_id_value;
 	let div1_id_value;
 	let div1_data_last_activity_value;
+	let div1_intro;
+	let div1_outro;
+	let current;
 
 	const block = {
 		c: function create() {
@@ -7133,14 +7724,14 @@ function create_fragment$1(ctx) {
 			div0 = element("div");
 			attr_dev(a, "href", a_href_value = /*game*/ ctx[0].url);
 			attr_dev(a, "target", "_blank");
-			add_location(a, file$1, 22, 2, 507);
+			add_location(a, file$1, 39, 2, 847);
 			attr_dev(div0, "class", "is2d");
 			attr_dev(div0, "id", div0_id_value = /*game*/ ctx[0].url);
-			add_location(div0, file$1, 23, 2, 558);
+			add_location(div0, file$1, 40, 2, 898);
 			attr_dev(div1, "class", "game svelte-1pg7cpa");
 			attr_dev(div1, "id", div1_id_value = /*game*/ ctx[0].url);
 			attr_dev(div1, "data-last-activity", div1_data_last_activity_value = parseInt(/*game*/ ctx[0].last_activity));
-			add_location(div1, file$1, 21, 0, 422);
+			add_location(div1, file$1, 35, 0, 696);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7151,33 +7742,58 @@ function create_fragment$1(ctx) {
 			append_dev(a, t0);
 			append_dev(div1, t1);
 			append_dev(div1, div0);
-			/*div0_binding*/ ctx[3](div0);
+			/*div0_binding*/ ctx[5](div0);
+			current = true;
 		},
-		p: function update(ctx, [dirty]) {
-			if (dirty & /*game*/ 1 && a_href_value !== (a_href_value = /*game*/ ctx[0].url)) {
+		p: function update(new_ctx, [dirty]) {
+			ctx = new_ctx;
+
+			if (!current || dirty & /*game*/ 1 && a_href_value !== (a_href_value = /*game*/ ctx[0].url)) {
 				attr_dev(a, "href", a_href_value);
 			}
 
-			if (dirty & /*game*/ 1 && div0_id_value !== (div0_id_value = /*game*/ ctx[0].url)) {
+			if (!current || dirty & /*game*/ 1 && div0_id_value !== (div0_id_value = /*game*/ ctx[0].url)) {
 				attr_dev(div0, "id", div0_id_value);
 			}
 
-			if (dirty & /*game*/ 1 && div1_id_value !== (div1_id_value = /*game*/ ctx[0].url)) {
+			if (!current || dirty & /*game*/ 1 && div1_id_value !== (div1_id_value = /*game*/ ctx[0].url)) {
 				attr_dev(div1, "id", div1_id_value);
 			}
 
-			if (dirty & /*game*/ 1 && div1_data_last_activity_value !== (div1_data_last_activity_value = parseInt(/*game*/ ctx[0].last_activity))) {
+			if (!current || dirty & /*game*/ 1 && div1_data_last_activity_value !== (div1_data_last_activity_value = parseInt(/*game*/ ctx[0].last_activity))) {
 				attr_dev(div1, "data-last-activity", div1_data_last_activity_value);
 			}
 		},
-		i: noop,
-		o: noop,
+		i: function intro(local) {
+			if (current) return;
+
+			if (local) {
+				add_render_callback(() => {
+					if (!current) return;
+					if (div1_outro) div1_outro.end(1);
+					div1_intro = create_in_transition(div1, /*receive*/ ctx[3], { key: /*game*/ ctx[0].url });
+					div1_intro.start();
+				});
+			}
+
+			current = true;
+		},
+		o: function outro(local) {
+			if (div1_intro) div1_intro.invalidate();
+
+			if (local) {
+				div1_outro = create_out_transition(div1, /*send*/ ctx[2], { key: /*game*/ ctx[0].url });
+			}
+
+			current = false;
+		},
 		d: function destroy(detaching) {
 			if (detaching) {
 				detach_dev(div1);
 			}
 
-			/*div0_binding*/ ctx[3](null);
+			/*div0_binding*/ ctx[5](null);
+			if (detaching && div1_outro) div1_outro.end();
 		}
 	};
 
@@ -7195,6 +7811,7 @@ function create_fragment$1(ctx) {
 function instance$1($$self, $$props, $$invalidate) {
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('DailyGame', slots, []);
+	const [send, receive] = crossfade({ duration: 1500, easing: quintOut });
 	let { game = {} } = $$props;
 	let boardDiv;
 	let pgnViewer;
@@ -7209,6 +7826,12 @@ function instance$1($$self, $$props, $$invalidate) {
 				scrollToMove: false
 			});
 		});
+	});
+
+	afterUpdate(() => {
+		if (pgnViewer) {
+			pgnViewer.redraw();
+		}
 	});
 
 	const writable_props = ['game', 'myColor'];
@@ -7226,12 +7849,17 @@ function instance$1($$self, $$props, $$invalidate) {
 
 	$$self.$$set = $$props => {
 		if ('game' in $$props) $$invalidate(0, game = $$props.game);
-		if ('myColor' in $$props) $$invalidate(2, myColor = $$props.myColor);
+		if ('myColor' in $$props) $$invalidate(4, myColor = $$props.myColor);
 	};
 
 	$$self.$capture_state = () => ({
 		onMount,
+		afterUpdate,
 		LichessPgnViewer: start,
+		crossfade,
+		quintOut,
+		send,
+		receive,
 		game,
 		boardDiv,
 		pgnViewer,
@@ -7242,20 +7870,20 @@ function instance$1($$self, $$props, $$invalidate) {
 		if ('game' in $$props) $$invalidate(0, game = $$props.game);
 		if ('boardDiv' in $$props) $$invalidate(1, boardDiv = $$props.boardDiv);
 		if ('pgnViewer' in $$props) pgnViewer = $$props.pgnViewer;
-		if ('myColor' in $$props) $$invalidate(2, myColor = $$props.myColor);
+		if ('myColor' in $$props) $$invalidate(4, myColor = $$props.myColor);
 	};
 
 	if ($$props && "$$inject" in $$props) {
 		$$self.$inject_state($$props.$$inject);
 	}
 
-	return [game, boardDiv, myColor, div0_binding];
+	return [game, boardDiv, send, receive, myColor, div0_binding];
 }
 
 class DailyGame extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init$1(this, options, instance$1, create_fragment$1, safe_not_equal, { game: 0, myColor: 2 }, add_css);
+		init$1(this, options, instance$1, create_fragment$1, safe_not_equal, { game: 0, myColor: 4 }, add_css);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
@@ -7297,8 +7925,9 @@ function get_each_context_1(ctx, list, i) {
 	return child_ctx;
 }
 
-// (106:0) {#each myGames as game}
-function create_each_block_1(ctx) {
+// (128:0) {#each myGames as game (game.url)}
+function create_each_block_1(key_1, ctx) {
+	let first;
 	let dailygame;
 	let current;
 
@@ -7313,14 +7942,20 @@ function create_each_block_1(ctx) {
 		});
 
 	const block = {
+		key: key_1,
+		first: null,
 		c: function create() {
+			first = empty();
 			create_component(dailygame.$$.fragment);
+			this.first = first;
 		},
 		m: function mount(target, anchor) {
+			insert_dev(target, first, anchor);
 			mount_component(dailygame, target, anchor);
 			current = true;
 		},
-		p: function update(ctx, dirty) {
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
 			const dailygame_changes = {};
 			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[23];
 
@@ -7340,6 +7975,10 @@ function create_each_block_1(ctx) {
 			current = false;
 		},
 		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(first);
+			}
+
 			destroy_component(dailygame, detaching);
 		}
 	};
@@ -7348,15 +7987,16 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(106:0) {#each myGames as game}",
+		source: "(128:0) {#each myGames as game (game.url)}",
 		ctx
 	});
 
 	return block;
 }
 
-// (111:0) {#each theirGames as game}
-function create_each_block(ctx) {
+// (136:0) {#each theirGames as game (game.url)}
+function create_each_block(key_1, ctx) {
+	let first;
 	let dailygame;
 	let current;
 
@@ -7371,14 +8011,20 @@ function create_each_block(ctx) {
 		});
 
 	const block = {
+		key: key_1,
+		first: null,
 		c: function create() {
+			first = empty();
 			create_component(dailygame.$$.fragment);
+			this.first = first;
 		},
 		m: function mount(target, anchor) {
+			insert_dev(target, first, anchor);
 			mount_component(dailygame, target, anchor);
 			current = true;
 		},
-		p: function update(ctx, dirty) {
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
 			const dailygame_changes = {};
 			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[23];
 
@@ -7398,6 +8044,10 @@ function create_each_block(ctx) {
 			current = false;
 		},
 		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(first);
+			}
+
 			destroy_component(dailygame, detaching);
 		}
 	};
@@ -7406,7 +8056,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(111:0) {#each theirGames as game}",
+		source: "(136:0) {#each theirGames as game (game.url)}",
 		ctx
 	});
 
@@ -7421,34 +8071,36 @@ function create_fragment(ctx) {
 	let t2;
 	let h20;
 	let t4;
+	let each_blocks_1 = [];
+	let each0_lookup = new Map();
 	let t5;
 	let hr;
 	let t6;
 	let h21;
 	let t8;
+	let each_blocks = [];
+	let each1_lookup = new Map();
 	let each1_anchor;
 	let current;
 	let each_value_1 = ensure_array_like_dev(/*myGames*/ ctx[0]);
-	let each_blocks_1 = [];
+	const get_key = ctx => /*game*/ ctx[23].url;
+	validate_each_keys(ctx, each_value_1, get_each_context_1, get_key);
 
 	for (let i = 0; i < each_value_1.length; i += 1) {
-		each_blocks_1[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
+		let child_ctx = get_each_context_1(ctx, each_value_1, i);
+		let key = get_key(child_ctx);
+		each0_lookup.set(key, each_blocks_1[i] = create_each_block_1(key, child_ctx));
 	}
-
-	const out = i => transition_out(each_blocks_1[i], 1, 1, () => {
-		each_blocks_1[i] = null;
-	});
 
 	let each_value = ensure_array_like_dev(/*theirGames*/ ctx[1]);
-	let each_blocks = [];
+	const get_key_1 = ctx => /*game*/ ctx[23].url;
+	validate_each_keys(ctx, each_value, get_each_context, get_key_1);
 
 	for (let i = 0; i < each_value.length; i += 1) {
-		each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
+		let child_ctx = get_each_context(ctx, each_value, i);
+		let key = get_key_1(child_ctx);
+		each1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
 	}
-
-	const out_1 = i => transition_out(each_blocks[i], 1, 1, () => {
-		each_blocks[i] = null;
-	});
 
 	const block = {
 		c: function create() {
@@ -7480,11 +8132,12 @@ function create_fragment(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 102, 0, 3517);
-			add_location(h1, file, 103, 0, 3592);
-			add_location(h20, file, 104, 0, 3613);
-			add_location(hr, file, 108, 0, 3757);
-			add_location(h21, file, 109, 0, 3763);
+			add_location(link, file, 123, 0, 4040);
+			attr_dev(h1, "class", "title");
+			add_location(h1, file, 125, 0, 4116);
+			add_location(h20, file, 126, 0, 4151);
+			add_location(hr, file, 133, 0, 4317);
+			add_location(h21, file, 134, 0, 4323);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7525,55 +8178,17 @@ function create_fragment(ctx) {
 
 			if (dirty & /*myGames, chessDotComUsername*/ 9) {
 				each_value_1 = ensure_array_like_dev(/*myGames*/ ctx[0]);
-				let i;
-
-				for (i = 0; i < each_value_1.length; i += 1) {
-					const child_ctx = get_each_context_1(ctx, each_value_1, i);
-
-					if (each_blocks_1[i]) {
-						each_blocks_1[i].p(child_ctx, dirty);
-						transition_in(each_blocks_1[i], 1);
-					} else {
-						each_blocks_1[i] = create_each_block_1(child_ctx);
-						each_blocks_1[i].c();
-						transition_in(each_blocks_1[i], 1);
-						each_blocks_1[i].m(t5.parentNode, t5);
-					}
-				}
-
 				group_outros();
-
-				for (i = each_value_1.length; i < each_blocks_1.length; i += 1) {
-					out(i);
-				}
-
+				validate_each_keys(ctx, each_value_1, get_each_context_1, get_key);
+				each_blocks_1 = update_keyed_each(each_blocks_1, dirty, get_key, 1, ctx, each_value_1, each0_lookup, t5.parentNode, outro_and_destroy_block, create_each_block_1, t5, get_each_context_1);
 				check_outros();
 			}
 
 			if (dirty & /*theirGames, chessDotComUsername*/ 10) {
 				each_value = ensure_array_like_dev(/*theirGames*/ ctx[1]);
-				let i;
-
-				for (i = 0; i < each_value.length; i += 1) {
-					const child_ctx = get_each_context(ctx, each_value, i);
-
-					if (each_blocks[i]) {
-						each_blocks[i].p(child_ctx, dirty);
-						transition_in(each_blocks[i], 1);
-					} else {
-						each_blocks[i] = create_each_block(child_ctx);
-						each_blocks[i].c();
-						transition_in(each_blocks[i], 1);
-						each_blocks[i].m(each1_anchor.parentNode, each1_anchor);
-					}
-				}
-
 				group_outros();
-
-				for (i = each_value.length; i < each_blocks.length; i += 1) {
-					out_1(i);
-				}
-
+				validate_each_keys(ctx, each_value, get_each_context, get_key_1);
+				each_blocks = update_keyed_each(each_blocks, dirty, get_key_1, 1, ctx, each_value, each1_lookup, each1_anchor.parentNode, outro_and_destroy_block, create_each_block, each1_anchor, get_each_context);
 				check_outros();
 			}
 		},
@@ -7591,13 +8206,9 @@ function create_fragment(ctx) {
 			current = true;
 		},
 		o: function outro(local) {
-			each_blocks_1 = each_blocks_1.filter(Boolean);
-
 			for (let i = 0; i < each_blocks_1.length; i += 1) {
 				transition_out(each_blocks_1[i]);
 			}
-
-			each_blocks = each_blocks.filter(Boolean);
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				transition_out(each_blocks[i]);
@@ -7621,8 +8232,13 @@ function create_fragment(ctx) {
 				detach_dev(each1_anchor);
 			}
 
-			destroy_each(each_blocks_1, detaching);
-			destroy_each(each_blocks, detaching);
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				each_blocks_1[i].d(detaching);
+			}
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].d(detaching);
+			}
 		}
 	};
 
@@ -7706,6 +8322,26 @@ function instance($$self, $$props, $$invalidate) {
 		setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
 	}
 
+	/**
+ * @typedef {Object} Game
+ * @property {string} url
+ * @property {number} move_by
+ * @property {string} pgn
+ * @property {string} time_control
+ * @property {number} last_activity
+ * @property {boolean} rated
+ * @property {string} turn
+ * @property {string} fen
+ * @property {number} start_time
+ * @property {string} time_class
+ * @property {string} rules
+ * @property {string} white
+ * @property {string} black
+ */
+	/**
+ * Fetch games
+ * @returns {Promise<Game[]>} The games
+ */
 	async function fetchGames() {
 		const response = await fetch(`https://api.chess.com/pub/player/${chessDotComUsername}/games`);
 		const data = await response.json();
