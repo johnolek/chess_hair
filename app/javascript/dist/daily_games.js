@@ -7110,7 +7110,7 @@ function start(element, cfg) {
 const file$1 = "svelte/DailyGame.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-1pg7cpa", ".game.svelte-1pg7cpa{margin-right:20px;display:inline-block;width:600px;max-width:90vw}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiRGFpbHlHYW1lLnN2ZWx0ZSIsInNvdXJjZXMiOlsiRGFpbHlHYW1lLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IExpY2hlc3NQZ25WaWV3ZXIgZnJvbSAnbGljaGVzcy1wZ24tdmlld2VyJztcblxuICBleHBvcnQgbGV0IGdhbWUgPSB7fTtcbiAgbGV0IGJvYXJkRGl2O1xuICBleHBvcnQgbGV0IG15Q29sb3IgPSAnd2hpdGUnO1xuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgTGljaGVzc1BnblZpZXdlcihib2FyZERpdiwge1xuICAgICAgICBwZ246IGdhbWUucGduLFxuICAgICAgICBpbml0aWFsUGx5OiAnbGFzdCcsXG4gICAgICAgIG9yaWVudGF0aW9uOiBteUNvbG9yLFxuICAgICAgICBzY3JvbGxUb01vdmU6IGZhbHNlLFxuICAgICAgICBjaGVzc2dyb3VuZDoge1xuICAgICAgICAgIG1vdmVhYmxlOiBteUNvbG9yLFxuICAgICAgICB9XG4gICAgICB9KTtcbiAgICB9KTtcbiAgfSk7XG48L3NjcmlwdD5cblxuPGRpdiBjbGFzcz1cImdhbWVcIiBpZD17Z2FtZS51cmx9IGRhdGEtbGFzdC1hY3Rpdml0eT17cGFyc2VJbnQoZ2FtZS5sYXN0X2FjdGl2aXR5KX0+XG4gIDxhIGhyZWY9e2dhbWUudXJsfSB0YXJnZXQ9XCJfYmxhbmtcIj5jaGVzcy5jb208L2E+XG4gIDxkaXYgY2xhc3M9XCJpczJkXCIgaWQ9e2dhbWUudXJsfSBiaW5kOnRoaXM9e2JvYXJkRGl2fT48L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5nYW1lIHtcbiAgICBtYXJnaW4tcmlnaHQ6IDIwcHg7XG4gICAgZGlzcGxheTogaW5saW5lLWJsb2NrO1xuICAgIHdpZHRoOiA2MDBweDtcbiAgICBtYXgtd2lkdGg6IDkwdnc7XG5cbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUE2QkUsb0JBQU0sQ0FDSixZQUFZLENBQUUsSUFBSSxDQUNsQixPQUFPLENBQUUsWUFBWSxDQUNyQixLQUFLLENBQUUsS0FBSyxDQUNaLFNBQVMsQ0FBRSxJQUViIn0= */");
+	append_styles(target, "svelte-1pg7cpa", ".game.svelte-1pg7cpa{margin-right:20px;display:inline-block;width:600px;max-width:90vw}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiRGFpbHlHYW1lLnN2ZWx0ZSIsInNvdXJjZXMiOlsiRGFpbHlHYW1lLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IExpY2hlc3NQZ25WaWV3ZXIgZnJvbSAnbGljaGVzcy1wZ24tdmlld2VyJztcblxuICBleHBvcnQgbGV0IGdhbWUgPSB7fTtcbiAgbGV0IGJvYXJkRGl2O1xuICBsZXQgcGduVmlld2VyO1xuICBleHBvcnQgbGV0IG15Q29sb3IgPSAnd2hpdGUnO1xuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgcGduVmlld2VyID0gTGljaGVzc1BnblZpZXdlcihib2FyZERpdiwge1xuICAgICAgICBwZ246IGdhbWUucGduLFxuICAgICAgICBpbml0aWFsUGx5OiAnbGFzdCcsXG4gICAgICAgIG9yaWVudGF0aW9uOiBteUNvbG9yLFxuICAgICAgICBzY3JvbGxUb01vdmU6IGZhbHNlLFxuICAgICAgfSk7XG4gICAgfSk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXYgY2xhc3M9XCJnYW1lXCIgaWQ9e2dhbWUudXJsfSBkYXRhLWxhc3QtYWN0aXZpdHk9e3BhcnNlSW50KGdhbWUubGFzdF9hY3Rpdml0eSl9PlxuICA8YSBocmVmPXtnYW1lLnVybH0gdGFyZ2V0PVwiX2JsYW5rXCI+Y2hlc3MuY29tPC9hPlxuICA8ZGl2IGNsYXNzPVwiaXMyZFwiIGlkPXtnYW1lLnVybH0gYmluZDp0aGlzPXtib2FyZERpdn0+PC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuZ2FtZSB7XG4gICAgbWFyZ2luLXJpZ2h0OiAyMHB4O1xuICAgIGRpc3BsYXk6IGlubGluZS1ibG9jaztcbiAgICB3aWR0aDogNjAwcHg7XG4gICAgbWF4LXdpZHRoOiA5MHZ3O1xuXG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBMkJFLG9CQUFNLENBQ0osWUFBWSxDQUFFLElBQUksQ0FDbEIsT0FBTyxDQUFFLFlBQVksQ0FDckIsS0FBSyxDQUFFLEtBQUssQ0FDWixTQUFTLENBQUUsSUFFYiJ9 */");
 }
 
 function create_fragment$1(ctx) {
@@ -7133,14 +7133,14 @@ function create_fragment$1(ctx) {
 			div0 = element("div");
 			attr_dev(a, "href", a_href_value = /*game*/ ctx[0].url);
 			attr_dev(a, "target", "_blank");
-			add_location(a, file$1, 24, 2, 540);
+			add_location(a, file$1, 22, 2, 507);
 			attr_dev(div0, "class", "is2d");
 			attr_dev(div0, "id", div0_id_value = /*game*/ ctx[0].url);
-			add_location(div0, file$1, 25, 2, 591);
+			add_location(div0, file$1, 23, 2, 558);
 			attr_dev(div1, "class", "game svelte-1pg7cpa");
 			attr_dev(div1, "id", div1_id_value = /*game*/ ctx[0].url);
 			attr_dev(div1, "data-last-activity", div1_data_last_activity_value = parseInt(/*game*/ ctx[0].last_activity));
-			add_location(div1, file$1, 23, 0, 455);
+			add_location(div1, file$1, 21, 0, 422);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7197,16 +7197,16 @@ function instance$1($$self, $$props, $$invalidate) {
 	validate_slots('DailyGame', slots, []);
 	let { game = {} } = $$props;
 	let boardDiv;
+	let pgnViewer;
 	let { myColor = 'white' } = $$props;
 
 	onMount(() => {
 		setTimeout(() => {
-			start(boardDiv, {
+			pgnViewer = start(boardDiv, {
 				pgn: game.pgn,
 				initialPly: 'last',
 				orientation: myColor,
-				scrollToMove: false,
-				chessground: { moveable: myColor }
+				scrollToMove: false
 			});
 		});
 	});
@@ -7234,12 +7234,14 @@ function instance$1($$self, $$props, $$invalidate) {
 		LichessPgnViewer: start,
 		game,
 		boardDiv,
+		pgnViewer,
 		myColor
 	});
 
 	$$self.$inject_state = $$props => {
 		if ('game' in $$props) $$invalidate(0, game = $$props.game);
 		if ('boardDiv' in $$props) $$invalidate(1, boardDiv = $$props.boardDiv);
+		if ('pgnViewer' in $$props) pgnViewer = $$props.pgnViewer;
 		if ('myColor' in $$props) $$invalidate(2, myColor = $$props.myColor);
 	};
 
@@ -7303,7 +7305,7 @@ function create_each_block_1(ctx) {
 	dailygame = new DailyGame({
 			props: {
 				game: /*game*/ ctx[23],
-				myColor: /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
+				myColor: /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7322,7 +7324,7 @@ function create_each_block_1(ctx) {
 			const dailygame_changes = {};
 			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[23];
 
-			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
+			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7361,7 +7363,7 @@ function create_each_block(ctx) {
 	dailygame = new DailyGame({
 			props: {
 				game: /*game*/ ctx[23],
-				myColor: /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
+				myColor: /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
 				? 'white'
 				: 'black'
 			},
@@ -7380,7 +7382,7 @@ function create_each_block(ctx) {
 			const dailygame_changes = {};
 			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[23];
 
-			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*playerName*/ ctx[3])
+			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
 			? 'white'
 			: 'black';
 
@@ -7478,11 +7480,11 @@ function create_fragment(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 102, 0, 3481);
-			add_location(h1, file, 103, 0, 3556);
-			add_location(h20, file, 104, 0, 3577);
-			add_location(hr, file, 108, 0, 3712);
-			add_location(h21, file, 109, 0, 3718);
+			add_location(link, file, 102, 0, 3517);
+			add_location(h1, file, 103, 0, 3592);
+			add_location(h20, file, 104, 0, 3613);
+			add_location(hr, file, 108, 0, 3757);
+			add_location(h21, file, 109, 0, 3763);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7521,7 +7523,7 @@ function create_fragment(ctx) {
 				attr_dev(link, "href", link_href_value);
 			}
 
-			if (dirty & /*myGames, playerName*/ 9) {
+			if (dirty & /*myGames, chessDotComUsername*/ 9) {
 				each_value_1 = ensure_array_like_dev(/*myGames*/ ctx[0]);
 				let i;
 
@@ -7548,7 +7550,7 @@ function create_fragment(ctx) {
 				check_outros();
 			}
 
-			if (dirty & /*theirGames, playerName*/ 10) {
+			if (dirty & /*theirGames, chessDotComUsername*/ 10) {
 				each_value = ensure_array_like_dev(/*theirGames*/ ctx[1]);
 				let i;
 
@@ -7644,7 +7646,7 @@ function instance($$self, $$props, $$invalidate) {
 	let pieceSet;
 	let gameCount = null;
 	let previousGameCount = null;
-	const playerName = document.body.dataset.chessDotComUsername;
+	const chessDotComUsername = document.body.dataset.chessDotComUsername;
 	const config = new Config();
 	const configForm = new ConfigForm(config);
 	const updateFrequencyOption = config.getConfigOption('Update frequency in seconds', 5);
@@ -7705,13 +7707,13 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	async function fetchGames() {
-		const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
+		const response = await fetch(`https://api.chess.com/pub/player/${chessDotComUsername}/games`);
 		const data = await response.json();
 		return data.games;
 	}
 
 	function filterMyTurnGames(games) {
-		return games.filter(game => game.turn === 'white' && game.white.includes(playerName) || game.turn === 'black' && game.black.includes(playerName));
+		return games.filter(game => game.turn === 'white' && game.white.includes(chessDotComUsername) || game.turn === 'black' && game.black.includes(chessDotComUsername));
 	}
 
 	function filterTheirTurnGames(games) {
@@ -7745,7 +7747,7 @@ function instance($$self, $$props, $$invalidate) {
 		pieceSet,
 		gameCount,
 		previousGameCount,
-		playerName,
+		chessDotComUsername,
 		config,
 		configForm,
 		updateFrequencyOption,
@@ -7796,7 +7798,15 @@ function instance($$self, $$props, $$invalidate) {
 		}
 	};
 
-	return [myGames, theirGames, pieceSet, playerName, title, gameCount, previousGameCount];
+	return [
+		myGames,
+		theirGames,
+		pieceSet,
+		chessDotComUsername,
+		title,
+		gameCount,
+		previousGameCount
+	];
 }
 
 class DailyGames extends SvelteComponentDev {

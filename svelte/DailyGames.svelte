@@ -23,7 +23,7 @@
     }
   }
 
-  const playerName = document.body.dataset.chessDotComUsername;
+  const chessDotComUsername = document.body.dataset.chessDotComUsername;
   const config = new Config();
   const configForm = new ConfigForm(config);
   const updateFrequencyOption = config.getConfigOption('Update frequency in seconds', 5);
@@ -78,13 +78,13 @@
   }
 
   async function fetchGames() {
-    const response = await fetch(`https://api.chess.com/pub/player/${playerName}/games`);
+    const response = await fetch(`https://api.chess.com/pub/player/${chessDotComUsername}/games`);
     const data = await response.json();
     return data.games;
   }
 
   function filterMyTurnGames(games) {
-    return games.filter(game => (game.turn === 'white' && game.white.includes(playerName)) || (game.turn === 'black' && game.black.includes(playerName)));
+    return games.filter(game => (game.turn === 'white' && game.white.includes(chessDotComUsername)) || (game.turn === 'black' && game.black.includes(chessDotComUsername)));
   }
 
   function filterTheirTurnGames(games) {
@@ -104,10 +104,10 @@
 <h1>Daily Games</h1>
 <h2>My Turn</h2>
 {#each myGames as game}
-  <DailyGame {game} myColor="{game.white.includes(playerName) ? 'white' : 'black'}"/>
+  <DailyGame {game} myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"/>
 {/each}
 <hr/>
 <h2>Their Turn</h2>
 {#each theirGames as game}
-  <DailyGame {game} myColor="{game.white.includes(playerName) ? 'white' : 'black'}"/>
+  <DailyGame {game} myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"/>
 {/each}

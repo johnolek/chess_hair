@@ -4,18 +4,16 @@
 
   export let game = {};
   let boardDiv;
+  let pgnViewer;
   export let myColor = 'white';
 
   onMount(() => {
     setTimeout(() => {
-      LichessPgnViewer(boardDiv, {
+      pgnViewer = LichessPgnViewer(boardDiv, {
         pgn: game.pgn,
         initialPly: 'last',
         orientation: myColor,
         scrollToMove: false,
-        chessground: {
-          moveable: myColor,
-        }
       });
     });
   });
