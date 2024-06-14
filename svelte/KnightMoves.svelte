@@ -1,9 +1,16 @@
 <script>
   import { onMount } from 'svelte';
+  import { tweened } from 'svelte/motion';
+  import { linear } from 'svelte/easing';
   import { Chessground } from "chessground";
   import { knightMovesData } from 'src/knight_moves_data';
   import Config from "src/local_config";
   import { ConfigForm } from "src/local_config";
+
+  const secondProgress = tweened(0, {
+    duration: 1000,
+    easing: linear,
+  });
 
   let chessground;
   let jsonData = knightMovesData;
@@ -14,7 +21,6 @@
   let gameRunning = false;
   let timeRemaining = null;
   let timeElapsed = null;
-  let gameStartTime = null;
 
   let progressClass = 'is-success';
   let animating = false;
@@ -146,7 +152,7 @@
     gameRunning = true;
     timeRemaining = 60;
     timeElapsed = 0;
-    gameStartTime = performance.now() / 1000;
+    secondProgress.set(0);
     newPosition();
     setTimeout(() => {
       endGame();
@@ -156,13 +162,9 @@
         clearInterval(timerInterval);
       }
       timeRemaining -= 1;
+      timeElapsed += 1;
+      secondProgress.set(timeElapsed);
     }, 1000);
-    const progressInterval = setInterval(() => {
-      if (timeRemaining === 0) {
-        clearInterval(progressInterval);
-      }
-      timeElapsed = (performance.now() / 1000) - gameStartTime;
-    }, 10);
   }
 
   function endGame() {
@@ -380,7 +382,7 @@
     </div>
 
     {#if gameRunning}
-      <progress class="progress {progressClass}" value="{timeElapsed}" max="60" style="width: {boardWidth}px;"></progress>
+      <progress class="progress {progressClass}" value="{$secondProgress}" max="60" style="width: {boardWidth}px;"></progress>
     {/if}
 
     <div class="fixed-grid has-3-cols" style="width: {boardWidth}px">
