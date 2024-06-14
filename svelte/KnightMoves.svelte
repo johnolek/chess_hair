@@ -252,6 +252,7 @@
 
   function drawCorrectArrows(validPaths) {
     const shapes = [];
+    const alreadyDrawn = new Set()
     const brushes = chessground.state.drawable.brushes;
     const brushKeys = Object.keys(brushes);
     let maxPathsToShow = maxPathsToDisplayOption.getValue();
@@ -266,8 +267,12 @@
       const movePairs = getMovePairsFromPath(path);
       const brushKey = brushKeys[index % brushKeys.length];
       movePairs.forEach((pair) => {
+        if (alreadyDrawn.has(pair)) {
+          return;
+        }
         const shape = {orig: pair[0], dest: pair[1], brush: brushKey, modifiers: {hilite: false, lineWidth: 5}}
         shapes.push(shape);
+        alreadyDrawn.add(pair);
       });
     });
 
