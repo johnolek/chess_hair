@@ -6,6 +6,7 @@
   import { knightMovesData } from 'src/knight_moves_data';
   import Config from "src/local_config";
   import { ConfigForm } from "src/local_config";
+  import { Util } from 'src/util';
 
   const secondProgress = tweened(0, {
     duration: 1000,
@@ -51,6 +52,18 @@
   let mainColumn;
   let boardContainer;
   let boardWrapper;
+
+  const customBrushes = {
+    brand1: { key: 'brand1', color: Util.getRootCssVarValue('--brand-color-1'), opacity: 1, lineWidth: 15},
+    brand2: { key: 'brand2', color: Util.getRootCssVarValue('--brand-color-2'), opacity: 1, lineWidth: 15},
+    brand3: { key: 'brand3', color: Util.getRootCssVarValue('--brand-color-3'), opacity: 1, lineWidth: 15},
+    brand4: { key: 'brand4', color: Util.getRootCssVarValue('--brand-color-4'), opacity: 1, lineWidth: 15},
+    brand5: { key: 'brand5', color: Util.getRootCssVarValue('--brand-color-5'), opacity: 1, lineWidth: 15},
+    brand6: { key: 'brand6', color: Util.getRootCssVarValue('--brand-color-6'), opacity: 1, lineWidth: 15},
+    brand7: { key: 'brand7', color: Util.getRootCssVarValue('--brand-color-7'), opacity: 1, lineWidth: 15},
+    brand8: { key: 'brand8', color: Util.getRootCssVarValue('--brand-color-8'), opacity: 1, lineWidth: 15},
+    brand9: { key: 'brand9', color: Util.getRootCssVarValue('--brand-color-9'), opacity: 1, lineWidth: 15},
+  };
 
   $: {
     if (gameRunning) {
@@ -98,6 +111,9 @@
       },
       draggable: false,
       selectable: false,
+      drawable: {
+        brushes: customBrushes,
+      }
     });
 
     resize();
@@ -254,7 +270,7 @@
     const shapes = [];
     const alreadyDrawn = new Set()
     const brushes = chessground.state.drawable.brushes;
-    const brushKeys = Object.keys(brushes);
+    const brushKeys = Object.keys(customBrushes);
     let maxPathsToShow = maxPathsToDisplayOption.getValue();
     if (maxPathsToShow < 1) {
       maxPathsToShow = 1;

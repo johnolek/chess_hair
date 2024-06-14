@@ -22441,4 +22441,16 @@ has-background-danger.is-hoverable:active {
   pointer-events: all !important;
 }
 
+:root {
+  --brand-color-1: hsl(190, 100%, 23%);
+  --brand-color-2: hsl(181, 88%, 31%);
+  --brand-color-3: hsl(160, 41%, 70%);
+  --brand-color-4: hsl(39, 100%, 47%);
+  --brand-color-5: hsl(30, 98%, 40%);
+  --brand-color-6: hsl(19, 97%, 37%);
+  --brand-color-7: hsl(5, 81%, 38%);
+  --brand-color-8: hsl(358, 64%, 37%);
+  --brand-color-9: hsl(197, 100%, 5%);
+}
+
 /*# sourceMappingURL=chess_hair.css.map */

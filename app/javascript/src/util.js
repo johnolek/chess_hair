@@ -7,6 +7,10 @@ class Util {
       link.parentNode.removeChild(link);
     });
   }
+
+  static getRootCssVarValue(varName) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName);
+  }
 }
 
 export { Util };
