@@ -1,7 +1,9 @@
 {
 	"dependencies": {
+		"bulma": "^1.0.1",
 		"chessground": "^9.1.1",
-		"lichess-pgn-viewer": "^2.1.0"
+		"lichess-pgn-viewer": "^2.1.0",
+		"sass": "^1.77.5"
 	},
 	"scripts": {
 		"dev": "rollup -c -w",
