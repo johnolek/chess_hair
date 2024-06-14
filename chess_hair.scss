@@ -1,0 +1,22 @@
+$rich-black: hsla(197, 100%, 5%, 1);
+$midnight-green: hsla(190, 100%, 23%, 1);
+$dark-cyan: hsla(181, 88%, 31%, 1);
+$tiffany-blue: hsla(160, 41%, 70%, 1);
+$vanilla: hsla(45, 60%, 78%, 1);
+$gamboge: hsla(39, 100%, 47%, 1);
+$alloy-orange: hsla(30, 98%, 40%, 1);
+$rust: hsla(19, 97%, 37%, 1);
+$rufous: hsla(5, 81%, 38%, 1);
+$auburn: hsla(358, 64%, 37%, 1);
+
+@use "bulma/sass" with (
+  $primary: $midnight-green,
+  $info: $vanilla,
+  $success: $tiffany-blue,
+  $warning: $gamboge,
+  $danger: $rufous,
+  $light: $vanilla,
+  $dark: $rich-black,
+  $background: $vanilla,
+);
+
