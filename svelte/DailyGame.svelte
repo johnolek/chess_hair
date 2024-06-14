@@ -1,6 +1,6 @@
 <script>
   import { onMount, afterUpdate } from 'svelte';
-  import LichessPgnViewer from 'lichess-pgn-viewer';
+  import LichessPgnViewer from '../vendor/javascript/lichess-pgn-viewer.min';
 
   export let game = {};
   let pgnViewerContainer;
@@ -18,6 +18,14 @@
       initialPly: 'last',
       orientation: myColor,
       scrollToMove: false,
+      menu: {
+        analysisBoard: {
+          enabled: false,
+        },
+        practiceWithComputer: {
+          enabled: false,
+        }
+      }
     });
     reversedViewer = LichessPgnViewer(reversedBoard, {
       pgn: game.pgn,
@@ -26,17 +34,18 @@
       scrollToMove: false,
       showClocks: false,
       showControls: false,
+      menu: {
+        analysisBoard: {
+          enabled: false,
+        },
+        practiceWithComputer: {
+          enabled: false,
+        },
+      }
     });
-    let previousButton = pgnViewer.div.querySelector('.lpv__controls__goto--prev');
-    previousButton.addEventListener('click', () => {
-      reversedViewer.goTo('prev');
-      pgnViewer.div.focus();
-    });
-    let nextButton = pgnViewer.div.querySelector('.lpv__controls__goto--next');
-    nextButton.addEventListener('click', () => {
-      reversedViewer.goTo('next');
-      pgnViewer.div.focus();
-    });
+    pgnViewer.div.addEventListener('pathChange', (event) => {
+      reversedViewer.toPath(event.detail.path)
+    })
   });
 
   afterUpdate(() => {
@@ -46,17 +55,24 @@
   })
 </script>
 
-<div class="fixed-grid has-2-cols">
-  <div class="grid">
-    <div class="cell">
-      <div class="is2d" id={game.url} bind:this={pgnViewerContainer}></div>
-    </div>
-    <div class="cell">
-      <div class="is2d reversed" id="{game.url}-reversed" bind:this={reversedBoard}></div>
+<div class="block">
+  <div class="fixed-grid has-2-cols">
+    <div class="box">
+      <div class="block">
+        <a href={game.url} class="button is-link is-small" target="_blank">Chess.com</a>
+      </div>
+      <div class="grid">
+        <div class="cell">
+          <div class="is2d" id={game.url} bind:this={pgnViewerContainer}></div>
+        </div>
+        <div class="cell">
+          <div class="is2d reversed" id="{game.url}-reversed" bind:this={reversedBoard}></div>
+        </div>
+      </div>
     </div>
   </div>
-  <hr/>
 </div>
+
 
 <style>
 </style>
