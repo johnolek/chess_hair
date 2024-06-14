@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { flip } from 'svelte/animate';
   import Config from "src/local_config";
   import { ConfigForm } from "src/local_config";
   import { boardOptions, pieceSetOptions } from "src/board/options";
@@ -126,13 +127,26 @@
 <h1 class="title">Daily Games</h1>
 <h2>My Turn</h2>
 {#each myGames as game (game.url)}
-  <DailyGame
-    {game}
-    myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"
-  />
+  <div animate:flip>
+    <DailyGame
+      {game}
+      myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"
+    />
+  </div>
 {/each}
 <hr/>
 <h2>Their Turn</h2>
 {#each theirGames as game (game.url)}
-  <DailyGame {game} myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"/>
+  <div animate:flip>
+    <DailyGame
+      {game}
+      myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"
+    />
+  </div>
 {/each}
+
+<style>
+  div {
+    display: inline-block;
+  }
+</style>

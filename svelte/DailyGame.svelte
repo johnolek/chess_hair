@@ -34,8 +34,6 @@
 </script>
 
 <div
-  in:receive={{ key: game.url }}
-  out:send={{ key: game.url }}
   class="game" id={game.url} data-last-activity={parseInt(game.last_activity)}>
   <a href={game.url} target="_blank">chess.com</a>
   <div class="is2d" id={game.url} bind:this={boardDiv}></div>
