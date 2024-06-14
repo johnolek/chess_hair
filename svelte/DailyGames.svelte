@@ -134,7 +134,6 @@
     />
   </div>
 {/each}
-<hr/>
 <h2>Their Turn</h2>
 {#each theirGames as game (game.url)}
   <div animate:flip>
@@ -145,8 +144,4 @@
   </div>
 {/each}
 
-<style>
-  div {
-    display: inline-block;
-  }
-</style>
+

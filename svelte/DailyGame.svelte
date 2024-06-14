@@ -2,27 +2,40 @@
   import { onMount, afterUpdate } from 'svelte';
   import LichessPgnViewer from 'lichess-pgn-viewer';
 
-  import { crossfade } from 'svelte/transition';
-  import { quintOut } from 'svelte/easing';
-
-  const [send, receive] = crossfade({
-    duration: 1500,
-    easing: quintOut
-  });
-
   export let game = {};
-  let boardDiv;
+  let pgnViewerContainer;
+  let reversedBoard;
   let pgnViewer;
+  let reversedViewer;
+  let mainWidth;
+  let mainStyle;
   export let myColor = 'white';
+  const otherColor = myColor === 'white' ? 'black' : 'white';
 
   onMount(() => {
-    setTimeout(() => {
-      pgnViewer = LichessPgnViewer(boardDiv, {
-        pgn: game.pgn,
-        initialPly: 'last',
-        orientation: myColor,
-        scrollToMove: false,
-      });
+    pgnViewer = LichessPgnViewer(pgnViewerContainer, {
+      pgn: game.pgn,
+      initialPly: 'last',
+      orientation: myColor,
+      scrollToMove: false,
+    });
+    reversedViewer = LichessPgnViewer(reversedBoard, {
+      pgn: game.pgn,
+      initialPly: 'last',
+      orientation: otherColor,
+      scrollToMove: false,
+      showClocks: false,
+      showControls: false,
+    });
+    let previousButton = pgnViewer.div.querySelector('.lpv__controls__goto--prev');
+    previousButton.addEventListener('click', () => {
+      reversedViewer.goTo('prev');
+      pgnViewer.div.focus();
+    });
+    let nextButton = pgnViewer.div.querySelector('.lpv__controls__goto--next');
+    nextButton.addEventListener('click', () => {
+      reversedViewer.goTo('next');
+      pgnViewer.div.focus();
     });
   });
 
@@ -33,18 +46,17 @@
   })
 </script>
 
-<div
-  class="game" id={game.url} data-last-activity={parseInt(game.last_activity)}>
-  <a href={game.url} target="_blank">chess.com</a>
-  <div class="is2d" id={game.url} bind:this={boardDiv}></div>
+<div class="fixed-grid has-2-cols">
+  <div class="grid">
+    <div class="cell">
+      <div class="is2d" id={game.url} bind:this={pgnViewerContainer}></div>
+    </div>
+    <div class="cell">
+      <div class="is2d reversed" id="{game.url}-reversed" bind:this={reversedBoard}></div>
+    </div>
+  </div>
+  <hr/>
 </div>
 
 <style>
-  .game {
-    margin-right: 20px;
-    display: inline-block;
-    width: 600px;
-    max-width: 90vw;
-
-  }
 </style>
