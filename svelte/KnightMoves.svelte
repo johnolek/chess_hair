@@ -26,6 +26,22 @@
   let progressClass = 'is-success';
   let animating = false;
   let answerShown;
+  let groupedPaths = [];
+  let groupIndex = 0;
+
+  let disableNext = false;
+  let disablePrev = true;
+
+  $: {
+    disableNext = groupIndex >= groupedPaths.length - 1;
+    disablePrev = groupIndex <= 0;
+  }
+
+  $: {
+    if (answerShown && groupedPaths.length > 0 && groupIndex >= 0) {
+      drawCorrectArrows(groupedPaths[groupIndex]);
+    }
+  }
 
   let highScore = 0;
   let maxPathsToDisplayOption;
@@ -54,15 +70,15 @@
   let boardWrapper;
 
   const customBrushes = {
-    brand1: { key: 'brand1', color: Util.getRootCssVarValue('--brand-color-1'), opacity: 1, lineWidth: 15},
-    brand2: { key: 'brand2', color: Util.getRootCssVarValue('--brand-color-2'), opacity: 1, lineWidth: 15},
-    brand3: { key: 'brand3', color: Util.getRootCssVarValue('--brand-color-3'), opacity: 1, lineWidth: 15},
-    brand4: { key: 'brand4', color: Util.getRootCssVarValue('--brand-color-4'), opacity: 1, lineWidth: 15},
-    brand5: { key: 'brand5', color: Util.getRootCssVarValue('--brand-color-5'), opacity: 1, lineWidth: 15},
-    brand6: { key: 'brand6', color: Util.getRootCssVarValue('--brand-color-6'), opacity: 1, lineWidth: 15},
-    brand7: { key: 'brand7', color: Util.getRootCssVarValue('--brand-color-7'), opacity: 1, lineWidth: 15},
-    brand8: { key: 'brand8', color: Util.getRootCssVarValue('--brand-color-8'), opacity: 1, lineWidth: 15},
-    brand9: { key: 'brand9', color: Util.getRootCssVarValue('--brand-color-9'), opacity: 1, lineWidth: 15},
+    brand1: {key: 'brand1', color: Util.getRootCssVarValue('--brand-color-1'), opacity: 1, lineWidth: 15},
+    brand2: {key: 'brand2', color: Util.getRootCssVarValue('--brand-color-2'), opacity: 1, lineWidth: 15},
+    brand3: {key: 'brand3', color: Util.getRootCssVarValue('--brand-color-3'), opacity: 1, lineWidth: 15},
+    brand4: {key: 'brand4', color: Util.getRootCssVarValue('--brand-color-4'), opacity: 1, lineWidth: 15},
+    brand5: {key: 'brand5', color: Util.getRootCssVarValue('--brand-color-5'), opacity: 1, lineWidth: 15},
+    brand6: {key: 'brand6', color: Util.getRootCssVarValue('--brand-color-6'), opacity: 1, lineWidth: 15},
+    brand7: {key: 'brand7', color: Util.getRootCssVarValue('--brand-color-7'), opacity: 1, lineWidth: 15},
+    brand8: {key: 'brand8', color: Util.getRootCssVarValue('--brand-color-8'), opacity: 1, lineWidth: 15},
+    brand9: {key: 'brand9', color: Util.getRootCssVarValue('--brand-color-9'), opacity: 1, lineWidth: 15},
   };
 
   $: {
@@ -267,14 +283,15 @@
   }
 
   function drawCorrectArrows(validPaths) {
+    clearDrawings();
     const shapes = [];
     const alreadyDrawn = new Set()
-    const brushes = chessground.state.drawable.brushes;
     const brushKeys = Object.keys(customBrushes);
     let maxPathsToShow = maxPathsToDisplayOption.getValue();
     if (maxPathsToShow < 1) {
       maxPathsToShow = 1;
     }
+    maxPathsToShow = 50;
 
     validPaths.forEach((path, index) => {
       if (index + 1 > maxPathsToShow) {
@@ -286,7 +303,7 @@
         if (alreadyDrawn.has(pair)) {
           return;
         }
-        const shape = {orig: pair[0], dest: pair[1], brush: brushKey, modifiers: {hilite: false, lineWidth: 5}}
+        const shape = {orig: pair[0], dest: pair[1], brush: brushKey, modifiers: {lineWidth: 10}}
         shapes.push(shape);
         alreadyDrawn.add(pair);
       });
@@ -314,6 +331,51 @@
     return pairs;
   }
 
+  function getGroupedPaths(paths) {
+    let groups = [];
+
+    for (let path of paths) {
+      let addedToGroup = false;
+
+      for (let group of groups) {
+        let overlap = group.some(groupPath => {
+          for (let i = 0; i < groupPath.length - 1; i++) {
+            for (let j = 0; j < path.length - 1; j++) {
+              if (groupPath[i] === path[j] && groupPath[i + 1] === path[j + 1]) {
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+
+        if (!overlap) {
+          group.push(path);
+          addedToGroup = true;
+          break;
+        }
+      }
+
+      if (!addedToGroup) {
+        groups.push([path]);
+      }
+    }
+
+    return groups;
+  }
+
+  function incrementGroupIndex() {
+    if (groupIndex < groupedPaths.length - 1) {
+      groupIndex++;
+    }
+  }
+
+  function decrementGroupIndex() {
+    if (groupIndex > 0) {
+      groupIndex--;
+    }
+  }
+
   function makeSequentialMoves(movePairs = [], callback = null) {
     animating = true;
     if (movePairs.length < 1) {
@@ -333,7 +395,6 @@
   }
 
   function clearDrawings() {
-    answerShown = false;
     chessground.set({
       drawable: {
         shapes: []
@@ -343,6 +404,7 @@
 
   function newPosition() {
     clearDrawings();
+    answerShown = false;
     const keys = Object.keys(jsonData);
     const index = getRandomIndex(keys.length);
     const key = keys[index];
@@ -403,7 +465,8 @@
     </div>
 
     {#if gameRunning}
-      <progress class="progress {progressClass}" value="{$secondProgress}" max="60" style="width: {boardWidth}px;"></progress>
+      <progress class="progress {progressClass}" value="{$secondProgress}" max="60"
+                style="width: {boardWidth}px;"></progress>
     {/if}
 
     <div class="fixed-grid has-3-cols" style="width: {boardWidth}px">
@@ -460,7 +523,8 @@
             answerShown = true;
             const correctPaths = positionData.paths;
             const randomlySorted = sortRandomly(correctPaths);
-            drawCorrectArrows(randomlySorted);
+            groupedPaths = sortRandomly(getGroupedPaths(randomlySorted));
+            groupIndex = 0;
           }
         }}>Show answer
             </button>
@@ -469,9 +533,16 @@
           <div class="block">
             <button class="button is-link" on:click={() => {
               clearDrawings();
+              answerShown = false;
             }}>
               Clear
             </button>
+            {#if groupedPaths.length > 1}
+              <div class="buttons has-addons">
+                <button class="button" on:click={decrementGroupIndex} disabled={disablePrev}>&laquo;</button>
+                <button class="button" on:click={incrementGroupIndex} disabled={disableNext}>&raquo;</button>
+              </div>
+            {/if}
           </div>
           <div class="block has-text-left">
             <div>
@@ -487,7 +558,6 @@
   </div>
 
 
-
 </div>
 
 <style>
@@ -499,6 +569,7 @@
   .board-wrapper {
     width: 100%;
   }
+
   .correct {
     color: green;
   }
@@ -508,10 +579,21 @@
   }
 
   @keyframes incorrectAnswer {
-    25% { background-color: red; transform: translateX(-10px); }
-    50% { background-color: red; transform: translateX(10px); }
-    75% { background-color: red; transform: translateX(-10px); }
-    100% { transform: translateX(0px); }
+    25% {
+      background-color: red;
+      transform: translateX(-10px);
+    }
+    50% {
+      background-color: red;
+      transform: translateX(10px);
+    }
+    75% {
+      background-color: red;
+      transform: translateX(-10px);
+    }
+    100% {
+      transform: translateX(0px);
+    }
   }
 
   .incorrectAnswer {
@@ -519,8 +601,13 @@
   }
 
   @keyframes correctAnswer {
-    50% { background-color: green; transform: scale(1.01); }
-    100% { transform: scale(1); }
+    50% {
+      background-color: green;
+      transform: scale(1.01);
+    }
+    100% {
+      transform: scale(1);
+    }
   }
 
   .correctAnswer {
