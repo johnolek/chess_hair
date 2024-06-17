@@ -11,13 +11,21 @@
   let correctCount = 0;
   let incorrectCount = 0;
   let correctAnswer;
+  let answerAllowed;
   let answerInput;
+  let answerValue = '';
   let resultText;
   let resultClass;
 
   let boardContainer;
   let chessground;
   let fen;
+
+  $: {
+    if (answerValue.length === 2) {
+      handleAnswer();
+    }
+  }
 
   $: {
     if (chessground && fen) {
@@ -32,7 +40,7 @@
   }
 
   function newPosition() {
-    answerInput.value = '';
+    answerAllowed = false;
     const game = getRandomGame();
     const pgnGame = parsePgn(game.pgn)[0];
     const totalPlies = [...pgnGame.moves.mainline()].length;
@@ -69,7 +77,29 @@
       });
       chessground.move(from, to);
       answerInput.focus();
+      answerValue = '';
+      answerAllowed = true;
     }, 1000);
+  }
+
+  function handleAnswer() {
+    if (!answerAllowed) {
+      return;
+    }
+    if (answerValue.length !== 2) {
+      return;
+    }
+    if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
+      resultText = `${answerValue} was correct!`;
+      resultClass = 'correct';
+      correctCount++;
+    } else {
+      resultText = `${answerInput.value} was incorrect. Correct answer was ${correctAnswer}.`
+      resultClass = 'incorrect';
+      incorrectCount++;
+    }
+    answerValue = '';
+    newPosition();
   }
 
   onMount(() => {
@@ -101,20 +131,9 @@
       <div class="is2d" bind:this={boardContainer} style="height: 500px; width: 500px;"></div>
     </div>
     <div class="block">
-      <form on:submit|preventDefault={() => {
-        if (answerInput.value.toLowerCase().trim() === correctAnswer.toLowerCase()) {
-          resultText = 'Correct!'
-          resultClass = 'correct';
-          correctCount++;
-        } else {
-          resultText = `${answerInput.value} was incorrect. Correct answer was ${correctAnswer}.`
-          resultClass = 'incorrect';
-          incorrectCount++;
-        }
-        newPosition();
-      }}>
+      <form on:submit|preventDefault={handleAnswer}>
         <label for="answer">Answer</label>
-        <input id="answer" type="text" bind:this={answerInput}/>
+        <input id="answer" type="text" bind:this={answerInput} bind:value={answerValue}/>
       </form>
     </div>
     {#if resultText}

@@ -179,6 +179,12 @@ function children(element) {
 
 /**
  * @returns {void} */
+function set_input_value(input, value) {
+	input.value = value == null ? '' : value;
+}
+
+/**
+ * @returns {void} */
 function set_style(node, key, value, important) {
 	{
 		node.style.setProperty(key, value, '');
@@ -678,8 +684,10 @@ function listen_dev(
 	has_stop_immediate_propagation
 ) {
 	const modifiers =
-		[];
-	modifiers.push('preventDefault');
+		options === true ? ['capture'] : options ? Array.from(Object.keys(options)) : [];
+	if (has_prevent_default) modifiers.push('preventDefault');
+	if (has_stop_propagation) modifiers.push('stopPropagation');
+	if (has_stop_immediate_propagation) modifiers.push('stopImmediatePropagation');
 	dispatch_dev('SvelteDOMAddEventListener', { node, event, handler, modifiers });
 	const dispose = listen(node, event, handler, options);
 	return () => {
@@ -5587,10 +5595,10 @@ const parseSan = (pos, san) => {
 const file = "svelte/NotationTrainer.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-a216cu", ".is2d.svelte-a216cu{width:100%}.column.svelte-a216cu{width:600px}.board-wrapper.svelte-a216cu{width:100%;position:relative}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSIsInNvdXJjZXMiOlsiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IHsgQ2hlc3Nncm91bmQgfSBmcm9tIFwiY2hlc3Nncm91bmRcIjtcbiAgaW1wb3J0IHsgcGFyc2VQZ24sIHN0YXJ0aW5nUG9zaXRpb24gfSBmcm9tICdjaGVzc29wcy9wZ24nO1xuICBpbXBvcnQgeyBVdGlsIH0gZnJvbSAnc3JjL3V0aWwnO1xuICBpbXBvcnQgeyBnZXRSYW5kb21HYW1lIH0gZnJvbSBcInNyYy9yYW5kb21fZ2FtZXNcIjtcbiAgaW1wb3J0IHsgcGFyc2VTYW4gfSBmcm9tIFwiY2hlc3NvcHMvc2FuXCI7XG4gIGltcG9ydCB7IG1ha2VGZW4gfSBmcm9tIFwiY2hlc3NvcHMvZmVuXCI7XG4gIGltcG9ydCB7IG1ha2VTcXVhcmUgfSBmcm9tIFwiY2hlc3NvcHMvdXRpbFwiO1xuXG4gIGxldCBjb3JyZWN0Q291bnQgPSAwO1xuICBsZXQgaW5jb3JyZWN0Q291bnQgPSAwO1xuICBsZXQgY29ycmVjdEFuc3dlcjtcbiAgbGV0IGFuc3dlcklucHV0O1xuICBsZXQgcmVzdWx0VGV4dDtcbiAgbGV0IHJlc3VsdENsYXNzO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgbGV0IGNoZXNzZ3JvdW5kO1xuICBsZXQgZmVuO1xuXG4gICQ6IHtcbiAgICBpZiAoY2hlc3Nncm91bmQgJiYgZmVuKSB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgICBmZW46IGZlbixcbiAgICAgICAgaGlnaGxpZ2h0OiB7XG4gICAgICAgICAgbGFzdE1vdmU6IGZhbHNlLFxuICAgICAgICAgIGNoZWNrOiBmYWxzZSxcbiAgICAgICAgfVxuICAgICAgfSlcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBuZXdQb3NpdGlvbigpIHtcbiAgICBhbnN3ZXJJbnB1dC52YWx1ZSA9ICcnO1xuICAgIGNvbnN0IGdhbWUgPSBnZXRSYW5kb21HYW1lKCk7XG4gICAgY29uc3QgcGduR2FtZSA9IHBhcnNlUGduKGdhbWUucGduKVswXTtcbiAgICBjb25zdCB0b3RhbFBsaWVzID0gWy4uLnBnbkdhbWUubW92ZXMubWFpbmxpbmUoKV0ubGVuZ3RoO1xuXG4gICAgY29uc3QgcmFuZG9tID0gVXRpbC5nZXRSYW5kb21JbnRCZXR3ZWVuKDEsIHRvdGFsUGxpZXMgLSAxKTtcbiAgICBjb25zdCBwb3NpdGlvblJlc3VsdCA9IHN0YXJ0aW5nUG9zaXRpb24ocGduR2FtZS5oZWFkZXJzKTtcbiAgICBjb25zdCBwb3NpdGlvbiA9IHBvc2l0aW9uUmVzdWx0LnVud3JhcCgpO1xuXG4gICAgY29uc3QgYWxsTm9kZXMgPSBbLi4ucGduR2FtZS5tb3Zlcy5tYWlubGluZU5vZGVzKCldO1xuXG4gICAgbGV0IGk7XG4gICAgbGV0IG1vdmU7XG4gICAgbGV0IG5leHROb2RlO1xuXG4gICAgZm9yIChpID0gMDsgaSA8IHJhbmRvbTsgaSsrKSB7XG4gICAgICBjb25zdCBub2RlID0gYWxsTm9kZXNbaV07XG4gICAgICBtb3ZlID0gcGFyc2VTYW4ocG9zaXRpb24sIG5vZGUuZGF0YS5zYW4pO1xuICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICAgIG5leHROb2RlID0gYWxsTm9kZXNbaSArIDFdO1xuICAgIH1cbiAgICBmZW4gPSBtYWtlRmVuKHBvc2l0aW9uLnRvU2V0dXAoKSk7XG5cbiAgICBjb25zdCBuZXh0TW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBuZXh0Tm9kZS5kYXRhLnNhbik7XG4gICAgY29uc3QgZnJvbSA9IG1ha2VTcXVhcmUobmV4dE1vdmUuZnJvbSk7XG4gICAgY29uc3QgdG8gPSBtYWtlU3F1YXJlKG5leHRNb3ZlLnRvKTtcbiAgICBjb3JyZWN0QW5zd2VyID0gdG87XG5cbiAgICBzZXRUaW1lb3V0KCgpID0+IHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiB0cnVlLFxuICAgICAgICAgIGNoZWNrOiBmYWxzZSxcbiAgICAgICAgfVxuICAgICAgfSk7XG4gICAgICBjaGVzc2dyb3VuZC5tb3ZlKGZyb20sIHRvKTtcbiAgICAgIGFuc3dlcklucHV0LmZvY3VzKCk7XG4gICAgfSwgMTAwMCk7XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCB7XG4gICAgICBmZW46ICc4LzgvOC84LzgvOC84LzgnLFxuICAgICAgY29vcmRpbmF0ZXM6IGZhbHNlLFxuICAgICAgYW5pbWF0aW9uOiB7XG4gICAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgICB9LFxuICAgICAgaGlnaGxpZ2h0OiB7XG4gICAgICAgIGxhc3RNb3ZlOiB0cnVlLFxuICAgICAgfSxcbiAgICAgIGRyYWdnYWJsZTogZmFsc2UsXG4gICAgICBzZWxlY3RhYmxlOiBmYWxzZSxcbiAgICB9KTtcbiAgICBuZXdQb3NpdGlvbigpO1xuICB9KTtcbjwvc2NyaXB0PlxuXG48aDE+Tm90YXRpb24gVHJhaW5lcjwvaDE+XG48bGluayBpZD1cInBpZWNlLXNwcml0ZVwiIGhyZWY9XCIvcGllY2UtY3NzL21lcmlkYS5jc3NcIiByZWw9XCJzdHlsZXNoZWV0XCI+XG48ZGl2IGNsYXNzPVwiY29sdW1uc1wiPlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGlzLTItZGVza3RvcFwiPlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgPHA+Q29ycmVjdDoge2NvcnJlY3RDb3VudH08L3A+XG4gICAgICA8cD5JbmNvcnJlY3Q6IHtpbmNvcnJlY3RDb3VudH08L3A+XG4gICAgPC9kaXY+XG4gICAgPGRpdiBjbGFzcz1cImJvYXJkLXdyYXBwZXIgYmxvY2tcIj5cbiAgICAgIDxkaXYgY2xhc3M9XCJpczJkXCIgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn0gc3R5bGU9XCJoZWlnaHQ6IDUwMHB4OyB3aWR0aDogNTAwcHg7XCI+PC9kaXY+XG4gICAgPC9kaXY+XG4gICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICA8Zm9ybSBvbjpzdWJtaXR8cHJldmVudERlZmF1bHQ9eygpID0+IHtcbiAgICAgICAgaWYgKGFuc3dlcklucHV0LnZhbHVlLnRvTG93ZXJDYXNlKCkudHJpbSgpID09PSBjb3JyZWN0QW5zd2VyLnRvTG93ZXJDYXNlKCkpIHtcbiAgICAgICAgICByZXN1bHRUZXh0ID0gJ0NvcnJlY3QhJ1xuICAgICAgICAgIHJlc3VsdENsYXNzID0gJ2NvcnJlY3QnO1xuICAgICAgICAgIGNvcnJlY3RDb3VudCsrO1xuICAgICAgICB9IGVsc2Uge1xuICAgICAgICAgIHJlc3VsdFRleHQgPSBgJHthbnN3ZXJJbnB1dC52YWx1ZX0gd2FzIGluY29ycmVjdC4gQ29ycmVjdCBhbnN3ZXIgd2FzICR7Y29ycmVjdEFuc3dlcn0uYFxuICAgICAgICAgIHJlc3VsdENsYXNzID0gJ2luY29ycmVjdCc7XG4gICAgICAgICAgaW5jb3JyZWN0Q291bnQrKztcbiAgICAgICAgfVxuICAgICAgICBuZXdQb3NpdGlvbigpO1xuICAgICAgfX0+XG4gICAgICAgIDxsYWJlbCBmb3I9XCJhbnN3ZXJcIj5BbnN3ZXI8L2xhYmVsPlxuICAgICAgICA8aW5wdXQgaWQ9XCJhbnN3ZXJcIiB0eXBlPVwidGV4dFwiIGJpbmQ6dGhpcz17YW5zd2VySW5wdXR9Lz5cbiAgICAgIDwvZm9ybT5cbiAgICA8L2Rpdj5cbiAgICB7I2lmIHJlc3VsdFRleHR9XG4gICAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cIntyZXN1bHRDbGFzc30gaXMtc2l6ZS0zXCI+XG4gICAgICAgICAge3Jlc3VsdFRleHR9XG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9kaXY+XG4gICAgey9pZn1cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuaXMyZCB7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cblxuICAuY29sdW1uIHtcbiAgICB3aWR0aDogNjAwcHg7XG4gIH1cblxuICAuYm9hcmQtd3JhcHBlciB7XG4gICAgd2lkdGg6IDEwMCU7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQWtJRSxtQkFBTSxDQUNKLEtBQUssQ0FBRSxJQUNULENBRUEscUJBQVEsQ0FDTixLQUFLLENBQUUsS0FDVCxDQUVBLDRCQUFlLENBQ2IsS0FBSyxDQUFFLElBQUksQ0FDWCxRQUFRLENBQUUsUUFDWiJ9 */");
+	append_styles(target, "svelte-a216cu", ".is2d.svelte-a216cu{width:100%}.column.svelte-a216cu{width:600px}.board-wrapper.svelte-a216cu{width:100%;position:relative}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSIsInNvdXJjZXMiOlsiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IHsgQ2hlc3Nncm91bmQgfSBmcm9tIFwiY2hlc3Nncm91bmRcIjtcbiAgaW1wb3J0IHsgcGFyc2VQZ24sIHN0YXJ0aW5nUG9zaXRpb24gfSBmcm9tICdjaGVzc29wcy9wZ24nO1xuICBpbXBvcnQgeyBVdGlsIH0gZnJvbSAnc3JjL3V0aWwnO1xuICBpbXBvcnQgeyBnZXRSYW5kb21HYW1lIH0gZnJvbSBcInNyYy9yYW5kb21fZ2FtZXNcIjtcbiAgaW1wb3J0IHsgcGFyc2VTYW4gfSBmcm9tIFwiY2hlc3NvcHMvc2FuXCI7XG4gIGltcG9ydCB7IG1ha2VGZW4gfSBmcm9tIFwiY2hlc3NvcHMvZmVuXCI7XG4gIGltcG9ydCB7IG1ha2VTcXVhcmUgfSBmcm9tIFwiY2hlc3NvcHMvdXRpbFwiO1xuXG4gIGxldCBjb3JyZWN0Q291bnQgPSAwO1xuICBsZXQgaW5jb3JyZWN0Q291bnQgPSAwO1xuICBsZXQgY29ycmVjdEFuc3dlcjtcbiAgbGV0IGFuc3dlckFsbG93ZWQ7XG4gIGxldCBhbnN3ZXJJbnB1dDtcbiAgbGV0IGFuc3dlclZhbHVlID0gJyc7XG4gIGxldCByZXN1bHRUZXh0O1xuICBsZXQgcmVzdWx0Q2xhc3M7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBsZXQgY2hlc3Nncm91bmQ7XG4gIGxldCBmZW47XG5cbiAgJDoge1xuICAgIGlmIChhbnN3ZXJWYWx1ZS5sZW5ndGggPT09IDIpIHtcbiAgICAgIGhhbmRsZUFuc3dlcigpO1xuICAgIH1cbiAgfVxuXG4gICQ6IHtcbiAgICBpZiAoY2hlc3Nncm91bmQgJiYgZmVuKSB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgICBmZW46IGZlbixcbiAgICAgICAgaGlnaGxpZ2h0OiB7XG4gICAgICAgICAgbGFzdE1vdmU6IGZhbHNlLFxuICAgICAgICAgIGNoZWNrOiBmYWxzZSxcbiAgICAgICAgfVxuICAgICAgfSlcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBuZXdQb3NpdGlvbigpIHtcbiAgICBhbnN3ZXJBbGxvd2VkID0gZmFsc2U7XG4gICAgY29uc3QgZ2FtZSA9IGdldFJhbmRvbUdhbWUoKTtcbiAgICBjb25zdCBwZ25HYW1lID0gcGFyc2VQZ24oZ2FtZS5wZ24pWzBdO1xuICAgIGNvbnN0IHRvdGFsUGxpZXMgPSBbLi4ucGduR2FtZS5tb3Zlcy5tYWlubGluZSgpXS5sZW5ndGg7XG5cbiAgICBjb25zdCByYW5kb20gPSBVdGlsLmdldFJhbmRvbUludEJldHdlZW4oMSwgdG90YWxQbGllcyAtIDEpO1xuICAgIGNvbnN0IHBvc2l0aW9uUmVzdWx0ID0gc3RhcnRpbmdQb3NpdGlvbihwZ25HYW1lLmhlYWRlcnMpO1xuICAgIGNvbnN0IHBvc2l0aW9uID0gcG9zaXRpb25SZXN1bHQudW53cmFwKCk7XG5cbiAgICBjb25zdCBhbGxOb2RlcyA9IFsuLi5wZ25HYW1lLm1vdmVzLm1haW5saW5lTm9kZXMoKV07XG5cbiAgICBsZXQgaTtcbiAgICBsZXQgbW92ZTtcbiAgICBsZXQgbmV4dE5vZGU7XG5cbiAgICBmb3IgKGkgPSAwOyBpIDwgcmFuZG9tOyBpKyspIHtcbiAgICAgIGNvbnN0IG5vZGUgPSBhbGxOb2Rlc1tpXTtcbiAgICAgIG1vdmUgPSBwYXJzZVNhbihwb3NpdGlvbiwgbm9kZS5kYXRhLnNhbik7XG4gICAgICBwb3NpdGlvbi5wbGF5KG1vdmUpO1xuICAgICAgbmV4dE5vZGUgPSBhbGxOb2Rlc1tpICsgMV07XG4gICAgfVxuICAgIGZlbiA9IG1ha2VGZW4ocG9zaXRpb24udG9TZXR1cCgpKTtcblxuICAgIGNvbnN0IG5leHRNb3ZlID0gcGFyc2VTYW4ocG9zaXRpb24sIG5leHROb2RlLmRhdGEuc2FuKTtcbiAgICBjb25zdCBmcm9tID0gbWFrZVNxdWFyZShuZXh0TW92ZS5mcm9tKTtcbiAgICBjb25zdCB0byA9IG1ha2VTcXVhcmUobmV4dE1vdmUudG8pO1xuICAgIGNvcnJlY3RBbnN3ZXIgPSB0bztcblxuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgaGlnaGxpZ2h0OiB7XG4gICAgICAgICAgbGFzdE1vdmU6IHRydWUsXG4gICAgICAgICAgY2hlY2s6IGZhbHNlLFxuICAgICAgICB9XG4gICAgICB9KTtcbiAgICAgIGNoZXNzZ3JvdW5kLm1vdmUoZnJvbSwgdG8pO1xuICAgICAgYW5zd2VySW5wdXQuZm9jdXMoKTtcbiAgICAgIGFuc3dlclZhbHVlID0gJyc7XG4gICAgICBhbnN3ZXJBbGxvd2VkID0gdHJ1ZTtcbiAgICB9LCAxMDAwKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGhhbmRsZUFuc3dlcigpIHtcbiAgICBpZiAoIWFuc3dlckFsbG93ZWQpIHtcbiAgICAgIHJldHVybjtcbiAgICB9XG4gICAgaWYgKGFuc3dlclZhbHVlLmxlbmd0aCAhPT0gMikge1xuICAgICAgcmV0dXJuO1xuICAgIH1cbiAgICBpZiAoYW5zd2VyVmFsdWUudG9Mb3dlckNhc2UoKS50cmltKCkgPT09IGNvcnJlY3RBbnN3ZXIudG9Mb3dlckNhc2UoKSkge1xuICAgICAgcmVzdWx0VGV4dCA9IGAke2Fuc3dlclZhbHVlfSB3YXMgY29ycmVjdCFgO1xuICAgICAgcmVzdWx0Q2xhc3MgPSAnY29ycmVjdCc7XG4gICAgICBjb3JyZWN0Q291bnQrKztcbiAgICB9IGVsc2Uge1xuICAgICAgcmVzdWx0VGV4dCA9IGAke2Fuc3dlcklucHV0LnZhbHVlfSB3YXMgaW5jb3JyZWN0LiBDb3JyZWN0IGFuc3dlciB3YXMgJHtjb3JyZWN0QW5zd2VyfS5gXG4gICAgICByZXN1bHRDbGFzcyA9ICdpbmNvcnJlY3QnO1xuICAgICAgaW5jb3JyZWN0Q291bnQrKztcbiAgICB9XG4gICAgYW5zd2VyVmFsdWUgPSAnJztcbiAgICBuZXdQb3NpdGlvbigpO1xuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgY2hlc3Nncm91bmQgPSBDaGVzc2dyb3VuZChib2FyZENvbnRhaW5lciwge1xuICAgICAgZmVuOiAnOC84LzgvOC84LzgvOC84JyxcbiAgICAgIGNvb3JkaW5hdGVzOiBmYWxzZSxcbiAgICAgIGFuaW1hdGlvbjoge1xuICAgICAgICBlbmFibGVkOiB0cnVlLFxuICAgICAgfSxcbiAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICBsYXN0TW92ZTogdHJ1ZSxcbiAgICAgIH0sXG4gICAgICBkcmFnZ2FibGU6IGZhbHNlLFxuICAgICAgc2VsZWN0YWJsZTogZmFsc2UsXG4gICAgfSk7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfSk7XG48L3NjcmlwdD5cblxuPGgxPk5vdGF0aW9uIFRyYWluZXI8L2gxPlxuPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy9tZXJpZGEuY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiPlxuPGRpdiBjbGFzcz1cImNvbHVtbnNcIj5cbiAgPGRpdiBjbGFzcz1cImNvbHVtbiBpcy0yLWRlc2t0b3BcIj5cbiAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgIDxwPkNvcnJlY3Q6IHtjb3JyZWN0Q291bnR9PC9wPlxuICAgICAgPHA+SW5jb3JyZWN0OiB7aW5jb3JyZWN0Q291bnR9PC9wPlxuICAgIDwvZGl2PlxuICAgIDxkaXYgY2xhc3M9XCJib2FyZC13cmFwcGVyIGJsb2NrXCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiaXMyZFwiIGJpbmQ6dGhpcz17Ym9hcmRDb250YWluZXJ9IHN0eWxlPVwiaGVpZ2h0OiA1MDBweDsgd2lkdGg6IDUwMHB4O1wiPjwvZGl2PlxuICAgIDwvZGl2PlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgPGZvcm0gb246c3VibWl0fHByZXZlbnREZWZhdWx0PXtoYW5kbGVBbnN3ZXJ9PlxuICAgICAgICA8bGFiZWwgZm9yPVwiYW5zd2VyXCI+QW5zd2VyPC9sYWJlbD5cbiAgICAgICAgPGlucHV0IGlkPVwiYW5zd2VyXCIgdHlwZT1cInRleHRcIiBiaW5kOnRoaXM9e2Fuc3dlcklucHV0fSBiaW5kOnZhbHVlPXthbnN3ZXJWYWx1ZX0vPlxuICAgICAgPC9mb3JtPlxuICAgIDwvZGl2PlxuICAgIHsjaWYgcmVzdWx0VGV4dH1cbiAgICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgICA8ZGl2IGNsYXNzPVwie3Jlc3VsdENsYXNzfSBpcy1zaXplLTNcIj5cbiAgICAgICAgICB7cmVzdWx0VGV4dH1cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cbiAgICB7L2lmfVxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5pczJkIHtcbiAgICB3aWR0aDogMTAwJTtcbiAgfVxuXG4gIC5jb2x1bW4ge1xuICAgIHdpZHRoOiA2MDBweDtcbiAgfVxuXG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICB3aWR0aDogMTAwJTtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBcUpFLG1CQUFNLENBQ0osS0FBSyxDQUFFLElBQ1QsQ0FFQSxxQkFBUSxDQUNOLEtBQUssQ0FBRSxLQUNULENBRUEsNEJBQWUsQ0FDYixLQUFLLENBQUUsSUFBSSxDQUNYLFFBQVEsQ0FBRSxRQUNaIn0= */");
 }
 
-// (120:4) {#if resultText}
+// (139:4) {#if resultText}
 function create_if_block(ctx) {
 	let div1;
 	let div0;
@@ -5603,9 +5611,9 @@ function create_if_block(ctx) {
 			div0 = element("div");
 			t = text(/*resultText*/ ctx[4]);
 			attr_dev(div0, "class", div0_class_value = "" + (/*resultClass*/ ctx[5] + " is-size-3" + " svelte-a216cu"));
-			add_location(div0, file, 121, 8, 3202);
+			add_location(div0, file, 140, 8, 3527);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file, 120, 6, 3174);
+			add_location(div1, file, 139, 6, 3499);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div1, anchor);
@@ -5630,7 +5638,7 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(120:4) {#if resultText}",
+		source: "(139:4) {#if resultText}",
 		ctx
 	});
 
@@ -5678,11 +5686,11 @@ function create_fragment(ctx) {
 			div0 = element("div");
 			p0 = element("p");
 			t3 = text("Correct: ");
-			t4 = text(/*correctCount*/ ctx[0]);
+			t4 = text(/*correctCount*/ ctx[1]);
 			t5 = space();
 			p1 = element("p");
 			t6 = text("Incorrect: ");
-			t7 = text(/*incorrectCount*/ ctx[1]);
+			t7 = text(/*incorrectCount*/ ctx[2]);
 			t8 = space();
 			div2 = element("div");
 			div1 = element("div");
@@ -5695,33 +5703,33 @@ function create_fragment(ctx) {
 			input = element("input");
 			t12 = space();
 			if (if_block) if_block.c();
-			add_location(h1, file, 91, 0, 2128);
+			add_location(h1, file, 121, 0, 2825);
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", "/piece-css/merida.css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 92, 0, 2154);
-			add_location(p0, file, 96, 6, 2313);
-			add_location(p1, file, 97, 6, 2350);
+			add_location(link, file, 122, 0, 2851);
+			add_location(p0, file, 126, 6, 3010);
+			add_location(p1, file, 127, 6, 3047);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 95, 4, 2287);
+			add_location(div0, file, 125, 4, 2984);
 			attr_dev(div1, "class", "is2d svelte-a216cu");
 			set_style(div1, "height", "500px");
 			set_style(div1, "width", "500px");
-			add_location(div1, file, 100, 6, 2440);
+			add_location(div1, file, 130, 6, 3137);
 			attr_dev(div2, "class", "board-wrapper block svelte-a216cu");
-			add_location(div2, file, 99, 4, 2400);
+			add_location(div2, file, 129, 4, 3097);
 			attr_dev(label, "for", "answer");
-			add_location(label, file, 115, 8, 3022);
+			add_location(label, file, 134, 8, 3322);
 			attr_dev(input, "id", "answer");
 			attr_dev(input, "type", "text");
-			add_location(input, file, 116, 8, 3065);
-			add_location(form, file, 103, 6, 2570);
+			add_location(input, file, 135, 8, 3365);
+			add_location(form, file, 133, 6, 3267);
 			attr_dev(div3, "class", "block");
-			add_location(div3, file, 102, 4, 2544);
+			add_location(div3, file, 132, 4, 3241);
 			attr_dev(div4, "class", "column is-2-desktop svelte-a216cu");
-			add_location(div4, file, 94, 2, 2249);
+			add_location(div4, file, 124, 2, 2946);
 			attr_dev(div5, "class", "columns");
-			add_location(div5, file, 93, 0, 2225);
+			add_location(div5, file, 123, 0, 2922);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -5752,17 +5760,26 @@ function create_fragment(ctx) {
 			append_dev(form, t11);
 			append_dev(form, input);
 			/*input_binding*/ ctx[11](input);
+			set_input_value(input, /*answerValue*/ ctx[0]);
 			append_dev(div4, t12);
 			if (if_block) if_block.m(div4, null);
 
 			if (!mounted) {
-				dispose = listen_dev(form, "submit", prevent_default(/*submit_handler*/ ctx[12]), false);
+				dispose = [
+					listen_dev(input, "input", /*input_input_handler*/ ctx[12]),
+					listen_dev(form, "submit", prevent_default(/*handleAnswer*/ ctx[7]), false, true, false, false)
+				];
+
 				mounted = true;
 			}
 		},
 		p: function update(ctx, [dirty]) {
-			if (dirty & /*correctCount*/ 1) set_data_dev(t4, /*correctCount*/ ctx[0]);
-			if (dirty & /*incorrectCount*/ 2) set_data_dev(t7, /*incorrectCount*/ ctx[1]);
+			if (dirty & /*correctCount*/ 2) set_data_dev(t4, /*correctCount*/ ctx[1]);
+			if (dirty & /*incorrectCount*/ 4) set_data_dev(t7, /*incorrectCount*/ ctx[2]);
+
+			if (dirty & /*answerValue*/ 1 && input.value !== /*answerValue*/ ctx[0]) {
+				set_input_value(input, /*answerValue*/ ctx[0]);
+			}
 
 			if (/*resultText*/ ctx[4]) {
 				if (if_block) {
@@ -5792,7 +5809,7 @@ function create_fragment(ctx) {
 			/*input_binding*/ ctx[11](null);
 			if (if_block) if_block.d();
 			mounted = false;
-			dispose();
+			run_all(dispose);
 		}
 	};
 
@@ -5813,7 +5830,9 @@ function instance($$self, $$props, $$invalidate) {
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let correctAnswer;
+	let answerAllowed;
 	let answerInput;
+	let answerValue = '';
 	let resultText;
 	let resultClass;
 	let boardContainer;
@@ -5821,7 +5840,7 @@ function instance($$self, $$props, $$invalidate) {
 	let fen;
 
 	function newPosition() {
-		$$invalidate(3, answerInput.value = '', answerInput);
+		answerAllowed = false;
 		const game = getRandomGame();
 		const pgnGame = parsePgn(game.pgn)[0];
 		const totalPlies = [...pgnGame.moves.mainline()].length;
@@ -5844,7 +5863,7 @@ function instance($$self, $$props, $$invalidate) {
 		const nextMove = parseSan(position, nextNode.data.san);
 		const from = makeSquare(nextMove.from);
 		const to = makeSquare(nextMove.to);
-		$$invalidate(2, correctAnswer = to);
+		correctAnswer = to;
 
 		setTimeout(
 			() => {
@@ -5854,9 +5873,34 @@ function instance($$self, $$props, $$invalidate) {
 
 				chessground.move(from, to);
 				answerInput.focus();
+				$$invalidate(0, answerValue = '');
+				answerAllowed = true;
 			},
 			1000
 		);
+	}
+
+	function handleAnswer() {
+		if (!answerAllowed) {
+			return;
+		}
+
+		if (answerValue.length !== 2) {
+			return;
+		}
+
+		if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
+			$$invalidate(4, resultText = `${answerValue} was correct!`);
+			$$invalidate(5, resultClass = 'correct');
+			$$invalidate(1, correctCount++, correctCount);
+		} else {
+			$$invalidate(4, resultText = `${answerInput.value} was incorrect. Correct answer was ${correctAnswer}.`);
+			$$invalidate(5, resultClass = 'incorrect');
+			$$invalidate(2, incorrectCount++, incorrectCount);
+		}
+
+		$$invalidate(0, answerValue = '');
+		newPosition();
 	}
 
 	onMount(() => {
@@ -5892,19 +5936,10 @@ function instance($$self, $$props, $$invalidate) {
 		});
 	}
 
-	const submit_handler = () => {
-		if (answerInput.value.toLowerCase().trim() === correctAnswer.toLowerCase()) {
-			$$invalidate(4, resultText = 'Correct!');
-			$$invalidate(5, resultClass = 'correct');
-			$$invalidate(0, correctCount++, correctCount);
-		} else {
-			$$invalidate(4, resultText = `${answerInput.value} was incorrect. Correct answer was ${correctAnswer}.`);
-			$$invalidate(5, resultClass = 'incorrect');
-			$$invalidate(1, incorrectCount++, incorrectCount);
-		}
-
-		newPosition();
-	};
+	function input_input_handler() {
+		answerValue = this.value;
+		$$invalidate(0, answerValue);
+	}
 
 	$$self.$capture_state = () => ({
 		onMount,
@@ -5919,20 +5954,25 @@ function instance($$self, $$props, $$invalidate) {
 		correctCount,
 		incorrectCount,
 		correctAnswer,
+		answerAllowed,
 		answerInput,
+		answerValue,
 		resultText,
 		resultClass,
 		boardContainer,
 		chessground,
 		fen,
-		newPosition
+		newPosition,
+		handleAnswer
 	});
 
 	$$self.$inject_state = $$props => {
-		if ('correctCount' in $$props) $$invalidate(0, correctCount = $$props.correctCount);
-		if ('incorrectCount' in $$props) $$invalidate(1, incorrectCount = $$props.incorrectCount);
-		if ('correctAnswer' in $$props) $$invalidate(2, correctAnswer = $$props.correctAnswer);
+		if ('correctCount' in $$props) $$invalidate(1, correctCount = $$props.correctCount);
+		if ('incorrectCount' in $$props) $$invalidate(2, incorrectCount = $$props.incorrectCount);
+		if ('correctAnswer' in $$props) correctAnswer = $$props.correctAnswer;
+		if ('answerAllowed' in $$props) answerAllowed = $$props.answerAllowed;
 		if ('answerInput' in $$props) $$invalidate(3, answerInput = $$props.answerInput);
+		if ('answerValue' in $$props) $$invalidate(0, answerValue = $$props.answerValue);
 		if ('resultText' in $$props) $$invalidate(4, resultText = $$props.resultText);
 		if ('resultClass' in $$props) $$invalidate(5, resultClass = $$props.resultClass);
 		if ('boardContainer' in $$props) $$invalidate(6, boardContainer = $$props.boardContainer);
@@ -5945,6 +5985,14 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*answerValue*/ 1) {
+			{
+				if (answerValue.length === 2) {
+					handleAnswer();
+				}
+			}
+		}
+
 		if ($$self.$$.dirty & /*chessground, fen*/ 768) {
 			{
 				if (chessground && fen) {
@@ -5958,19 +6006,19 @@ function instance($$self, $$props, $$invalidate) {
 	};
 
 	return [
+		answerValue,
 		correctCount,
 		incorrectCount,
-		correctAnswer,
 		answerInput,
 		resultText,
 		resultClass,
 		boardContainer,
-		newPosition,
+		handleAnswer,
 		chessground,
 		fen,
 		div1_binding,
 		input_binding,
-		submit_handler
+		input_input_handler
 	];
 }
 
