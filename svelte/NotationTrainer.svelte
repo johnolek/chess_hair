@@ -48,8 +48,12 @@
     const random = Util.getRandomIntBetween(1, totalPlies - 1);
     const positionResult = startingPosition(pgnGame.headers);
     const position = positionResult.unwrap();
-
     const allNodes = [...pgnGame.moves.mainlineNodes()];
+
+    if (['O-O', 'O-O-O'].includes(allNodes[random].data.san)) {
+      // Skip castles
+      return newPosition();
+    }
 
     let i;
     let move;
