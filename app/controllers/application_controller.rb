@@ -13,6 +13,9 @@ class ApplicationController < ActionController::Base
     @has_username = (@chess_com_username.present? || @lichess_username.present?)
   end
 
+  def notation_trainer
+  end
+
   private
 
   def set_default_body_attributes

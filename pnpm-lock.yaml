@@ -14,6 +14,9 @@ importers:
       chessground:
         specifier: ^9.1.1
         version: 9.1.1
+      chessops:
+        specifier: ^0.14.1
+        version: 0.14.1
       lichess-pgn-viewer:
         specifier: ^2.1.0
         version: 2.1.0
@@ -207,6 +210,9 @@ packages:
 
   chessops@0.12.7:
     resolution: {integrity: sha512-ylWwKOudgTNJCDq7vx/Rs9fkZwPB3CEk0AJ8NtAfEYOoA3DGRQdS/Z/oQRsnQvs92rUu0yEobn4ZIPzLh8y9/w==}
+
+  chessops@0.14.1:
+    resolution: {integrity: sha512-CnMcfypDVrl/+MkErK0YMAEvivAAnUQ/2f32C54F9HbmDVEDjvoXJYLnS//+4HWGLqGA5+yDs+Y2T0gsxxLgpQ==}
 
   chokidar@3.6.0:
     resolution: {integrity: sha512-7VT13fmjotKpGipCW9JEQAusEPE+Ei8nl6/g4FBAmIm0GOOLMua9NDDo/DWp0ZAxCr3cPq5ZpBqmPAQgDda2Pw==}
@@ -497,6 +503,10 @@ snapshots:
   chessground@9.1.1: {}
 
   chessops@0.12.7:
+    dependencies:
+      '@badrap/result': 0.2.13
+
+  chessops@0.14.1:
     dependencies:
       '@badrap/result': 0.2.13
 

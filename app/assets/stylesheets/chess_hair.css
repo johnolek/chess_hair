@@ -22441,6 +22441,14 @@ has-background-danger.is-hoverable:active {
   pointer-events: all !important;
 }
 
+.correct {
+  color: green;
+}
+
+.incorrect {
+  color: red;
+}
+
 :root {
   --brand-color-1: hsl(190, 100%, 23%);
   --brand-color-2: hsl(181, 88%, 31%);

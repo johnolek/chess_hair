@@ -1,0 +1,15 @@
+<% content_for :title, 'Notation Trainer' %>
+<% content_for :head do %>
+  <%= javascript_import_module_tag 'dist/notation_trainer' %>
+  <%= stylesheet_link_tag 'lichess_pgn_viewer' %>
+  <script type="module">
+    import NotationTrainer from 'dist/notation_trainer';
+    document.addEventListener('DOMContentLoaded', () => {
+      new NotationTrainer({
+        target: document.getElementById('main'),
+      })
+    });
+  </script>
+<% end %>
+
+<div id="main"></div>

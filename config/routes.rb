@@ -6,6 +6,7 @@ Rails.application.routes.draw do
   get 'knight-moves', to: 'application#knight_moves'
 
   get 'daily-games', to: 'application#daily_games'
+  get 'notation-trainer', to: 'application#notation_trainer'
 
   root "application#knight_moves"
 end

@@ -57,5 +57,14 @@ export default [
       name: 'ThemeSwitcher',
       file: 'app/javascript/dist/theme_switcher.js'
     },
+  },
+  {
+    ...sharedConfig,
+    input: './svelte/NotationTrainer.svelte',
+    output: {
+      ...sharedOutputOptions,
+      name: 'NotationTrainer',
+      file: 'app/javascript/dist/notation_trainer.js'
+    },
   }
 ]
