@@ -8,9 +8,9 @@
 		"svelte-persisted-store": "^0.11.0"
 	},
 	"scripts": {
-		"dev": "rollup -c -w",
+		"dev": "rollup -c -w & pnpm run build-bulma",
 		"build": "rollup -c",
-		"build-bulma": "sass --load-path=node_modules chess_hair.scss app/assets/stylesheets/chess_hair.css"
+		"build-bulma": "sass --load-path=node_modules --watch chess_hair.scss app/assets/stylesheets/chess_hair.css"
 	},
 	"devDependencies": {
 		"@rollup/plugin-node-resolve": "^15.2.3",
