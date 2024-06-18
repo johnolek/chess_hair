@@ -17,6 +17,9 @@
   let resultText;
   let resultClass;
 
+  let boardWidth = 600;
+  let boardHeight = 600;
+  let boardWrapper;
   let boardContainer;
   let chessground;
   let fen;
@@ -38,6 +41,18 @@
       })
     }
   }
+
+  function resize() {
+    if (boardWrapper) {
+      const width = boardWrapper.offsetWidth;
+      const totalHeight = window.innerHeight;
+      const newDimension = Math.min(0.7 * totalHeight, width);
+      boardHeight = newDimension;
+      boardWidth = newDimension;
+    }
+  }
+
+  window.addEventListener('resize', resize);
 
   function newPosition() {
     answerAllowed = false;
@@ -120,19 +135,20 @@
       selectable: false,
     });
     newPosition();
+    resize();
   });
 </script>
 
-<h1>Notation Trainer</h1>
 <link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet">
-<div class="columns">
-  <div class="column is-2-desktop">
+<div class="columns is-centered">
+  <div class="column is-6-widescreen">
+    <h1>Notation Trainer</h1>
     <div class="block">
       <p>Correct: {correctCount}</p>
       <p>Incorrect: {incorrectCount}</p>
     </div>
-    <div class="board-wrapper block">
-      <div class="is2d" bind:this={boardContainer} style="height: 500px; width: 500px;"></div>
+    <div class="board-wrapper block" bind:this={boardWrapper}>
+      <div class="is2d" bind:this={boardContainer} style="position: relative;width: {boardWidth}px; height: {boardWidth}px;"></div>
     </div>
     <div class="block">
       <form on:submit|preventDefault={handleAnswer}>
@@ -151,14 +167,6 @@
 </div>
 
 <style>
-  .is2d {
-    width: 100%;
-  }
-
-  .column {
-    width: 600px;
-  }
-
   .board-wrapper {
     width: 100%;
     position: relative;
