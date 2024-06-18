@@ -33,7 +33,6 @@
   }
 
   boardStyle.subscribe((value) => {
-    console.log(document.body);
     document.body.dataset.board = value;
   });
 
