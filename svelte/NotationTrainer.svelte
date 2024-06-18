@@ -8,6 +8,9 @@
   import { makeFen } from "chessops/fen";
   import { makeSquare } from "chessops/util";
   import { pieceSet } from './stores';
+  import { persisted } from "svelte-persisted-store";
+
+  const orientation = persisted('notation.orientation', 'white');
 
   let correctCount = 0;
   let incorrectCount = 0;
@@ -26,7 +29,11 @@
   let chessground;
   let fen;
 
-
+  orientation.subscribe(() => {
+    if (chessground) {
+      chessground.toggleOrientation();
+    }
+  });
 
   $: {
     answerValue = `${answerFile}${answerRank}`;
@@ -58,7 +65,6 @@
       boardWidth = newDimension;
     }
   }
-
 
   function newPosition() {
     answerAllowed = false;
@@ -158,8 +164,13 @@
       highlight: {
         lastMove: true,
       },
-      draggable: false,
-      selectable: false,
+      draggable: {
+        enabled: false,
+      },
+      selectable: {
+        enabled: false,
+      },
+      orientation: $orientation,
     });
     newPosition();
     resize();
@@ -170,6 +181,17 @@
 <div class="columns is-centered">
   <div class="column is-6-widescreen">
     <h1>Notation Trainer</h1>
+    <div class="block">
+      {#if $orientation === 'white'}
+        <button class="button is-small" on:click={() => {
+          orientation.set('black');
+        }}>View as black</button>
+      {:else}
+        <button class="button is-small" on:click={() => {
+          orientation.set('white');
+        }}>View as white</button>
+      {/if}
+    </div>
     <div class="block">
       <p>Correct: {correctCount}</p>
       <p>Incorrect: {incorrectCount}</p>
