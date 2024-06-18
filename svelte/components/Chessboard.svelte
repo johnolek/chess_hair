@@ -22,8 +22,11 @@
   }
 
   export let chessground;
-
   export let size;
+
+  export let pieceSetOverride;
+  export let boardStyleOverride;
+
   let maxWidth = '70vh';
 
   $: {
@@ -37,11 +40,15 @@
   });
 </script>
 
-<link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet">
+{#if pieceSetOverride}
+  <link id="piece-sprite" href="/piece-css/{pieceSetOverride}.css" rel="stylesheet">
+{:else}
+  <link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet">
+{/if}
 
 <div class="board-wrapper" style="max-width: {maxWidth}" bind:clientWidth={size}>
   <div
-    class="is2d"
+    class="is2d {boardStyleOverride ? boardStyleOverride : ''}"
     bind:this={boardContainer}
     style="position: relative;width: {size}px; height: {size}px">
   </div>

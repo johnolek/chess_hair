@@ -32,10 +32,6 @@
     }, 500);
   }
 
-  boardStyle.subscribe((value) => {
-    document.body.dataset.board = value;
-  });
-
   onMount(() => {
     document.body.dataset.board = $boardStyle;
   });
