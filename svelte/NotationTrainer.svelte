@@ -127,6 +127,10 @@
     newPosition();
   }
 
+  const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const ranks = ['1', '2', '3', '4', '5' ,'6', '7', '8'];
+
+
   function handleKeydown(event) {
     const key = event.key.toLowerCase();
     if (key === 'backspace') {
@@ -135,9 +139,9 @@
       return;
     }
 
-    if (['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].includes(key)) {
+    if (files.includes(key)) {
       answerFile = key;
-    } else if (key >= '1' && key <= '8') {
+    } else if (ranks.includes(key)) {
       answerRank = key;
     }
   }
@@ -186,6 +190,32 @@
             </div>
           </div>
         {/if}
+      </div>
+    </div>
+    <div class="block">
+      <div class="columns">
+        <div class="column is-half">
+          <div class="fixed-grid has-4-cols">
+            <div class="grid">
+              {#each files as file}
+                <div class="cell">
+                  <button class="button is-large" on:click={() => answerFile = file}>{file}</button>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
+        <div class="column is-half">
+          <div class="fixed-grid has-4-cols">
+            <div class="grid">
+              {#each ranks as rank}
+                <div class="cell">
+                  <button class="button is-large" on:click={() => answerRank = rank}>{rank}</button>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
