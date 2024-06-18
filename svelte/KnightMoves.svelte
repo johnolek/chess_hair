@@ -17,7 +17,6 @@
 
   let gameRunning = false;
   let timeRemaining = null;
-  let timeElapsed = null;
 
   let animating = false;
   let answerShown;
@@ -45,7 +44,6 @@
   let kingSquare;
   let config;
   let configForm;
-  let startTimedGameButtonDisabled = false;
 
   let boardWidth;
 
@@ -121,14 +119,8 @@
 
   function startTimedGame() {
     reset();
-    startTimedGameButtonDisabled = true;
     gameRunning = true;
-    timeRemaining = 60;
-    timeElapsed = 0;
     newPosition();
-    setTimeout(() => {
-      endGame();
-    }, 60000); // 1 minute
   }
 
   function endGame() {
@@ -138,17 +130,14 @@
 
     gameRunning = false;
     timeRemaining = null;
-    timeElapsed = null;
     correctCount = 0;
     incorrectCount = 0;
-    startTimedGameButtonDisabled = false;
   }
 
   function reset() {
     correctCount = 0;
     incorrectCount = 0;
     gameRunning = false;
-    startTimedGameButtonDisabled = false;
   }
 
   function getRandomIndex(max) {
@@ -386,7 +375,7 @@
     </div>
 
     {#if gameRunning}
-      <ProgressTimer max=20 width={boardWidth} on:complete={endGame}/>
+      <ProgressTimer max=30 width={boardWidth} on:complete={endGame}/>
     {/if}
 
     <div class="fixed-grid has-3-cols" style="width: {boardWidth}px">
@@ -478,8 +467,6 @@
       </div>
     </div>
   </div>
-
-
 </div>
 
 <style>
