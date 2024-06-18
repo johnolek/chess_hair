@@ -12,17 +12,22 @@
   let incorrectCount = 0;
   let correctAnswer;
   let answerAllowed;
-  let answerInput;
   let answerValue = '';
   let resultText;
   let resultClass;
 
+  let answerRank = '';
+  let answerFile = '';
+
   let boardWidth = 600;
-  let boardHeight = 600;
   let boardWrapper;
   let boardContainer;
   let chessground;
   let fen;
+
+  $: {
+    answerValue = `${answerFile}${answerRank}`;
+  }
 
   $: {
     if (answerValue.length === 2) {
@@ -47,12 +52,10 @@
       const width = boardWrapper.offsetWidth;
       const totalHeight = window.innerHeight;
       const newDimension = Math.min(0.7 * totalHeight, width);
-      boardHeight = newDimension;
       boardWidth = newDimension;
     }
   }
 
-  window.addEventListener('resize', resize);
 
   function newPosition() {
     answerAllowed = false;
@@ -95,7 +98,6 @@
         }
       });
       chessground.move(from, to);
-      answerInput.focus();
       answerValue = '';
       answerAllowed = true;
     }, 1000);
@@ -113,15 +115,33 @@
       resultClass = 'correct';
       correctCount++;
     } else {
-      resultText = `${answerInput.value} was incorrect. Correct answer was ${correctAnswer}.`
+      resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`
       resultClass = 'incorrect';
       incorrectCount++;
     }
-    answerValue = '';
+    answerRank = '';
+    answerFile = '';
     newPosition();
   }
 
+  function handleKeydown(event) {
+    const key = event.key.toLowerCase();
+    if (key === 'backspace') {
+      answerRank = '';
+      answerFile = '';
+      return;
+    }
+
+    if (['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].includes(key)) {
+      answerFile = key;
+    } else if (key >= '1' && key <= '8') {
+      answerRank = key;
+    }
+  }
+
   onMount(() => {
+    window.addEventListener('resize', resize);
+    window.addEventListener('keydown', handleKeydown);
     chessground = Chessground(boardContainer, {
       fen: '8/8/8/8/8/8/8/8',
       coordinates: false,
@@ -148,20 +168,22 @@
       <p>Incorrect: {incorrectCount}</p>
     </div>
     <div class="board-wrapper block" bind:this={boardWrapper}>
-      <div class="is2d" bind:this={boardContainer} style="position: relative;width: {boardWidth}px; height: {boardWidth}px;"></div>
+      <div class="is2d" bind:this={boardContainer}
+           style="position: relative;width: {boardWidth}px; height: {boardWidth}px;"></div>
     </div>
     <div class="block">
-      <form on:submit|preventDefault={handleAnswer}>
-        <label for="answer">Answer</label>
-        <input id="answer" type="text" bind:this={answerInput} bind:value={answerValue}/>
-      </form>
-    </div>
-    {#if resultText}
-      <div class="block">
-        <div class="{resultClass} is-size-3">
-          {resultText}
-        </div>
+      <div class="container has-text-centered">
+        <span class="is-size-1">
+          {answerFile !== '' ? answerFile : '-'}{answerRank !== '' ? answerRank : '-'}
+        </span>
+        {#if resultText}
+          <div class="block">
+            <div class="{resultClass} is-size-3">
+              {resultText}
+            </div>
+          </div>
+        {/if}
       </div>
-    {/if}
+    </div>
   </div>
 </div>
