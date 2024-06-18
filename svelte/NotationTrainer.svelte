@@ -165,10 +165,3 @@
     {/if}
   </div>
 </div>
-
-<style>
-  .board-wrapper {
-    width: 100%;
-    position: relative;
-  }
-</style>
