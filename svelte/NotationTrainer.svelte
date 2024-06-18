@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import ChessBoard from './components/Chessboard.svelte';
+  import Chessboard from './components/Chessboard.svelte';
 
   import { parsePgn, startingPosition } from 'chessops/pgn';
   import { Util } from 'src/util';
@@ -211,7 +211,7 @@
     </div>
 
     <div class="block">
-      <ChessBoard
+      <Chessboard
         {chessgroundConfig}
         bind:fen={fen}
         bind:chessground={chessground}

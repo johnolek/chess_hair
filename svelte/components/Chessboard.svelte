@@ -5,7 +5,7 @@
 
   let boardContainer;
   export let chessgroundConfig = {};
-  export let orientation;
+  export let orientation = 'white';
 
   export let fen;
   $: {
@@ -22,7 +22,7 @@
 
   export let chessground;
 
-  let size;
+  export let size;
   let maxWidth = '70vh';
 
   $: {

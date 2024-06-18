@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { tweened } from 'svelte/motion';
   import { linear } from 'svelte/easing';
-  import { Chessground } from "chessground";
+  import Chessboard from './components/Chessboard.svelte';
   import { knightMovesData } from 'src/knight_moves_data';
   import Config from "src/local_config";
   import { ConfigForm } from "src/local_config";
@@ -51,12 +51,8 @@
   let config;
   let configForm;
   let startTimedGameButtonDisabled = false;
-  let resultText = '';
-  let resultTextClass = '';
 
-  let boardWidth = 512;
-  let boardHeight = 512;
-  let padding = 80;
+  let boardWidth;
 
   let button1;
   let button2;
@@ -64,10 +60,6 @@
   let button4;
   let button5;
   let button6;
-
-  let mainColumn;
-  let boardContainer;
-  let boardWrapper;
 
   const customBrushes = {
     brand1: {key: 'brand1', color: Util.getRootCssVarValue('--brand-color-1'), opacity: 1, lineWidth: 15},
@@ -96,59 +88,28 @@
     }
   }
 
-  $: {
-    const totalHeight = window.innerHeight;
-    const remainingHeight = totalHeight - boardHeight;
+  initConfig();
 
-    if (button1) {
-      const maxHeight = button1.offsetWidth;
-      const calculatedHeight = (remainingHeight / 2) - padding;
-      const buttonHeight = Math.min(maxHeight, calculatedHeight);
-      button1.style.height = `${buttonHeight}px`;
-      button2.style.height = `${buttonHeight}px`;
-      button3.style.height = `${buttonHeight}px`;
-      button4.style.height = `${buttonHeight}px`;
-      button5.style.height = `${buttonHeight}px`;
-      button6.style.height = `${buttonHeight}px`;
+  let chessgroundConfig = {
+    fen: '8/8/8/8/8/8/8/8',
+    animation: {
+      enabled: true,
+      duration: animationLengthOption.getValue(),
+    },
+    highlight: {
+      lastMove: false,
+    },
+    draggable: false,
+    selectable: false,
+    drawable: {
+      brushes: customBrushes,
     }
-  }
+  };
 
   onMount(() => {
-    initConfig();
-
-    chessground = Chessground(boardContainer, {
-      fen: '8/8/8/8/8/8/8/8',
-      animation: {
-        enabled: true,
-        duration: animationLengthOption.getValue(),
-      },
-      highlight: {
-        lastMove: false,
-      },
-      draggable: false,
-      selectable: false,
-      drawable: {
-        brushes: customBrushes,
-      }
-    });
-
-    resize();
-    window.addEventListener('resize', resize);
-
     initKeyboardShortcuts();
-    resize();
     newPosition();
   });
-
-  function resize() {
-    const width = boardWrapper.offsetWidth;
-    const totalHeight = window.innerHeight;
-    const minButtonHeight = 30;
-    const maxHeight = totalHeight - (2 * minButtonHeight) - padding;
-    const boardDimensions = Math.min(width, maxHeight);
-    boardHeight = boardDimensions;
-    boardWidth = boardDimensions;
-  }
 
   function getButton(id) {
     switch (id) {
@@ -203,13 +164,6 @@
     if (correctCount > highScore && gameRunning) {
       highScore = correctCount;
     }
-    if (incorrectCount > 0) {
-      resultTextClass = 'incorrect';
-      resultText = `Incorrect, game over! The correct answer was ${getMinimumMovesForCurrentPosition()}. Your score was ${correctCount}.`
-    } else {
-      resultTextClass = 'correct';
-      resultText = `Time's up! Your score was ${correctCount}.`;
-    }
 
     gameRunning = false;
     timeRemaining = null;
@@ -224,8 +178,6 @@
     incorrectCount = 0;
     gameRunning = false;
     startTimedGameButtonDisabled = false;
-    resultText = '';
-    resultTextClass = '';
   }
 
   function getRandomIndex(max) {
@@ -259,8 +211,6 @@
     if (number === minimum) {
       correctCount += 1;
       animateElement(button, 'correctAnswer');
-      resultTextClass = 'correct';
-      resultText = `${number} was correct!`;
       newPosition();
     } else {
       incorrectCount += 1;
@@ -268,8 +218,6 @@
       if (gameRunning) {
         endGame();
       } else {
-        resultText = `${number} was incorrect. The correct answer was ${minimum}.`;
-        resultTextClass = 'incorrect';
       }
       const correctPaths = positionData.paths;
       const randomlySorted = sortRandomly(correctPaths);
@@ -457,11 +405,13 @@
 <link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet">
 
 <div class="columns">
-  <div class="column column2 is-6-desktop" bind:this={mainColumn}>
-    <div class="board-wrapper mb-3" bind:this={boardWrapper}>
-      <div class="board-container is2d" bind:this={boardContainer}
-           style="width: {boardWidth}px; height: {boardHeight}px; position: relative;">
-      </div>
+  <div class="column column2 is-6-desktop">
+    <div class="block">
+      <Chessboard
+        {chessgroundConfig}
+        bind:chessground={chessground}
+        bind:size={boardWidth}
+      />
     </div>
 
     {#if gameRunning}

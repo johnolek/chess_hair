@@ -277,6 +277,81 @@ function set_style(node, key, value, important) {
 		node.style.setProperty(key, value, '');
 	}
 }
+// unfortunately this can't be a constant as that wouldn't be tree-shakeable
+// so we cache the result instead
+
+/**
+ * @type {boolean} */
+let crossorigin;
+
+/**
+ * @returns {boolean} */
+function is_crossorigin() {
+	if (crossorigin === undefined) {
+		crossorigin = false;
+		try {
+			if (typeof window !== 'undefined' && window.parent) {
+				void window.parent.document;
+			}
+		} catch (error) {
+			crossorigin = true;
+		}
+	}
+	return crossorigin;
+}
+
+/**
+ * @param {HTMLElement} node
+ * @param {() => void} fn
+ * @returns {() => void}
+ */
+function add_iframe_resize_listener(node, fn) {
+	const computed_style = getComputedStyle(node);
+	if (computed_style.position === 'static') {
+		node.style.position = 'relative';
+	}
+	const iframe = element('iframe');
+	iframe.setAttribute(
+		'style',
+		'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; ' +
+			'overflow: hidden; border: 0; opacity: 0; pointer-events: none; z-index: -1;'
+	);
+	iframe.setAttribute('aria-hidden', 'true');
+	iframe.tabIndex = -1;
+	const crossorigin = is_crossorigin();
+
+	/**
+	 * @type {() => void}
+	 */
+	let unsubscribe;
+	if (crossorigin) {
+		iframe.src = "data:text/html,<script>onresize=function(){parent.postMessage(0,'*')}</script>";
+		unsubscribe = listen(
+			window,
+			'message',
+			/** @param {MessageEvent} event */ (event) => {
+				if (event.source === iframe.contentWindow) fn();
+			}
+		);
+	} else {
+		iframe.src = 'about:blank';
+		iframe.onload = () => {
+			unsubscribe = listen(iframe.contentWindow, 'resize', fn);
+			// make sure an initial resize event is fired _after_ the iframe is loaded (which is asynchronous)
+			// see https://github.com/sveltejs/svelte/issues/4233
+			fn();
+		};
+	}
+	append(node, iframe);
+	return () => {
+		if (crossorigin) {
+			unsubscribe();
+		} else if (unsubscribe && iframe.contentWindow) {
+			unsubscribe();
+		}
+		detach(iframe);
+	};
+}
 
 /**
  * @template T
@@ -363,6 +438,11 @@ function schedule_update() {
 /** @returns {void} */
 function add_render_callback(fn) {
 	render_callbacks.push(fn);
+}
+
+/** @returns {void} */
+function add_flush_callback(fn) {
+	flush_callbacks.push(fn);
 }
 
 // flush() calls callbacks in this order:
@@ -465,6 +545,11 @@ function flush_render_callbacks(fns) {
 const outroing = new Set();
 
 /**
+ * @type {Outro}
+ */
+let outros;
+
+/**
  * @param {import('./private.js').Fragment} block
  * @param {0 | 1} [local]
  * @returns {void}
@@ -473,6 +558,24 @@ function transition_in(block, local) {
 	if (block && block.i) {
 		outroing.delete(block);
 		block.i(local);
+	}
+}
+
+/**
+ * @param {import('./private.js').Fragment} block
+ * @param {0 | 1} local
+ * @param {0 | 1} [detach]
+ * @param {() => void} [callback]
+ * @returns {void}
+ */
+function transition_out(block, local, detach, callback) {
+	if (block && block.o) {
+		if (outroing.has(block)) return;
+		outroing.add(block);
+		outros.c.push(() => {
+			outroing.delete(block);
+		});
+		block.o(local);
 	}
 }
 
@@ -505,6 +608,20 @@ function transition_in(block, local) {
  * @property {number} end
  * @property {Outro} [group]
  */
+
+/** @returns {void} */
+function bind(component, name, callback) {
+	const index = component.$$.props[name];
+	if (index !== undefined) {
+		component.$$.bound[index] = callback;
+		callback(component.$$.ctx[index]);
+	}
+}
+
+/** @returns {void} */
+function create_component(block) {
+	block && block.c();
+}
 
 /** @returns {void} */
 function mount_component(component, target, anchor) {
@@ -3154,16 +3271,380 @@ function debounceRedraw(redrawNow) {
     };
 }
 
+// index.ts
+var stores = {
+  local: {},
+  session: {}
+};
+function getStorage(type) {
+  return type === "local" ? localStorage : sessionStorage;
+}
+function persisted(key, initialValue, options) {
+  var _a, _b, _c, _d, _e, _f, _g, _h;
+  const serializer = (_a = void 0 ) != null ? _a : JSON;
+  const storageType = (_b = void 0 ) != null ? _b : "local";
+  const syncTabs = (_c = void 0 ) != null ? _c : true;
+  const onWriteError = (_e = (_d = void 0 ) != null ? _d : void 0 ) != null ? _e : (e) => console.error(`Error when writing value from persisted store "${key}" to ${storageType}`, e);
+  const onParseError = (_f = void 0 ) != null ? _f : (newVal, e) => console.error(`Error when parsing ${newVal ? '"' + newVal + '"' : "value"} from persisted store "${key}"`, e);
+  const beforeRead = (_g = void 0 ) != null ? _g : (val) => val;
+  const beforeWrite = (_h = void 0 ) != null ? _h : (val) => val;
+  const browser = typeof window !== "undefined" && typeof document !== "undefined";
+  const storage = browser ? getStorage(storageType) : null;
+  function updateStorage(key2, value) {
+    const newVal = beforeWrite(value);
+    try {
+      storage == null ? void 0 : storage.setItem(key2, serializer.stringify(newVal));
+    } catch (e) {
+      onWriteError(e);
+    }
+  }
+  function maybeLoadInitial() {
+    function serialize(json2) {
+      try {
+        return serializer.parse(json2);
+      } catch (e) {
+        onParseError(json2, e);
+      }
+    }
+    const json = storage == null ? void 0 : storage.getItem(key);
+    if (json == null)
+      return initialValue;
+    const serialized = serialize(json);
+    if (serialized == null)
+      return initialValue;
+    const newVal = beforeRead(serialized);
+    return newVal;
+  }
+  if (!stores[storageType][key]) {
+    const initial = maybeLoadInitial();
+    const store = writable(initial, (set2) => {
+      if (browser && storageType == "local" && syncTabs) {
+        const handleStorage = (event) => {
+          if (event.key === key && event.newValue) {
+            let newVal;
+            try {
+              newVal = serializer.parse(event.newValue);
+            } catch (e) {
+              onParseError(event.newValue, e);
+              return;
+            }
+            const processedVal = beforeRead(newVal);
+            set2(processedVal);
+          }
+        };
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+      }
+    });
+    const { subscribe, set } = store;
+    stores[storageType][key] = {
+      set(value) {
+        set(value);
+        updateStorage(key, value);
+      },
+      update(callback) {
+        return store.update((last) => {
+          const value = callback(last);
+          updateStorage(key, value);
+          return value;
+        });
+      },
+      reset() {
+        this.set(initialValue);
+      },
+      subscribe
+    };
+  }
+  return stores[storageType][key];
+}
+
+const pieceSet = persisted('global.pieceSet', 'merida');
+persisted('global.boardStyle', 'brown');
+
+/* svelte/components/Chessboard.svelte generated by Svelte v4.2.18 */
+const file$1 = "svelte/components/Chessboard.svelte";
+
+function add_css$1(target) {
+	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tICdzdmVsdGUnO1xuICBpbXBvcnQgeyBDaGVzc2dyb3VuZCB9IGZyb20gXCJjaGVzc2dyb3VuZFwiO1xuICBpbXBvcnQgeyBwaWVjZVNldCB9IGZyb20gJy4uL3N0b3Jlcyc7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb24gPSAnd2hpdGUnO1xuXG4gIGV4cG9ydCBsZXQgZmVuO1xuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH1cbiAgICAgIH0pXG4gICAgfVxuICB9XG5cbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZDtcblxuICBleHBvcnQgbGV0IHNpemU7XG4gIGxldCBtYXhXaWR0aCA9ICc3MHZoJztcblxuICAkOiB7XG4gICAgaWYgKG9yaWVudGF0aW9uICYmIGNoZXNzZ3JvdW5kKSB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe29yaWVudGF0aW9uOiBvcmllbnRhdGlvbn0pO1xuICAgIH1cbiAgfVxuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIGNoZXNzZ3JvdW5kID0gQ2hlc3Nncm91bmQoYm9hcmRDb250YWluZXIsIGNoZXNzZ3JvdW5kQ29uZmlnKTtcbiAgfSk7XG48L3NjcmlwdD5cblxuPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy97JHBpZWNlU2V0fS5jc3NcIiByZWw9XCJzdHlsZXNoZWV0XCI+XG5cbjxkaXYgY2xhc3M9XCJib2FyZC13cmFwcGVyXCIgc3R5bGU9XCJtYXgtd2lkdGg6IHttYXhXaWR0aH1cIiBiaW5kOmNsaWVudFdpZHRoPXtzaXplfT5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZFwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIj5cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuYm9hcmQtd3JhcHBlciB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQWlERSw2QkFBZSxDQUNiLFFBQVEsQ0FBRSxRQUFRLENBQ2xCLEtBQUssQ0FBRSxJQUNUIn0= */");
+}
+
+function create_fragment$1(ctx) {
+	let link;
+	let link_href_value;
+	let t;
+	let div1;
+	let div0;
+	let div1_resize_listener;
+
+	const block = {
+		c: function create() {
+			link = element("link");
+			t = space();
+			div1 = element("div");
+			div0 = element("div");
+			attr_dev(link, "id", "piece-sprite");
+			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[2] + ".css");
+			attr_dev(link, "rel", "stylesheet");
+			add_location(link, file$1, 38, 0, 706);
+			attr_dev(div0, "class", "is2d");
+			set_style(div0, "position", "relative");
+			set_style(div0, "width", /*size*/ ctx[0] + "px");
+			set_style(div0, "height", /*size*/ ctx[0] + "px");
+			add_location(div0, file$1, 41, 2, 867);
+			attr_dev(div1, "class", "board-wrapper svelte-16y75xy");
+			set_style(div1, "max-width", /*maxWidth*/ ctx[3]);
+			add_render_callback(() => /*div1_elementresize_handler*/ ctx[9].call(div1));
+			add_location(div1, file$1, 40, 0, 783);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, link, anchor);
+			insert_dev(target, t, anchor);
+			insert_dev(target, div1, anchor);
+			append_dev(div1, div0);
+			/*div0_binding*/ ctx[8](div0);
+			div1_resize_listener = add_iframe_resize_listener(div1, /*div1_elementresize_handler*/ ctx[9].bind(div1));
+		},
+		p: function update(ctx, [dirty]) {
+			if (dirty & /*$pieceSet*/ 4 && link_href_value !== (link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[2] + ".css")) {
+				attr_dev(link, "href", link_href_value);
+			}
+
+			if (dirty & /*size*/ 1) {
+				set_style(div0, "width", /*size*/ ctx[0] + "px");
+			}
+
+			if (dirty & /*size*/ 1) {
+				set_style(div0, "height", /*size*/ ctx[0] + "px");
+			}
+		},
+		i: noop,
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(link);
+				detach_dev(t);
+				detach_dev(div1);
+			}
+
+			/*div0_binding*/ ctx[8](null);
+			div1_resize_listener();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$1.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$1($$self, $$props, $$invalidate) {
+	let $pieceSet;
+	validate_store(pieceSet, 'pieceSet');
+	component_subscribe($$self, pieceSet, $$value => $$invalidate(2, $pieceSet = $$value));
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('Chessboard', slots, []);
+	let boardContainer;
+	let { chessgroundConfig = {} } = $$props;
+	let { orientation = 'white' } = $$props;
+	let { fen } = $$props;
+	let { chessground } = $$props;
+	let { size } = $$props;
+	let maxWidth = '70vh';
+
+	onMount(() => {
+		$$invalidate(4, chessground = Chessground(boardContainer, chessgroundConfig));
+	});
+
+	$$self.$$.on_mount.push(function () {
+		if (fen === undefined && !('fen' in $$props || $$self.$$.bound[$$self.$$.props['fen']])) {
+			console.warn("<Chessboard> was created without expected prop 'fen'");
+		}
+
+		if (chessground === undefined && !('chessground' in $$props || $$self.$$.bound[$$self.$$.props['chessground']])) {
+			console.warn("<Chessboard> was created without expected prop 'chessground'");
+		}
+
+		if (size === undefined && !('size' in $$props || $$self.$$.bound[$$self.$$.props['size']])) {
+			console.warn("<Chessboard> was created without expected prop 'size'");
+		}
+	});
+
+	const writable_props = ['chessgroundConfig', 'orientation', 'fen', 'chessground', 'size'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Chessboard> was created with unknown prop '${key}'`);
+	});
+
+	function div0_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			boardContainer = $$value;
+			$$invalidate(1, boardContainer);
+		});
+	}
+
+	function div1_elementresize_handler() {
+		size = this.clientWidth;
+		$$invalidate(0, size);
+	}
+
+	$$self.$$set = $$props => {
+		if ('chessgroundConfig' in $$props) $$invalidate(5, chessgroundConfig = $$props.chessgroundConfig);
+		if ('orientation' in $$props) $$invalidate(6, orientation = $$props.orientation);
+		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
+		if ('chessground' in $$props) $$invalidate(4, chessground = $$props.chessground);
+		if ('size' in $$props) $$invalidate(0, size = $$props.size);
+	};
+
+	$$self.$capture_state = () => ({
+		onMount,
+		Chessground,
+		pieceSet,
+		boardContainer,
+		chessgroundConfig,
+		orientation,
+		fen,
+		chessground,
+		size,
+		maxWidth,
+		$pieceSet
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('boardContainer' in $$props) $$invalidate(1, boardContainer = $$props.boardContainer);
+		if ('chessgroundConfig' in $$props) $$invalidate(5, chessgroundConfig = $$props.chessgroundConfig);
+		if ('orientation' in $$props) $$invalidate(6, orientation = $$props.orientation);
+		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
+		if ('chessground' in $$props) $$invalidate(4, chessground = $$props.chessground);
+		if ('size' in $$props) $$invalidate(0, size = $$props.size);
+		if ('maxWidth' in $$props) $$invalidate(3, maxWidth = $$props.maxWidth);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*chessground, fen*/ 144) {
+			{
+				if (chessground && fen) {
+					chessground.set({
+						fen,
+						highlight: { lastMove: false, check: false }
+					});
+				}
+			}
+		}
+
+		if ($$self.$$.dirty & /*orientation, chessground*/ 80) {
+			{
+				if (orientation && chessground) {
+					chessground.set({ orientation });
+				}
+			}
+		}
+	};
+
+	return [
+		size,
+		boardContainer,
+		$pieceSet,
+		maxWidth,
+		chessground,
+		chessgroundConfig,
+		orientation,
+		fen,
+		div0_binding,
+		div1_elementresize_handler
+	];
+}
+
+class Chessboard extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+
+		init(
+			this,
+			options,
+			instance$1,
+			create_fragment$1,
+			safe_not_equal,
+			{
+				chessgroundConfig: 5,
+				orientation: 6,
+				fen: 7,
+				chessground: 4,
+				size: 0
+			},
+			add_css$1
+		);
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "Chessboard",
+			options,
+			id: create_fragment$1.name
+		});
+	}
+
+	get chessgroundConfig() {
+		throw new Error("<Chessboard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set chessgroundConfig(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get orientation() {
+		throw new Error("<Chessboard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set orientation(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get fen() {
+		throw new Error("<Chessboard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set fen(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get chessground() {
+		throw new Error("<Chessboard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set chessground(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get size() {
+		throw new Error("<Chessboard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set size(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+}
+
 /* svelte/KnightMoves.svelte generated by Svelte v4.2.18 */
 
 const { Object: Object_1 } = globals;
 const file = "svelte/KnightMoves.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-djrxqv", ".cell.svelte-djrxqv button.svelte-djrxqv{width:100%;display:inline-block}.board-wrapper.svelte-djrxqv.svelte-djrxqv{width:100%}.correct.svelte-djrxqv.svelte-djrxqv{color:green}.incorrect.svelte-djrxqv.svelte-djrxqv{color:red}@keyframes svelte-djrxqv-incorrectAnswer{25%{background-color:red;transform:translateX(-10px)}50%{background-color:red;transform:translateX(10px)}75%{background-color:red;transform:translateX(-10px)}100%{transform:translateX(0px)}}.incorrectAnswer.svelte-djrxqv.svelte-djrxqv{animation:svelte-djrxqv-incorrectAnswer 1s linear}@keyframes svelte-djrxqv-correctAnswer{50%{background-color:green;transform:scale(1.01)}100%{transform:scale(1)}}.correctAnswer.svelte-djrxqv.svelte-djrxqv{animation:svelte-djrxqv-correctAnswer 0.75s linear}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiS25pZ2h0TW92ZXMuc3ZlbHRlIiwic291cmNlcyI6WyJLbmlnaHRNb3Zlcy5zdmVsdGUiXSwic291cmNlc0NvbnRlbnQiOlsiPHNjcmlwdD5cbiAgaW1wb3J0IHsgb25Nb3VudCB9IGZyb20gJ3N2ZWx0ZSc7XG4gIGltcG9ydCB7IHR3ZWVuZWQgfSBmcm9tICdzdmVsdGUvbW90aW9uJztcbiAgaW1wb3J0IHsgbGluZWFyIH0gZnJvbSAnc3ZlbHRlL2Vhc2luZyc7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IGtuaWdodE1vdmVzRGF0YSB9IGZyb20gJ3NyYy9rbmlnaHRfbW92ZXNfZGF0YSc7XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgQ29uZmlnRm9ybSB9IGZyb20gXCJzcmMvbG9jYWxfY29uZmlnXCI7XG4gIGltcG9ydCB7IFV0aWwgfSBmcm9tICdzcmMvdXRpbCc7XG5cbiAgY29uc3Qgc2Vjb25kUHJvZ3Jlc3MgPSB0d2VlbmVkKDAsIHtcbiAgICBkdXJhdGlvbjogMTAwMCxcbiAgICBlYXNpbmc6IGxpbmVhcixcbiAgfSk7XG5cbiAgbGV0IGNoZXNzZ3JvdW5kO1xuICBsZXQganNvbkRhdGEgPSBrbmlnaHRNb3Zlc0RhdGE7XG4gIGxldCBwb3NpdGlvbkRhdGEgPSBudWxsO1xuICBsZXQgY29ycmVjdENvdW50ID0gMDtcbiAgbGV0IGluY29ycmVjdENvdW50ID0gMDtcblxuICBsZXQgZ2FtZVJ1bm5pbmcgPSBmYWxzZTtcbiAgbGV0IHRpbWVSZW1haW5pbmcgPSBudWxsO1xuICBsZXQgdGltZUVsYXBzZWQgPSBudWxsO1xuXG4gIGxldCBwcm9ncmVzc0NsYXNzID0gJ2lzLXN1Y2Nlc3MnO1xuICBsZXQgYW5pbWF0aW5nID0gZmFsc2U7XG4gIGxldCBhbnN3ZXJTaG93bjtcbiAgbGV0IGdyb3VwZWRQYXRocyA9IFtdO1xuICBsZXQgZ3JvdXBJbmRleCA9IDA7XG5cbiAgbGV0IGRpc2FibGVOZXh0ID0gZmFsc2U7XG4gIGxldCBkaXNhYmxlUHJldiA9IHRydWU7XG5cbiAgJDoge1xuICAgIGRpc2FibGVOZXh0ID0gZ3JvdXBJbmRleCA+PSBncm91cGVkUGF0aHMubGVuZ3RoIC0gMTtcbiAgICBkaXNhYmxlUHJldiA9IGdyb3VwSW5kZXggPD0gMDtcbiAgfVxuXG4gICQ6IHtcbiAgICBpZiAoYW5zd2VyU2hvd24gJiYgZ3JvdXBlZFBhdGhzLmxlbmd0aCA+IDAgJiYgZ3JvdXBJbmRleCA+PSAwKSB7XG4gICAgICBkcmF3Q29ycmVjdEFycm93cyhncm91cGVkUGF0aHNbZ3JvdXBJbmRleF0pO1xuICAgIH1cbiAgfVxuXG4gIGxldCBoaWdoU2NvcmUgPSAwO1xuICBsZXQgbWF4UGF0aHNUb0Rpc3BsYXlPcHRpb247XG4gIGxldCBhbmltYXRpb25MZW5ndGhPcHRpb247XG4gIGxldCBrbmlnaHRTcXVhcmU7XG4gIGxldCBraW5nU3F1YXJlO1xuICBsZXQgY29uZmlnO1xuICBsZXQgY29uZmlnRm9ybTtcbiAgbGV0IHN0YXJ0VGltZWRHYW1lQnV0dG9uRGlzYWJsZWQgPSBmYWxzZTtcbiAgbGV0IHJlc3VsdFRleHQgPSAnJztcbiAgbGV0IHJlc3VsdFRleHRDbGFzcyA9ICcnO1xuXG4gIGxldCBib2FyZFdpZHRoID0gNTEyO1xuICBsZXQgYm9hcmRIZWlnaHQgPSA1MTI7XG4gIGxldCBwYWRkaW5nID0gODA7XG5cbiAgbGV0IGJ1dHRvbjE7XG4gIGxldCBidXR0b24yO1xuICBsZXQgYnV0dG9uMztcbiAgbGV0IGJ1dHRvbjQ7XG4gIGxldCBidXR0b241O1xuICBsZXQgYnV0dG9uNjtcblxuICBsZXQgbWFpbkNvbHVtbjtcbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBsZXQgYm9hcmRXcmFwcGVyO1xuXG4gIGNvbnN0IGN1c3RvbUJydXNoZXMgPSB7XG4gICAgYnJhbmQxOiB7a2V5OiAnYnJhbmQxJywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTEnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQyOiB7a2V5OiAnYnJhbmQyJywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTInKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQzOiB7a2V5OiAnYnJhbmQzJywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTMnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ0OiB7a2V5OiAnYnJhbmQ0JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTQnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ1OiB7a2V5OiAnYnJhbmQ1JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTUnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ2OiB7a2V5OiAnYnJhbmQ2JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTYnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ3OiB7a2V5OiAnYnJhbmQ3JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTcnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ4OiB7a2V5OiAnYnJhbmQ4JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTgnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ5OiB7a2V5OiAnYnJhbmQ5JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTknKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gIH07XG5cbiAgJDoge1xuICAgIGlmIChnYW1lUnVubmluZykge1xuICAgICAgY29uc3QgcGVyY2VudERvbmUgPSB0aW1lRWxhcHNlZCAvIDYwO1xuICAgICAgaWYgKHBlcmNlbnREb25lIDwgMC43KSB7XG4gICAgICAgIHByb2dyZXNzQ2xhc3MgPSAnaXMtc3VjY2Vzcyc7XG4gICAgICB9IGVsc2UgaWYgKHBlcmNlbnREb25lIDwgMC45KSB7XG4gICAgICAgIHByb2dyZXNzQ2xhc3MgPSAnaXMtd2FybmluZyc7XG4gICAgICB9IGVsc2Uge1xuICAgICAgICBwcm9ncmVzc0NsYXNzID0gJ2lzLWRhbmdlcic7XG4gICAgICB9XG4gICAgfSBlbHNlIHtcbiAgICAgIHByb2dyZXNzQ2xhc3MgPSAnaXMtc3VjY2Vzcyc7XG4gICAgfVxuICB9XG5cbiAgJDoge1xuICAgIGNvbnN0IHRvdGFsSGVpZ2h0ID0gd2luZG93LmlubmVySGVpZ2h0O1xuICAgIGNvbnN0IHJlbWFpbmluZ0hlaWdodCA9IHRvdGFsSGVpZ2h0IC0gYm9hcmRIZWlnaHQ7XG5cbiAgICBpZiAoYnV0dG9uMSkge1xuICAgICAgY29uc3QgbWF4SGVpZ2h0ID0gYnV0dG9uMS5vZmZzZXRXaWR0aDtcbiAgICAgIGNvbnN0IGNhbGN1bGF0ZWRIZWlnaHQgPSAocmVtYWluaW5nSGVpZ2h0IC8gMikgLSBwYWRkaW5nO1xuICAgICAgY29uc3QgYnV0dG9uSGVpZ2h0ID0gTWF0aC5taW4obWF4SGVpZ2h0LCBjYWxjdWxhdGVkSGVpZ2h0KTtcbiAgICAgIGJ1dHRvbjEuc3R5bGUuaGVpZ2h0ID0gYCR7YnV0dG9uSGVpZ2h0fXB4YDtcbiAgICAgIGJ1dHRvbjIuc3R5bGUuaGVpZ2h0ID0gYCR7YnV0dG9uSGVpZ2h0fXB4YDtcbiAgICAgIGJ1dHRvbjMuc3R5bGUuaGVpZ2h0ID0gYCR7YnV0dG9uSGVpZ2h0fXB4YDtcbiAgICAgIGJ1dHRvbjQuc3R5bGUuaGVpZ2h0ID0gYCR7YnV0dG9uSGVpZ2h0fXB4YDtcbiAgICAgIGJ1dHRvbjUuc3R5bGUuaGVpZ2h0ID0gYCR7YnV0dG9uSGVpZ2h0fXB4YDtcbiAgICAgIGJ1dHRvbjYuc3R5bGUuaGVpZ2h0ID0gYCR7YnV0dG9uSGVpZ2h0fXB4YDtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBpbml0Q29uZmlnKCk7XG5cbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCB7XG4gICAgICBmZW46ICc4LzgvOC84LzgvOC84LzgnLFxuICAgICAgYW5pbWF0aW9uOiB7XG4gICAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgICAgIGR1cmF0aW9uOiBhbmltYXRpb25MZW5ndGhPcHRpb24uZ2V0VmFsdWUoKSxcbiAgICAgIH0sXG4gICAgICBoaWdobGlnaHQ6IHtcbiAgICAgICAgbGFzdE1vdmU6IGZhbHNlLFxuICAgICAgfSxcbiAgICAgIGRyYWdnYWJsZTogZmFsc2UsXG4gICAgICBzZWxlY3RhYmxlOiBmYWxzZSxcbiAgICAgIGRyYXdhYmxlOiB7XG4gICAgICAgIGJydXNoZXM6IGN1c3RvbUJydXNoZXMsXG4gICAgICB9XG4gICAgfSk7XG5cbiAgICByZXNpemUoKTtcbiAgICB3aW5kb3cuYWRkRXZlbnRMaXN0ZW5lcigncmVzaXplJywgcmVzaXplKTtcblxuICAgIGluaXRLZXlib2FyZFNob3J0Y3V0cygpO1xuICAgIHJlc2l6ZSgpO1xuICAgIG5ld1Bvc2l0aW9uKCk7XG4gIH0pO1xuXG4gIGZ1bmN0aW9uIHJlc2l6ZSgpIHtcbiAgICBjb25zdCB3aWR0aCA9IGJvYXJkV3JhcHBlci5vZmZzZXRXaWR0aDtcbiAgICBjb25zdCB0b3RhbEhlaWdodCA9IHdpbmRvdy5pbm5lckhlaWdodDtcbiAgICBjb25zdCBtaW5CdXR0b25IZWlnaHQgPSAzMDtcbiAgICBjb25zdCBtYXhIZWlnaHQgPSB0b3RhbEhlaWdodCAtICgyICogbWluQnV0dG9uSGVpZ2h0KSAtIHBhZGRpbmc7XG4gICAgY29uc3QgYm9hcmREaW1lbnNpb25zID0gTWF0aC5taW4od2lkdGgsIG1heEhlaWdodCk7XG4gICAgYm9hcmRIZWlnaHQgPSBib2FyZERpbWVuc2lvbnM7XG4gICAgYm9hcmRXaWR0aCA9IGJvYXJkRGltZW5zaW9ucztcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldEJ1dHRvbihpZCkge1xuICAgIHN3aXRjaCAoaWQpIHtcbiAgICAgIGNhc2UgMTpcbiAgICAgICAgcmV0dXJuIGJ1dHRvbjE7XG4gICAgICBjYXNlIDI6XG4gICAgICAgIHJldHVybiBidXR0b24yO1xuICAgICAgY2FzZSAzOlxuICAgICAgICByZXR1cm4gYnV0dG9uMztcbiAgICAgIGNhc2UgNDpcbiAgICAgICAgcmV0dXJuIGJ1dHRvbjQ7XG4gICAgICBjYXNlIDU6XG4gICAgICAgIHJldHVybiBidXR0b241O1xuICAgICAgY2FzZSA2OlxuICAgICAgICByZXR1cm4gYnV0dG9uNjtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBpbml0S2V5Ym9hcmRTaG9ydGN1dHMoKSB7XG4gICAgd2luZG93LmFkZEV2ZW50TGlzdGVuZXIoJ2tleWRvd24nLCAoZXZlbnQpID0+IHtcbiAgICAgIGNvbnN0IGtleSA9IGV2ZW50LmtleTtcbiAgICAgIGlmIChrZXkgPj0gJzEnICYmIGtleSA8PSAnNicpIHtcbiAgICAgICAgLy8gVHJpZ2dlciBjbGljayBldmVudCBvbiBjb3JyZXNwb25kaW5nIGJ1dHRvblxuICAgICAgICBjb25zdCBidXR0b24gPSBnZXRCdXR0b24ocGFyc2VJbnQoa2V5KSk7XG4gICAgICAgIGJ1dHRvbi5jbGljaygpO1xuICAgICAgfVxuICAgIH0pO1xuICB9XG5cbiAgZnVuY3Rpb24gc3RhcnRUaW1lZEdhbWUoKSB7XG4gICAgcmVzZXQoKTtcbiAgICBzdGFydFRpbWVkR2FtZUJ1dHRvbkRpc2FibGVkID0gdHJ1ZTtcbiAgICBnYW1lUnVubmluZyA9IHRydWU7XG4gICAgdGltZVJlbWFpbmluZyA9IDYwO1xuICAgIHRpbWVFbGFwc2VkID0gMDtcbiAgICBzZWNvbmRQcm9ncmVzcy5zZXQoMCk7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgICBzZXRUaW1lb3V0KCgpID0+IHtcbiAgICAgIGVuZEdhbWUoKTtcbiAgICB9LCA2MDAwMCk7IC8vIDEgbWludXRlXG4gICAgY29uc3QgdGltZXJJbnRlcnZhbCA9IHNldEludGVydmFsKCgpID0+IHtcbiAgICAgIGlmICh0aW1lUmVtYWluaW5nID09PSAwKSB7XG4gICAgICAgIGNsZWFySW50ZXJ2YWwodGltZXJJbnRlcnZhbCk7XG4gICAgICB9XG4gICAgICB0aW1lUmVtYWluaW5nIC09IDE7XG4gICAgICB0aW1lRWxhcHNlZCArPSAxO1xuICAgICAgc2Vjb25kUHJvZ3Jlc3Muc2V0KHRpbWVFbGFwc2VkKTtcbiAgICB9LCAxMDAwKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGVuZEdhbWUoKSB7XG4gICAgaWYgKGNvcnJlY3RDb3VudCA+IGhpZ2hTY29yZSAmJiBnYW1lUnVubmluZykge1xuICAgICAgaGlnaFNjb3JlID0gY29ycmVjdENvdW50O1xuICAgIH1cbiAgICBpZiAoaW5jb3JyZWN0Q291bnQgPiAwKSB7XG4gICAgICByZXN1bHRUZXh0Q2xhc3MgPSAnaW5jb3JyZWN0JztcbiAgICAgIHJlc3VsdFRleHQgPSBgSW5jb3JyZWN0LCBnYW1lIG92ZXIhIFRoZSBjb3JyZWN0IGFuc3dlciB3YXMgJHtnZXRNaW5pbXVtTW92ZXNGb3JDdXJyZW50UG9zaXRpb24oKX0uIFlvdXIgc2NvcmUgd2FzICR7Y29ycmVjdENvdW50fS5gXG4gICAgfSBlbHNlIHtcbiAgICAgIHJlc3VsdFRleHRDbGFzcyA9ICdjb3JyZWN0JztcbiAgICAgIHJlc3VsdFRleHQgPSBgVGltZSdzIHVwISBZb3VyIHNjb3JlIHdhcyAke2NvcnJlY3RDb3VudH0uYDtcbiAgICB9XG5cbiAgICBnYW1lUnVubmluZyA9IGZhbHNlO1xuICAgIHRpbWVSZW1haW5pbmcgPSBudWxsO1xuICAgIHRpbWVFbGFwc2VkID0gbnVsbDtcbiAgICBjb3JyZWN0Q291bnQgPSAwO1xuICAgIGluY29ycmVjdENvdW50ID0gMDtcbiAgICBzdGFydFRpbWVkR2FtZUJ1dHRvbkRpc2FibGVkID0gZmFsc2U7XG4gIH1cblxuICBmdW5jdGlvbiByZXNldCgpIHtcbiAgICBjb3JyZWN0Q291bnQgPSAwO1xuICAgIGluY29ycmVjdENvdW50ID0gMDtcbiAgICBnYW1lUnVubmluZyA9IGZhbHNlO1xuICAgIHN0YXJ0VGltZWRHYW1lQnV0dG9uRGlzYWJsZWQgPSBmYWxzZTtcbiAgICByZXN1bHRUZXh0ID0gJyc7XG4gICAgcmVzdWx0VGV4dENsYXNzID0gJyc7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRSYW5kb21JbmRleChtYXgpIHtcbiAgICByZXR1cm4gTWF0aC5mbG9vcihNYXRoLnJhbmRvbSgpICogbWF4KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldFJhbmRvbUVsZW1lbnQoYXJyYXkpIHtcbiAgICBjb25zdCBpbmRleCA9IGdldFJhbmRvbUluZGV4KGFycmF5Lmxlbmd0aCk7XG4gICAgcmV0dXJuIGFycmF5W2luZGV4XTtcbiAgfVxuXG4gIGZ1bmN0aW9uIHNvcnRSYW5kb21seShhcnJheSkge1xuICAgIHJldHVybiBhcnJheS5zb3J0KCgpID0+IE1hdGgucmFuZG9tKCkgLSAwLjUpO1xuICB9XG5cbiAgZnVuY3Rpb24gZ2V0TWluaW11bU1vdmVzRm9yQ3VycmVudFBvc2l0aW9uKCkge1xuICAgIHJldHVybiBwb3NpdGlvbkRhdGEubWluX2xlbmd0aDtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldFBhdGhzRm9yQ3VycmVudFBvc2l0aW9uKCkge1xuICAgIHJldHVybiBwb3NpdGlvbkRhdGEucGF0aHM7XG4gIH1cblxuICBmdW5jdGlvbiBwcm9jZXNzQnV0dG9uKGlkKSB7XG4gICAgaWYgKGFuaW1hdGluZykge1xuICAgICAgcmV0dXJuO1xuICAgIH1cbiAgICBjb25zdCBudW1iZXIgPSBwYXJzZUludChpZCk7XG4gICAgY29uc3QgbWluaW11bSA9IGdldE1pbmltdW1Nb3Zlc0ZvckN1cnJlbnRQb3NpdGlvbigpO1xuICAgIGNvbnN0IGJ1dHRvbiA9IGdldEJ1dHRvbihudW1iZXIpO1xuICAgIGlmIChudW1iZXIgPT09IG1pbmltdW0pIHtcbiAgICAgIGNvcnJlY3RDb3VudCArPSAxO1xuICAgICAgYW5pbWF0ZUVsZW1lbnQoYnV0dG9uLCAnY29ycmVjdEFuc3dlcicpO1xuICAgICAgcmVzdWx0VGV4dENsYXNzID0gJ2NvcnJlY3QnO1xuICAgICAgcmVzdWx0VGV4dCA9IGAke251bWJlcn0gd2FzIGNvcnJlY3QhYDtcbiAgICAgIG5ld1Bvc2l0aW9uKCk7XG4gICAgfSBlbHNlIHtcbiAgICAgIGluY29ycmVjdENvdW50ICs9IDE7XG4gICAgICBhbmltYXRlRWxlbWVudChidXR0b24sICdpbmNvcnJlY3RBbnN3ZXInKTtcbiAgICAgIGlmIChnYW1lUnVubmluZykge1xuICAgICAgICBlbmRHYW1lKCk7XG4gICAgICB9IGVsc2Uge1xuICAgICAgICByZXN1bHRUZXh0ID0gYCR7bnVtYmVyfSB3YXMgaW5jb3JyZWN0LiBUaGUgY29ycmVjdCBhbnN3ZXIgd2FzICR7bWluaW11bX0uYDtcbiAgICAgICAgcmVzdWx0VGV4dENsYXNzID0gJ2luY29ycmVjdCc7XG4gICAgICB9XG4gICAgICBjb25zdCBjb3JyZWN0UGF0aHMgPSBwb3NpdGlvbkRhdGEucGF0aHM7XG4gICAgICBjb25zdCByYW5kb21seVNvcnRlZCA9IHNvcnRSYW5kb21seShjb3JyZWN0UGF0aHMpO1xuICAgICAgY29uc3QgcGF0aFRvQW5pbWF0ZSA9IHJhbmRvbWx5U29ydGVkWzBdO1xuICAgICAgY29uc3QgbW92ZVBhaXJzID0gZ2V0TW92ZVBhaXJzRnJvbVBhdGgocGF0aFRvQW5pbWF0ZSk7XG4gICAgICBkcmF3Q29ycmVjdEFycm93cyhyYW5kb21seVNvcnRlZCk7XG4gICAgICBtYWtlU2VxdWVudGlhbE1vdmVzKG1vdmVQYWlycywgKCkgPT4ge1xuICAgICAgICBuZXdQb3NpdGlvbigpO1xuICAgICAgfSk7XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gZHJhd0NvcnJlY3RBcnJvd3ModmFsaWRQYXRocykge1xuICAgIGNsZWFyRHJhd2luZ3MoKTtcbiAgICBjb25zdCBzaGFwZXMgPSBbXTtcbiAgICBjb25zdCBhbHJlYWR5RHJhd24gPSBuZXcgU2V0KClcbiAgICBjb25zdCBicnVzaEtleXMgPSBPYmplY3Qua2V5cyhjdXN0b21CcnVzaGVzKTtcbiAgICBsZXQgbWF4UGF0aHNUb1Nob3cgPSBtYXhQYXRoc1RvRGlzcGxheU9wdGlvbi5nZXRWYWx1ZSgpO1xuICAgIGlmIChtYXhQYXRoc1RvU2hvdyA8IDEpIHtcbiAgICAgIG1heFBhdGhzVG9TaG93ID0gMTtcbiAgICB9XG4gICAgbWF4UGF0aHNUb1Nob3cgPSA1MDtcblxuICAgIHZhbGlkUGF0aHMuZm9yRWFjaCgocGF0aCwgaW5kZXgpID0+IHtcbiAgICAgIGlmIChpbmRleCArIDEgPiBtYXhQYXRoc1RvU2hvdykge1xuICAgICAgICByZXR1cm47XG4gICAgICB9XG4gICAgICBjb25zdCBtb3ZlUGFpcnMgPSBnZXRNb3ZlUGFpcnNGcm9tUGF0aChwYXRoKTtcbiAgICAgIGNvbnN0IGJydXNoS2V5ID0gYnJ1c2hLZXlzW2luZGV4ICUgYnJ1c2hLZXlzLmxlbmd0aF07XG4gICAgICBtb3ZlUGFpcnMuZm9yRWFjaCgocGFpcikgPT4ge1xuICAgICAgICBpZiAoYWxyZWFkeURyYXduLmhhcyhwYWlyKSkge1xuICAgICAgICAgIHJldHVybjtcbiAgICAgICAgfVxuICAgICAgICBjb25zdCBzaGFwZSA9IHtvcmlnOiBwYWlyWzBdLCBkZXN0OiBwYWlyWzFdLCBicnVzaDogYnJ1c2hLZXksIG1vZGlmaWVyczoge2xpbmVXaWR0aDogMTB9fVxuICAgICAgICBzaGFwZXMucHVzaChzaGFwZSk7XG4gICAgICAgIGFscmVhZHlEcmF3bi5hZGQocGFpcik7XG4gICAgICB9KTtcbiAgICB9KTtcblxuICAgIGNvbnN0IG1haW5QYXRoID0gdmFsaWRQYXRoc1swXTtcbiAgICBjb25zdCBtYWluTW92ZVBhaXJzID0gZ2V0TW92ZVBhaXJzRnJvbVBhdGgobWFpblBhdGgpO1xuICAgIG1haW5Nb3ZlUGFpcnMuZm9yRWFjaCgocGFpcikgPT4ge1xuICAgICAgY29uc3Qgc2hhcGUgPSB7b3JpZzogcGFpclswXSwgZGVzdDogcGFpclsxXSwgYnJ1c2g6ICdncmVlbicsIG1vZGlmaWVyczoge2luZVdpZHRoOiAxMH19XG4gICAgICBzaGFwZXMucHVzaChzaGFwZSk7XG4gICAgfSk7XG5cbiAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgZHJhd2FibGU6IHtcbiAgICAgICAgc2hhcGVzOiBzaGFwZXNcbiAgICAgIH1cbiAgICB9KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldE1vdmVQYWlyc0Zyb21QYXRoKHBhdGgpIHtcbiAgICBjb25zdCBwYWlycyA9IFtdO1xuICAgIGZvciAobGV0IGkgPSAwOyBpIDwgcGF0aC5sZW5ndGggLSAxOyBpKyspIHtcbiAgICAgIHBhaXJzLnB1c2goW3BhdGhbaV0sIHBhdGhbaSArIDFdXSk7XG4gICAgfVxuICAgIHJldHVybiBwYWlycztcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldEdyb3VwZWRQYXRocyhwYXRocykge1xuICAgIGxldCBncm91cHMgPSBbXTtcblxuICAgIGZvciAobGV0IHBhdGggb2YgcGF0aHMpIHtcbiAgICAgIGxldCBhZGRlZFRvR3JvdXAgPSBmYWxzZTtcblxuICAgICAgZm9yIChsZXQgZ3JvdXAgb2YgZ3JvdXBzKSB7XG4gICAgICAgIGxldCBvdmVybGFwID0gZ3JvdXAuc29tZShncm91cFBhdGggPT4ge1xuICAgICAgICAgIGZvciAobGV0IGkgPSAwOyBpIDwgZ3JvdXBQYXRoLmxlbmd0aCAtIDE7IGkrKykge1xuICAgICAgICAgICAgZm9yIChsZXQgaiA9IDA7IGogPCBwYXRoLmxlbmd0aCAtIDE7IGorKykge1xuICAgICAgICAgICAgICBpZiAoZ3JvdXBQYXRoW2ldID09PSBwYXRoW2pdICYmIGdyb3VwUGF0aFtpICsgMV0gPT09IHBhdGhbaiArIDFdKSB7XG4gICAgICAgICAgICAgICAgcmV0dXJuIHRydWU7XG4gICAgICAgICAgICAgIH1cbiAgICAgICAgICAgIH1cbiAgICAgICAgICB9XG4gICAgICAgICAgcmV0dXJuIGZhbHNlO1xuICAgICAgICB9KTtcblxuICAgICAgICBpZiAoIW92ZXJsYXApIHtcbiAgICAgICAgICBncm91cC5wdXNoKHBhdGgpO1xuICAgICAgICAgIGFkZGVkVG9Hcm91cCA9IHRydWU7XG4gICAgICAgICAgYnJlYWs7XG4gICAgICAgIH1cbiAgICAgIH1cblxuICAgICAgaWYgKCFhZGRlZFRvR3JvdXApIHtcbiAgICAgICAgZ3JvdXBzLnB1c2goW3BhdGhdKTtcbiAgICAgIH1cbiAgICB9XG5cbiAgICByZXR1cm4gZ3JvdXBzO1xuICB9XG5cbiAgZnVuY3Rpb24gaW5jcmVtZW50R3JvdXBJbmRleCgpIHtcbiAgICBpZiAoZ3JvdXBJbmRleCA8IGdyb3VwZWRQYXRocy5sZW5ndGggLSAxKSB7XG4gICAgICBncm91cEluZGV4Kys7XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gZGVjcmVtZW50R3JvdXBJbmRleCgpIHtcbiAgICBpZiAoZ3JvdXBJbmRleCA+IDApIHtcbiAgICAgIGdyb3VwSW5kZXgtLTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBtYWtlU2VxdWVudGlhbE1vdmVzKG1vdmVQYWlycyA9IFtdLCBjYWxsYmFjayA9IG51bGwpIHtcbiAgICBhbmltYXRpbmcgPSB0cnVlO1xuICAgIGlmIChtb3ZlUGFpcnMubGVuZ3RoIDwgMSkge1xuICAgICAgYW5pbWF0aW5nID0gZmFsc2U7XG4gICAgICBpZiAoY2FsbGJhY2spIHtcbiAgICAgICAgY2FsbGJhY2soKTtcbiAgICAgIH1cbiAgICAgIHJldHVybjtcbiAgICB9XG5cbiAgICAvLyBzaGlmdCBtdXRhdGVzIHRoZSBhcnJheVxuICAgIGNvbnN0IG1vdmUgPSBtb3ZlUGFpcnMuc2hpZnQoKTtcblxuICAgIGNoZXNzZ3JvdW5kLm1vdmUobW92ZVswXSwgbW92ZVsxXSk7XG5cbiAgICBzZXRUaW1lb3V0KCgpID0+IG1ha2VTZXF1ZW50aWFsTW92ZXMobW92ZVBhaXJzLCBjYWxsYmFjayksIGFuaW1hdGlvbkxlbmd0aE9wdGlvbi5nZXRWYWx1ZSgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGNsZWFyRHJhd2luZ3MoKSB7XG4gICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgIGRyYXdhYmxlOiB7XG4gICAgICAgIHNoYXBlczogW11cbiAgICAgIH1cbiAgICB9KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIG5ld1Bvc2l0aW9uKCkge1xuICAgIGNsZWFyRHJhd2luZ3MoKTtcbiAgICBhbnN3ZXJTaG93biA9IGZhbHNlO1xuICAgIGNvbnN0IGtleXMgPSBPYmplY3Qua2V5cyhqc29uRGF0YSk7XG4gICAgY29uc3QgaW5kZXggPSBnZXRSYW5kb21JbmRleChrZXlzLmxlbmd0aCk7XG4gICAgY29uc3Qga2V5ID0ga2V5c1tpbmRleF07XG4gICAgY29uc3QgcHJldmlvdXNLbmlnaHRTcXVhcmUgPSBrbmlnaHRTcXVhcmU7XG4gICAgY29uc3QgcHJldmlvdXNLaW5nU3F1YXJlID0ga2luZ1NxdWFyZTtcbiAgICBjb25zdCBzcXVhcmVzID0ga2V5LnNwbGl0KCcuJyk7XG4gICAga25pZ2h0U3F1YXJlID0gc3F1YXJlc1swXTtcbiAgICBraW5nU3F1YXJlID0gc3F1YXJlc1sxXTtcbiAgICBwb3NpdGlvbkRhdGEgPSBqc29uRGF0YVtrZXldO1xuICAgIGNvbnN0IGtpbmcgPSB7XG4gICAgICByb2xlOiAna2luZycsXG4gICAgICBjb2xvcjogJ2JsYWNrJyxcbiAgICB9XG4gICAgY29uc3Qga25pZ2h0ID0ge1xuICAgICAgcm9sZTogJ2tuaWdodCcsXG4gICAgICBjb2xvcjogJ3doaXRlJyxcbiAgICB9XG4gICAgY29uc3QgcGllY2VzRGlmZiA9IG5ldyBNYXAoKTtcbiAgICBpZiAocHJldmlvdXNLbmlnaHRTcXVhcmUgJiYgcHJldmlvdXNLaW5nU3F1YXJlKSB7XG4gICAgICBwaWVjZXNEaWZmLnNldChwcmV2aW91c0tuaWdodFNxdWFyZSwgdW5kZWZpbmVkKTtcbiAgICAgIHBpZWNlc0RpZmYuc2V0KHByZXZpb3VzS2luZ1NxdWFyZSwgdW5kZWZpbmVkKTtcbiAgICB9XG4gICAgcGllY2VzRGlmZi5zZXQoa2luZ1NxdWFyZSwga2luZyk7XG4gICAgcGllY2VzRGlmZi5zZXQoa25pZ2h0U3F1YXJlLCBrbmlnaHQpO1xuICAgIGNoZXNzZ3JvdW5kLnNldFBpZWNlcyhwaWVjZXNEaWZmKTtcbiAgICBjaGVzc2dyb3VuZC5zZXRQaWVjZXMobmV3IE1hcCgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGFuaW1hdGVFbGVtZW50KGVsZW1lbnQsIGFuaW1hdGlvbkNsYXNzKSB7XG4gICAgZWxlbWVudC5jbGFzc0xpc3QuYWRkKGFuaW1hdGlvbkNsYXNzKTtcblxuICAgIC8vIExpc3RlbiBmb3IgdGhlIGFuaW1hdGlvbmVuZCBldmVudFxuICAgIGVsZW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignYW5pbWF0aW9uZW5kJywgZnVuY3Rpb24gKCkge1xuICAgICAgLy8gT25jZSB0aGUgYW5pbWF0aW9uIGVuZHMsIHJlbW92ZSB0aGUgY2xhc3NcbiAgICAgIGVsZW1lbnQuY2xhc3NMaXN0LnJlbW92ZShhbmltYXRpb25DbGFzcyk7XG4gICAgfSwge29uY2U6IHRydWV9KTsgLy8gVGhlIGxpc3RlbmVyIGlzIHJlbW92ZWQgYWZ0ZXIgaXQncyBpbnZva2VkIG9uY2VcbiAgfVxuXG4gIGZ1bmN0aW9uIGluaXRDb25maWcoKSB7XG4gICAgY29uZmlnID0gbmV3IENvbmZpZygna25pZ2h0X21vdmVzX2dhbWUnKTtcbiAgICBhbmltYXRpb25MZW5ndGhPcHRpb24gPSBjb25maWcuZ2V0Q29uZmlnT3B0aW9uKCdBbmltYXRpb24gbGVuZ3RoIChtcyknLCAzMDApO1xuXG4gICAgbWF4UGF0aHNUb0Rpc3BsYXlPcHRpb24gPSBjb25maWcuZ2V0Q29uZmlnT3B0aW9uKCdNYXggcGF0aHMgdG8gc2hvdycsIDYpO1xuXG4gICAgY29uZmlnRm9ybSA9IG5ldyBDb25maWdGb3JtKGNvbmZpZyk7XG4gICAgY29uZmlnRm9ybS5hZGRMaW5rVG9ET00oJ2NvbmZpZycpO1xuICB9XG48L3NjcmlwdD5cblxuPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy9tZXJpZGEuY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiPlxuXG48ZGl2IGNsYXNzPVwiY29sdW1uc1wiPlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGNvbHVtbjIgaXMtNi1kZXNrdG9wXCIgYmluZDp0aGlzPXttYWluQ29sdW1ufT5cbiAgICA8ZGl2IGNsYXNzPVwiYm9hcmQtd3JhcHBlciBtYi0zXCIgYmluZDp0aGlzPXtib2FyZFdyYXBwZXJ9PlxuICAgICAgPGRpdiBjbGFzcz1cImJvYXJkLWNvbnRhaW5lciBpczJkXCIgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICAgICAgICAgc3R5bGU9XCJ3aWR0aDoge2JvYXJkV2lkdGh9cHg7IGhlaWdodDoge2JvYXJkSGVpZ2h0fXB4OyBwb3NpdGlvbjogcmVsYXRpdmU7XCI+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cblxuICAgIHsjaWYgZ2FtZVJ1bm5pbmd9XG4gICAgICA8cHJvZ3Jlc3MgY2xhc3M9XCJwcm9ncmVzcyB7cHJvZ3Jlc3NDbGFzc31cIiB2YWx1ZT1cInskc2Vjb25kUHJvZ3Jlc3N9XCIgbWF4PVwiNjBcIlxuICAgICAgICAgICAgICAgIHN0eWxlPVwid2lkdGg6IHtib2FyZFdpZHRofXB4O1wiPjwvcHJvZ3Jlc3M+XG4gICAgey9pZn1cblxuICAgIDxkaXYgY2xhc3M9XCJmaXhlZC1ncmlkIGhhcy0zLWNvbHNcIiBzdHlsZT1cIndpZHRoOiB7Ym9hcmRXaWR0aH1weFwiPlxuICAgICAgPGRpdiBjbGFzcz1cImdyaWRcIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNlbGxcIj5cbiAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIiBpZD1cIjFcIiBvbjpjbGljaz17KCkgPT4gcHJvY2Vzc0J1dHRvbignMScpfSBiaW5kOnRoaXM9e2J1dHRvbjF9PjE8L2J1dHRvbj5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCIgaWQ9XCIyXCIgb246Y2xpY2s9eygpID0+IHByb2Nlc3NCdXR0b24oJzInKX0gYmluZDp0aGlzPXtidXR0b24yfT4yPC9idXR0b24+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiIGlkPVwiM1wiIG9uOmNsaWNrPXsoKSA9PiBwcm9jZXNzQnV0dG9uKCczJyl9IGJpbmQ6dGhpcz17YnV0dG9uM30+MzwvYnV0dG9uPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNlbGxcIj5cbiAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIiBpZD1cIjRcIiBvbjpjbGljaz17KCkgPT4gcHJvY2Vzc0J1dHRvbignNCcpfSBiaW5kOnRoaXM9e2J1dHRvbjR9PjQ8L2J1dHRvbj5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCIgaWQ9XCI1XCIgb246Y2xpY2s9eygpID0+IHByb2Nlc3NCdXR0b24oJzUnKX0gYmluZDp0aGlzPXtidXR0b241fT41PC9idXR0b24+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiIGlkPVwiNlwiIG9uOmNsaWNrPXsoKSA9PiBwcm9jZXNzQnV0dG9uKCc2Jyl9IGJpbmQ6dGhpcz17YnV0dG9uNn0+NjwvYnV0dG9uPlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvZGl2PlxuICAgIDwvZGl2PlxuICA8L2Rpdj5cblxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGNvbHVtbjEgaXMtMy1kZXNrdG9wXCI+XG4gICAgPGRpdiBjbGFzcz1cImJveCBzY29yZS1jb250YWluZXJcIj5cbiAgICAgIDxkaXYgY2xhc3M9XCJjb250YWluZXIgaGFzLXRleHQtY2VudGVyZWRcIj5cbiAgICAgICAgPGgyIGNsYXNzPVwiaXMtc2l6ZS01XCI+Q29ycmVjdDwvaDI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJzY29yZSBpcy1zaXplLTJcIj57Y29ycmVjdENvdW50fTwvZGl2PlxuICAgICAgICA8aDIgY2xhc3M9XCJpcy1zaXplLTVcIj5JbmNvcnJlY3Q8L2gyPlxuICAgICAgICA8ZGl2IGNsYXNzPVwic2NvcmUgaXMtc2l6ZS0yXCI+e2luY29ycmVjdENvdW50fTwvZGl2PlxuICAgICAgPC9kaXY+XG4gICAgPC9kaXY+XG4gICAgPGRpdiBjbGFzcz1cImJveFwiPlxuICAgICAgPGRpdiBjbGFzcz1cImNvbnRhaW5lciBoYXMtdGV4dC1jZW50ZXJlZFwiPlxuICAgICAgICA8aDIgY2xhc3M9XCJpcy1zaXplLTVcIj5IaWdoIFNjb3JlPC9oMj5cbiAgICAgICAgPGRpdiBjbGFzcz1cInNjb3JlIGlzLXNpemUtMlwiPntoaWdoU2NvcmV9PC9kaXY+XG4gICAgICAgIDxidXR0b24gaWQ9XCJzdGFydFRpbWVkR2FtZVwiIGRpc2FibGVkPXtzdGFydFRpbWVkR2FtZUJ1dHRvbkRpc2FibGVkfSBvbjpjbGljaz17c3RhcnRUaW1lZEdhbWV9XG4gICAgICAgICAgICAgICAgY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiPlN0YXJ0IFRpbWVkIEdhbWVcbiAgICAgICAgPC9idXR0b24+XG4gICAgICAgIHsjaWYgdGltZVJlbWFpbmluZyA+IDB9XG4gICAgICAgICAgPGRpdiBpZD1cInRpbWVyXCI+e3RpbWVSZW1haW5pbmd9PC9kaXY+XG4gICAgICAgIHsvaWZ9XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgICA8ZGl2IGNsYXNzPVwiYm94XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiY29udGFpbmVyIGhhcy10ZXh0LWNlbnRlcmVkXCI+XG4gICAgICAgIHsjaWYgIWFuc3dlclNob3dufVxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1pbmZvXCIgZGlzYWJsZWQ9e2Fuc3dlclNob3duIHx8IGdhbWVSdW5uaW5nfSBvbjpjbGlja3xwcmV2ZW50RGVmYXVsdD17KCkgPT4ge1xuICAgICAgICAgIGlmIChwb3NpdGlvbkRhdGEpIHtcbiAgICAgICAgICAgIGFuc3dlclNob3duID0gdHJ1ZTtcbiAgICAgICAgICAgIGNvbnN0IGNvcnJlY3RQYXRocyA9IHBvc2l0aW9uRGF0YS5wYXRocztcbiAgICAgICAgICAgIGNvbnN0IHJhbmRvbWx5U29ydGVkID0gc29ydFJhbmRvbWx5KGNvcnJlY3RQYXRocyk7XG4gICAgICAgICAgICBncm91cGVkUGF0aHMgPSBzb3J0UmFuZG9tbHkoZ2V0R3JvdXBlZFBhdGhzKHJhbmRvbWx5U29ydGVkKSk7XG4gICAgICAgICAgICBncm91cEluZGV4ID0gMDtcbiAgICAgICAgICB9XG4gICAgICAgIH19PlNob3cgYW5zd2VyXG4gICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgezplbHNlfVxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1saW5rXCIgb246Y2xpY2s9eygpID0+IHtcbiAgICAgICAgICAgICAgY2xlYXJEcmF3aW5ncygpO1xuICAgICAgICAgICAgICBhbnN3ZXJTaG93biA9IGZhbHNlO1xuICAgICAgICAgICAgfX0+XG4gICAgICAgICAgICAgIENsZWFyXG4gICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICAgIHsjaWYgZ3JvdXBlZFBhdGhzLmxlbmd0aCA+IDF9XG4gICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJidXR0b25zIGhhcy1hZGRvbnNcIj5cbiAgICAgICAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uXCIgb246Y2xpY2s9e2RlY3JlbWVudEdyb3VwSW5kZXh9IGRpc2FibGVkPXtkaXNhYmxlUHJldn0+JmxhcXVvOzwvYnV0dG9uPlxuICAgICAgICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b25cIiBvbjpjbGljaz17aW5jcmVtZW50R3JvdXBJbmRleH0gZGlzYWJsZWQ9e2Rpc2FibGVOZXh0fT4mcmFxdW87PC9idXR0b24+XG4gICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgey9pZn1cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8ZGl2IGNsYXNzPVwiYmxvY2sgaGFzLXRleHQtbGVmdFwiPlxuICAgICAgICAgICAgPGRpdj5cbiAgICAgICAgICAgICAgTWluaW11bSAjIG9mIG1vdmVzOiB7Z2V0TWluaW11bU1vdmVzRm9yQ3VycmVudFBvc2l0aW9uKCl9XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIDxkaXY+XG4gICAgICAgICAgICAgIFRvdGFsIHVuaXF1ZSBwYXRoczoge3Bvc2l0aW9uRGF0YS5wYXRocy5sZW5ndGh9XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgey9pZn1cbiAgICAgIDwvZGl2PlxuICAgIDwvZGl2PlxuICA8L2Rpdj5cblxuXG48L2Rpdj5cblxuPHN0eWxlPlxuICAuY2VsbCBidXR0b24ge1xuICAgIHdpZHRoOiAxMDAlO1xuICAgIGRpc3BsYXk6IGlubGluZS1ibG9jaztcbiAgfVxuXG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICB3aWR0aDogMTAwJTtcbiAgfVxuXG4gIC5jb3JyZWN0IHtcbiAgICBjb2xvcjogZ3JlZW47XG4gIH1cblxuICAuaW5jb3JyZWN0IHtcbiAgICBjb2xvcjogcmVkO1xuICB9XG5cbiAgQGtleWZyYW1lcyBpbmNvcnJlY3RBbnN3ZXIge1xuICAgIDI1JSB7XG4gICAgICBiYWNrZ3JvdW5kLWNvbG9yOiByZWQ7XG4gICAgICB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoLTEwcHgpO1xuICAgIH1cbiAgICA1MCUge1xuICAgICAgYmFja2dyb3VuZC1jb2xvcjogcmVkO1xuICAgICAgdHJhbnNmb3JtOiB0cmFuc2xhdGVYKDEwcHgpO1xuICAgIH1cbiAgICA3NSUge1xuICAgICAgYmFja2dyb3VuZC1jb2xvcjogcmVkO1xuICAgICAgdHJhbnNmb3JtOiB0cmFuc2xhdGVYKC0xMHB4KTtcbiAgICB9XG4gICAgMTAwJSB7XG4gICAgICB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoMHB4KTtcbiAgICB9XG4gIH1cblxuICAuaW5jb3JyZWN0QW5zd2VyIHtcbiAgICBhbmltYXRpb246IGluY29ycmVjdEFuc3dlciAxcyBsaW5lYXI7XG4gIH1cblxuICBAa2V5ZnJhbWVzIGNvcnJlY3RBbnN3ZXIge1xuICAgIDUwJSB7XG4gICAgICBiYWNrZ3JvdW5kLWNvbG9yOiBncmVlbjtcbiAgICAgIHRyYW5zZm9ybTogc2NhbGUoMS4wMSk7XG4gICAgfVxuICAgIDEwMCUge1xuICAgICAgdHJhbnNmb3JtOiBzY2FsZSgxKTtcbiAgICB9XG4gIH1cblxuICAuY29ycmVjdEFuc3dlciB7XG4gICAgYW5pbWF0aW9uOiBjb3JyZWN0QW5zd2VyIDAuNzVzIGxpbmVhcjtcbiAgfVxuPC9zdHlsZT5cblxuXG5cblxuXG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBbWpCRSxtQkFBSyxDQUFDLG9CQUFPLENBQ1gsS0FBSyxDQUFFLElBQUksQ0FDWCxPQUFPLENBQUUsWUFDWCxDQUVBLDBDQUFlLENBQ2IsS0FBSyxDQUFFLElBQ1QsQ0FFQSxvQ0FBUyxDQUNQLEtBQUssQ0FBRSxLQUNULENBRUEsc0NBQVcsQ0FDVCxLQUFLLENBQUUsR0FDVCxDQUVBLFdBQVcsNkJBQWdCLENBQ3pCLEdBQUksQ0FDRixnQkFBZ0IsQ0FBRSxHQUFHLENBQ3JCLFNBQVMsQ0FBRSxXQUFXLEtBQUssQ0FDN0IsQ0FDQSxHQUFJLENBQ0YsZ0JBQWdCLENBQUUsR0FBRyxDQUNyQixTQUFTLENBQUUsV0FBVyxJQUFJLENBQzVCLENBQ0EsR0FBSSxDQUNGLGdCQUFnQixDQUFFLEdBQUcsQ0FDckIsU0FBUyxDQUFFLFdBQVcsS0FBSyxDQUM3QixDQUNBLElBQUssQ0FDSCxTQUFTLENBQUUsV0FBVyxHQUFHLENBQzNCLENBQ0YsQ0FFQSw0Q0FBaUIsQ0FDZixTQUFTLENBQUUsNkJBQWUsQ0FBQyxFQUFFLENBQUMsTUFDaEMsQ0FFQSxXQUFXLDJCQUFjLENBQ3ZCLEdBQUksQ0FDRixnQkFBZ0IsQ0FBRSxLQUFLLENBQ3ZCLFNBQVMsQ0FBRSxNQUFNLElBQUksQ0FDdkIsQ0FDQSxJQUFLLENBQ0gsU0FBUyxDQUFFLE1BQU0sQ0FBQyxDQUNwQixDQUNGLENBRUEsMENBQWUsQ0FDYixTQUFTLENBQUUsMkJBQWEsQ0FBQyxLQUFLLENBQUMsTUFDakMifQ== */");
+	append_styles(target, "svelte-djrxqv", ".cell.svelte-djrxqv button.svelte-djrxqv{width:100%;display:inline-block}.board-wrapper.svelte-djrxqv.svelte-djrxqv{width:100%}.correct.svelte-djrxqv.svelte-djrxqv{color:green}.incorrect.svelte-djrxqv.svelte-djrxqv{color:red}@keyframes svelte-djrxqv-incorrectAnswer{25%{background-color:red;transform:translateX(-10px)}50%{background-color:red;transform:translateX(10px)}75%{background-color:red;transform:translateX(-10px)}100%{transform:translateX(0px)}}.incorrectAnswer.svelte-djrxqv.svelte-djrxqv{animation:svelte-djrxqv-incorrectAnswer 1s linear}@keyframes svelte-djrxqv-correctAnswer{50%{background-color:green;transform:scale(1.01)}100%{transform:scale(1)}}.correctAnswer.svelte-djrxqv.svelte-djrxqv{animation:svelte-djrxqv-correctAnswer 0.75s linear}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiS25pZ2h0TW92ZXMuc3ZlbHRlIiwic291cmNlcyI6WyJLbmlnaHRNb3Zlcy5zdmVsdGUiXSwic291cmNlc0NvbnRlbnQiOlsiPHNjcmlwdD5cbiAgaW1wb3J0IHsgb25Nb3VudCB9IGZyb20gJ3N2ZWx0ZSc7XG4gIGltcG9ydCB7IHR3ZWVuZWQgfSBmcm9tICdzdmVsdGUvbW90aW9uJztcbiAgaW1wb3J0IHsgbGluZWFyIH0gZnJvbSAnc3ZlbHRlL2Vhc2luZyc7XG4gIGltcG9ydCBDaGVzc2JvYXJkIGZyb20gJy4vY29tcG9uZW50cy9DaGVzc2JvYXJkLnN2ZWx0ZSc7XG4gIGltcG9ydCB7IGtuaWdodE1vdmVzRGF0YSB9IGZyb20gJ3NyYy9rbmlnaHRfbW92ZXNfZGF0YSc7XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgQ29uZmlnRm9ybSB9IGZyb20gXCJzcmMvbG9jYWxfY29uZmlnXCI7XG4gIGltcG9ydCB7IFV0aWwgfSBmcm9tICdzcmMvdXRpbCc7XG5cbiAgY29uc3Qgc2Vjb25kUHJvZ3Jlc3MgPSB0d2VlbmVkKDAsIHtcbiAgICBkdXJhdGlvbjogMTAwMCxcbiAgICBlYXNpbmc6IGxpbmVhcixcbiAgfSk7XG5cbiAgbGV0IGNoZXNzZ3JvdW5kO1xuICBsZXQganNvbkRhdGEgPSBrbmlnaHRNb3Zlc0RhdGE7XG4gIGxldCBwb3NpdGlvbkRhdGEgPSBudWxsO1xuICBsZXQgY29ycmVjdENvdW50ID0gMDtcbiAgbGV0IGluY29ycmVjdENvdW50ID0gMDtcblxuICBsZXQgZ2FtZVJ1bm5pbmcgPSBmYWxzZTtcbiAgbGV0IHRpbWVSZW1haW5pbmcgPSBudWxsO1xuICBsZXQgdGltZUVsYXBzZWQgPSBudWxsO1xuXG4gIGxldCBwcm9ncmVzc0NsYXNzID0gJ2lzLXN1Y2Nlc3MnO1xuICBsZXQgYW5pbWF0aW5nID0gZmFsc2U7XG4gIGxldCBhbnN3ZXJTaG93bjtcbiAgbGV0IGdyb3VwZWRQYXRocyA9IFtdO1xuICBsZXQgZ3JvdXBJbmRleCA9IDA7XG5cbiAgbGV0IGRpc2FibGVOZXh0ID0gZmFsc2U7XG4gIGxldCBkaXNhYmxlUHJldiA9IHRydWU7XG5cbiAgJDoge1xuICAgIGRpc2FibGVOZXh0ID0gZ3JvdXBJbmRleCA+PSBncm91cGVkUGF0aHMubGVuZ3RoIC0gMTtcbiAgICBkaXNhYmxlUHJldiA9IGdyb3VwSW5kZXggPD0gMDtcbiAgfVxuXG4gICQ6IHtcbiAgICBpZiAoYW5zd2VyU2hvd24gJiYgZ3JvdXBlZFBhdGhzLmxlbmd0aCA+IDAgJiYgZ3JvdXBJbmRleCA+PSAwKSB7XG4gICAgICBkcmF3Q29ycmVjdEFycm93cyhncm91cGVkUGF0aHNbZ3JvdXBJbmRleF0pO1xuICAgIH1cbiAgfVxuXG4gIGxldCBoaWdoU2NvcmUgPSAwO1xuICBsZXQgbWF4UGF0aHNUb0Rpc3BsYXlPcHRpb247XG4gIGxldCBhbmltYXRpb25MZW5ndGhPcHRpb247XG4gIGxldCBrbmlnaHRTcXVhcmU7XG4gIGxldCBraW5nU3F1YXJlO1xuICBsZXQgY29uZmlnO1xuICBsZXQgY29uZmlnRm9ybTtcbiAgbGV0IHN0YXJ0VGltZWRHYW1lQnV0dG9uRGlzYWJsZWQgPSBmYWxzZTtcblxuICBsZXQgYm9hcmRXaWR0aDtcblxuICBsZXQgYnV0dG9uMTtcbiAgbGV0IGJ1dHRvbjI7XG4gIGxldCBidXR0b24zO1xuICBsZXQgYnV0dG9uNDtcbiAgbGV0IGJ1dHRvbjU7XG4gIGxldCBidXR0b242O1xuXG4gIGNvbnN0IGN1c3RvbUJydXNoZXMgPSB7XG4gICAgYnJhbmQxOiB7a2V5OiAnYnJhbmQxJywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTEnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQyOiB7a2V5OiAnYnJhbmQyJywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTInKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQzOiB7a2V5OiAnYnJhbmQzJywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTMnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ0OiB7a2V5OiAnYnJhbmQ0JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTQnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ1OiB7a2V5OiAnYnJhbmQ1JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTUnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ2OiB7a2V5OiAnYnJhbmQ2JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTYnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ3OiB7a2V5OiAnYnJhbmQ3JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTcnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ4OiB7a2V5OiAnYnJhbmQ4JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTgnKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gICAgYnJhbmQ5OiB7a2V5OiAnYnJhbmQ5JywgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKCctLWJyYW5kLWNvbG9yLTknKSwgb3BhY2l0eTogMSwgbGluZVdpZHRoOiAxNX0sXG4gIH07XG5cbiAgJDoge1xuICAgIGlmIChnYW1lUnVubmluZykge1xuICAgICAgY29uc3QgcGVyY2VudERvbmUgPSB0aW1lRWxhcHNlZCAvIDYwO1xuICAgICAgaWYgKHBlcmNlbnREb25lIDwgMC43KSB7XG4gICAgICAgIHByb2dyZXNzQ2xhc3MgPSAnaXMtc3VjY2Vzcyc7XG4gICAgICB9IGVsc2UgaWYgKHBlcmNlbnREb25lIDwgMC45KSB7XG4gICAgICAgIHByb2dyZXNzQ2xhc3MgPSAnaXMtd2FybmluZyc7XG4gICAgICB9IGVsc2Uge1xuICAgICAgICBwcm9ncmVzc0NsYXNzID0gJ2lzLWRhbmdlcic7XG4gICAgICB9XG4gICAgfSBlbHNlIHtcbiAgICAgIHByb2dyZXNzQ2xhc3MgPSAnaXMtc3VjY2Vzcyc7XG4gICAgfVxuICB9XG5cbiAgaW5pdENvbmZpZygpO1xuXG4gIGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHtcbiAgICBmZW46ICc4LzgvOC84LzgvOC84LzgnLFxuICAgIGFuaW1hdGlvbjoge1xuICAgICAgZW5hYmxlZDogdHJ1ZSxcbiAgICAgIGR1cmF0aW9uOiBhbmltYXRpb25MZW5ndGhPcHRpb24uZ2V0VmFsdWUoKSxcbiAgICB9LFxuICAgIGhpZ2hsaWdodDoge1xuICAgICAgbGFzdE1vdmU6IGZhbHNlLFxuICAgIH0sXG4gICAgZHJhZ2dhYmxlOiBmYWxzZSxcbiAgICBzZWxlY3RhYmxlOiBmYWxzZSxcbiAgICBkcmF3YWJsZToge1xuICAgICAgYnJ1c2hlczogY3VzdG9tQnJ1c2hlcyxcbiAgICB9XG4gIH07XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgaW5pdEtleWJvYXJkU2hvcnRjdXRzKCk7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfSk7XG5cbiAgZnVuY3Rpb24gZ2V0QnV0dG9uKGlkKSB7XG4gICAgc3dpdGNoIChpZCkge1xuICAgICAgY2FzZSAxOlxuICAgICAgICByZXR1cm4gYnV0dG9uMTtcbiAgICAgIGNhc2UgMjpcbiAgICAgICAgcmV0dXJuIGJ1dHRvbjI7XG4gICAgICBjYXNlIDM6XG4gICAgICAgIHJldHVybiBidXR0b24zO1xuICAgICAgY2FzZSA0OlxuICAgICAgICByZXR1cm4gYnV0dG9uNDtcbiAgICAgIGNhc2UgNTpcbiAgICAgICAgcmV0dXJuIGJ1dHRvbjU7XG4gICAgICBjYXNlIDY6XG4gICAgICAgIHJldHVybiBidXR0b242O1xuICAgIH1cbiAgfVxuXG4gIGZ1bmN0aW9uIGluaXRLZXlib2FyZFNob3J0Y3V0cygpIHtcbiAgICB3aW5kb3cuYWRkRXZlbnRMaXN0ZW5lcigna2V5ZG93bicsIChldmVudCkgPT4ge1xuICAgICAgY29uc3Qga2V5ID0gZXZlbnQua2V5O1xuICAgICAgaWYgKGtleSA+PSAnMScgJiYga2V5IDw9ICc2Jykge1xuICAgICAgICAvLyBUcmlnZ2VyIGNsaWNrIGV2ZW50IG9uIGNvcnJlc3BvbmRpbmcgYnV0dG9uXG4gICAgICAgIGNvbnN0IGJ1dHRvbiA9IGdldEJ1dHRvbihwYXJzZUludChrZXkpKTtcbiAgICAgICAgYnV0dG9uLmNsaWNrKCk7XG4gICAgICB9XG4gICAgfSk7XG4gIH1cblxuICBmdW5jdGlvbiBzdGFydFRpbWVkR2FtZSgpIHtcbiAgICByZXNldCgpO1xuICAgIHN0YXJ0VGltZWRHYW1lQnV0dG9uRGlzYWJsZWQgPSB0cnVlO1xuICAgIGdhbWVSdW5uaW5nID0gdHJ1ZTtcbiAgICB0aW1lUmVtYWluaW5nID0gNjA7XG4gICAgdGltZUVsYXBzZWQgPSAwO1xuICAgIHNlY29uZFByb2dyZXNzLnNldCgwKTtcbiAgICBuZXdQb3NpdGlvbigpO1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgZW5kR2FtZSgpO1xuICAgIH0sIDYwMDAwKTsgLy8gMSBtaW51dGVcbiAgICBjb25zdCB0aW1lckludGVydmFsID0gc2V0SW50ZXJ2YWwoKCkgPT4ge1xuICAgICAgaWYgKHRpbWVSZW1haW5pbmcgPT09IDApIHtcbiAgICAgICAgY2xlYXJJbnRlcnZhbCh0aW1lckludGVydmFsKTtcbiAgICAgIH1cbiAgICAgIHRpbWVSZW1haW5pbmcgLT0gMTtcbiAgICAgIHRpbWVFbGFwc2VkICs9IDE7XG4gICAgICBzZWNvbmRQcm9ncmVzcy5zZXQodGltZUVsYXBzZWQpO1xuICAgIH0sIDEwMDApO1xuICB9XG5cbiAgZnVuY3Rpb24gZW5kR2FtZSgpIHtcbiAgICBpZiAoY29ycmVjdENvdW50ID4gaGlnaFNjb3JlICYmIGdhbWVSdW5uaW5nKSB7XG4gICAgICBoaWdoU2NvcmUgPSBjb3JyZWN0Q291bnQ7XG4gICAgfVxuXG4gICAgZ2FtZVJ1bm5pbmcgPSBmYWxzZTtcbiAgICB0aW1lUmVtYWluaW5nID0gbnVsbDtcbiAgICB0aW1lRWxhcHNlZCA9IG51bGw7XG4gICAgY29ycmVjdENvdW50ID0gMDtcbiAgICBpbmNvcnJlY3RDb3VudCA9IDA7XG4gICAgc3RhcnRUaW1lZEdhbWVCdXR0b25EaXNhYmxlZCA9IGZhbHNlO1xuICB9XG5cbiAgZnVuY3Rpb24gcmVzZXQoKSB7XG4gICAgY29ycmVjdENvdW50ID0gMDtcbiAgICBpbmNvcnJlY3RDb3VudCA9IDA7XG4gICAgZ2FtZVJ1bm5pbmcgPSBmYWxzZTtcbiAgICBzdGFydFRpbWVkR2FtZUJ1dHRvbkRpc2FibGVkID0gZmFsc2U7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRSYW5kb21JbmRleChtYXgpIHtcbiAgICByZXR1cm4gTWF0aC5mbG9vcihNYXRoLnJhbmRvbSgpICogbWF4KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldFJhbmRvbUVsZW1lbnQoYXJyYXkpIHtcbiAgICBjb25zdCBpbmRleCA9IGdldFJhbmRvbUluZGV4KGFycmF5Lmxlbmd0aCk7XG4gICAgcmV0dXJuIGFycmF5W2luZGV4XTtcbiAgfVxuXG4gIGZ1bmN0aW9uIHNvcnRSYW5kb21seShhcnJheSkge1xuICAgIHJldHVybiBhcnJheS5zb3J0KCgpID0+IE1hdGgucmFuZG9tKCkgLSAwLjUpO1xuICB9XG5cbiAgZnVuY3Rpb24gZ2V0TWluaW11bU1vdmVzRm9yQ3VycmVudFBvc2l0aW9uKCkge1xuICAgIHJldHVybiBwb3NpdGlvbkRhdGEubWluX2xlbmd0aDtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldFBhdGhzRm9yQ3VycmVudFBvc2l0aW9uKCkge1xuICAgIHJldHVybiBwb3NpdGlvbkRhdGEucGF0aHM7XG4gIH1cblxuICBmdW5jdGlvbiBwcm9jZXNzQnV0dG9uKGlkKSB7XG4gICAgaWYgKGFuaW1hdGluZykge1xuICAgICAgcmV0dXJuO1xuICAgIH1cbiAgICBjb25zdCBudW1iZXIgPSBwYXJzZUludChpZCk7XG4gICAgY29uc3QgbWluaW11bSA9IGdldE1pbmltdW1Nb3Zlc0ZvckN1cnJlbnRQb3NpdGlvbigpO1xuICAgIGNvbnN0IGJ1dHRvbiA9IGdldEJ1dHRvbihudW1iZXIpO1xuICAgIGlmIChudW1iZXIgPT09IG1pbmltdW0pIHtcbiAgICAgIGNvcnJlY3RDb3VudCArPSAxO1xuICAgICAgYW5pbWF0ZUVsZW1lbnQoYnV0dG9uLCAnY29ycmVjdEFuc3dlcicpO1xuICAgICAgbmV3UG9zaXRpb24oKTtcbiAgICB9IGVsc2Uge1xuICAgICAgaW5jb3JyZWN0Q291bnQgKz0gMTtcbiAgICAgIGFuaW1hdGVFbGVtZW50KGJ1dHRvbiwgJ2luY29ycmVjdEFuc3dlcicpO1xuICAgICAgaWYgKGdhbWVSdW5uaW5nKSB7XG4gICAgICAgIGVuZEdhbWUoKTtcbiAgICAgIH0gZWxzZSB7XG4gICAgICB9XG4gICAgICBjb25zdCBjb3JyZWN0UGF0aHMgPSBwb3NpdGlvbkRhdGEucGF0aHM7XG4gICAgICBjb25zdCByYW5kb21seVNvcnRlZCA9IHNvcnRSYW5kb21seShjb3JyZWN0UGF0aHMpO1xuICAgICAgY29uc3QgcGF0aFRvQW5pbWF0ZSA9IHJhbmRvbWx5U29ydGVkWzBdO1xuICAgICAgY29uc3QgbW92ZVBhaXJzID0gZ2V0TW92ZVBhaXJzRnJvbVBhdGgocGF0aFRvQW5pbWF0ZSk7XG4gICAgICBkcmF3Q29ycmVjdEFycm93cyhyYW5kb21seVNvcnRlZCk7XG4gICAgICBtYWtlU2VxdWVudGlhbE1vdmVzKG1vdmVQYWlycywgKCkgPT4ge1xuICAgICAgICBuZXdQb3NpdGlvbigpO1xuICAgICAgfSk7XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gZHJhd0NvcnJlY3RBcnJvd3ModmFsaWRQYXRocykge1xuICAgIGNsZWFyRHJhd2luZ3MoKTtcbiAgICBjb25zdCBzaGFwZXMgPSBbXTtcbiAgICBjb25zdCBhbHJlYWR5RHJhd24gPSBuZXcgU2V0KClcbiAgICBjb25zdCBicnVzaEtleXMgPSBPYmplY3Qua2V5cyhjdXN0b21CcnVzaGVzKTtcbiAgICBsZXQgbWF4UGF0aHNUb1Nob3cgPSBtYXhQYXRoc1RvRGlzcGxheU9wdGlvbi5nZXRWYWx1ZSgpO1xuICAgIGlmIChtYXhQYXRoc1RvU2hvdyA8IDEpIHtcbiAgICAgIG1heFBhdGhzVG9TaG93ID0gMTtcbiAgICB9XG4gICAgbWF4UGF0aHNUb1Nob3cgPSA1MDtcblxuICAgIHZhbGlkUGF0aHMuZm9yRWFjaCgocGF0aCwgaW5kZXgpID0+IHtcbiAgICAgIGlmIChpbmRleCArIDEgPiBtYXhQYXRoc1RvU2hvdykge1xuICAgICAgICByZXR1cm47XG4gICAgICB9XG4gICAgICBjb25zdCBtb3ZlUGFpcnMgPSBnZXRNb3ZlUGFpcnNGcm9tUGF0aChwYXRoKTtcbiAgICAgIGNvbnN0IGJydXNoS2V5ID0gYnJ1c2hLZXlzW2luZGV4ICUgYnJ1c2hLZXlzLmxlbmd0aF07XG4gICAgICBtb3ZlUGFpcnMuZm9yRWFjaCgocGFpcikgPT4ge1xuICAgICAgICBpZiAoYWxyZWFkeURyYXduLmhhcyhwYWlyKSkge1xuICAgICAgICAgIHJldHVybjtcbiAgICAgICAgfVxuICAgICAgICBjb25zdCBzaGFwZSA9IHtvcmlnOiBwYWlyWzBdLCBkZXN0OiBwYWlyWzFdLCBicnVzaDogYnJ1c2hLZXksIG1vZGlmaWVyczoge2xpbmVXaWR0aDogMTB9fVxuICAgICAgICBzaGFwZXMucHVzaChzaGFwZSk7XG4gICAgICAgIGFscmVhZHlEcmF3bi5hZGQocGFpcik7XG4gICAgICB9KTtcbiAgICB9KTtcblxuICAgIGNvbnN0IG1haW5QYXRoID0gdmFsaWRQYXRoc1swXTtcbiAgICBjb25zdCBtYWluTW92ZVBhaXJzID0gZ2V0TW92ZVBhaXJzRnJvbVBhdGgobWFpblBhdGgpO1xuICAgIG1haW5Nb3ZlUGFpcnMuZm9yRWFjaCgocGFpcikgPT4ge1xuICAgICAgY29uc3Qgc2hhcGUgPSB7b3JpZzogcGFpclswXSwgZGVzdDogcGFpclsxXSwgYnJ1c2g6ICdncmVlbicsIG1vZGlmaWVyczoge2luZVdpZHRoOiAxMH19XG4gICAgICBzaGFwZXMucHVzaChzaGFwZSk7XG4gICAgfSk7XG5cbiAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgZHJhd2FibGU6IHtcbiAgICAgICAgc2hhcGVzOiBzaGFwZXNcbiAgICAgIH1cbiAgICB9KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldE1vdmVQYWlyc0Zyb21QYXRoKHBhdGgpIHtcbiAgICBjb25zdCBwYWlycyA9IFtdO1xuICAgIGZvciAobGV0IGkgPSAwOyBpIDwgcGF0aC5sZW5ndGggLSAxOyBpKyspIHtcbiAgICAgIHBhaXJzLnB1c2goW3BhdGhbaV0sIHBhdGhbaSArIDFdXSk7XG4gICAgfVxuICAgIHJldHVybiBwYWlycztcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldEdyb3VwZWRQYXRocyhwYXRocykge1xuICAgIGxldCBncm91cHMgPSBbXTtcblxuICAgIGZvciAobGV0IHBhdGggb2YgcGF0aHMpIHtcbiAgICAgIGxldCBhZGRlZFRvR3JvdXAgPSBmYWxzZTtcblxuICAgICAgZm9yIChsZXQgZ3JvdXAgb2YgZ3JvdXBzKSB7XG4gICAgICAgIGxldCBvdmVybGFwID0gZ3JvdXAuc29tZShncm91cFBhdGggPT4ge1xuICAgICAgICAgIGZvciAobGV0IGkgPSAwOyBpIDwgZ3JvdXBQYXRoLmxlbmd0aCAtIDE7IGkrKykge1xuICAgICAgICAgICAgZm9yIChsZXQgaiA9IDA7IGogPCBwYXRoLmxlbmd0aCAtIDE7IGorKykge1xuICAgICAgICAgICAgICBpZiAoZ3JvdXBQYXRoW2ldID09PSBwYXRoW2pdICYmIGdyb3VwUGF0aFtpICsgMV0gPT09IHBhdGhbaiArIDFdKSB7XG4gICAgICAgICAgICAgICAgcmV0dXJuIHRydWU7XG4gICAgICAgICAgICAgIH1cbiAgICAgICAgICAgIH1cbiAgICAgICAgICB9XG4gICAgICAgICAgcmV0dXJuIGZhbHNlO1xuICAgICAgICB9KTtcblxuICAgICAgICBpZiAoIW92ZXJsYXApIHtcbiAgICAgICAgICBncm91cC5wdXNoKHBhdGgpO1xuICAgICAgICAgIGFkZGVkVG9Hcm91cCA9IHRydWU7XG4gICAgICAgICAgYnJlYWs7XG4gICAgICAgIH1cbiAgICAgIH1cblxuICAgICAgaWYgKCFhZGRlZFRvR3JvdXApIHtcbiAgICAgICAgZ3JvdXBzLnB1c2goW3BhdGhdKTtcbiAgICAgIH1cbiAgICB9XG5cbiAgICByZXR1cm4gZ3JvdXBzO1xuICB9XG5cbiAgZnVuY3Rpb24gaW5jcmVtZW50R3JvdXBJbmRleCgpIHtcbiAgICBpZiAoZ3JvdXBJbmRleCA8IGdyb3VwZWRQYXRocy5sZW5ndGggLSAxKSB7XG4gICAgICBncm91cEluZGV4Kys7XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gZGVjcmVtZW50R3JvdXBJbmRleCgpIHtcbiAgICBpZiAoZ3JvdXBJbmRleCA+IDApIHtcbiAgICAgIGdyb3VwSW5kZXgtLTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBtYWtlU2VxdWVudGlhbE1vdmVzKG1vdmVQYWlycyA9IFtdLCBjYWxsYmFjayA9IG51bGwpIHtcbiAgICBhbmltYXRpbmcgPSB0cnVlO1xuICAgIGlmIChtb3ZlUGFpcnMubGVuZ3RoIDwgMSkge1xuICAgICAgYW5pbWF0aW5nID0gZmFsc2U7XG4gICAgICBpZiAoY2FsbGJhY2spIHtcbiAgICAgICAgY2FsbGJhY2soKTtcbiAgICAgIH1cbiAgICAgIHJldHVybjtcbiAgICB9XG5cbiAgICAvLyBzaGlmdCBtdXRhdGVzIHRoZSBhcnJheVxuICAgIGNvbnN0IG1vdmUgPSBtb3ZlUGFpcnMuc2hpZnQoKTtcblxuICAgIGNoZXNzZ3JvdW5kLm1vdmUobW92ZVswXSwgbW92ZVsxXSk7XG5cbiAgICBzZXRUaW1lb3V0KCgpID0+IG1ha2VTZXF1ZW50aWFsTW92ZXMobW92ZVBhaXJzLCBjYWxsYmFjayksIGFuaW1hdGlvbkxlbmd0aE9wdGlvbi5nZXRWYWx1ZSgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGNsZWFyRHJhd2luZ3MoKSB7XG4gICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgIGRyYXdhYmxlOiB7XG4gICAgICAgIHNoYXBlczogW11cbiAgICAgIH1cbiAgICB9KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIG5ld1Bvc2l0aW9uKCkge1xuICAgIGNsZWFyRHJhd2luZ3MoKTtcbiAgICBhbnN3ZXJTaG93biA9IGZhbHNlO1xuICAgIGNvbnN0IGtleXMgPSBPYmplY3Qua2V5cyhqc29uRGF0YSk7XG4gICAgY29uc3QgaW5kZXggPSBnZXRSYW5kb21JbmRleChrZXlzLmxlbmd0aCk7XG4gICAgY29uc3Qga2V5ID0ga2V5c1tpbmRleF07XG4gICAgY29uc3QgcHJldmlvdXNLbmlnaHRTcXVhcmUgPSBrbmlnaHRTcXVhcmU7XG4gICAgY29uc3QgcHJldmlvdXNLaW5nU3F1YXJlID0ga2luZ1NxdWFyZTtcbiAgICBjb25zdCBzcXVhcmVzID0ga2V5LnNwbGl0KCcuJyk7XG4gICAga25pZ2h0U3F1YXJlID0gc3F1YXJlc1swXTtcbiAgICBraW5nU3F1YXJlID0gc3F1YXJlc1sxXTtcbiAgICBwb3NpdGlvbkRhdGEgPSBqc29uRGF0YVtrZXldO1xuICAgIGNvbnN0IGtpbmcgPSB7XG4gICAgICByb2xlOiAna2luZycsXG4gICAgICBjb2xvcjogJ2JsYWNrJyxcbiAgICB9XG4gICAgY29uc3Qga25pZ2h0ID0ge1xuICAgICAgcm9sZTogJ2tuaWdodCcsXG4gICAgICBjb2xvcjogJ3doaXRlJyxcbiAgICB9XG4gICAgY29uc3QgcGllY2VzRGlmZiA9IG5ldyBNYXAoKTtcbiAgICBpZiAocHJldmlvdXNLbmlnaHRTcXVhcmUgJiYgcHJldmlvdXNLaW5nU3F1YXJlKSB7XG4gICAgICBwaWVjZXNEaWZmLnNldChwcmV2aW91c0tuaWdodFNxdWFyZSwgdW5kZWZpbmVkKTtcbiAgICAgIHBpZWNlc0RpZmYuc2V0KHByZXZpb3VzS2luZ1NxdWFyZSwgdW5kZWZpbmVkKTtcbiAgICB9XG4gICAgcGllY2VzRGlmZi5zZXQoa2luZ1NxdWFyZSwga2luZyk7XG4gICAgcGllY2VzRGlmZi5zZXQoa25pZ2h0U3F1YXJlLCBrbmlnaHQpO1xuICAgIGNoZXNzZ3JvdW5kLnNldFBpZWNlcyhwaWVjZXNEaWZmKTtcbiAgICBjaGVzc2dyb3VuZC5zZXRQaWVjZXMobmV3IE1hcCgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGFuaW1hdGVFbGVtZW50KGVsZW1lbnQsIGFuaW1hdGlvbkNsYXNzKSB7XG4gICAgZWxlbWVudC5jbGFzc0xpc3QuYWRkKGFuaW1hdGlvbkNsYXNzKTtcblxuICAgIC8vIExpc3RlbiBmb3IgdGhlIGFuaW1hdGlvbmVuZCBldmVudFxuICAgIGVsZW1lbnQuYWRkRXZlbnRMaXN0ZW5lcignYW5pbWF0aW9uZW5kJywgZnVuY3Rpb24gKCkge1xuICAgICAgLy8gT25jZSB0aGUgYW5pbWF0aW9uIGVuZHMsIHJlbW92ZSB0aGUgY2xhc3NcbiAgICAgIGVsZW1lbnQuY2xhc3NMaXN0LnJlbW92ZShhbmltYXRpb25DbGFzcyk7XG4gICAgfSwge29uY2U6IHRydWV9KTsgLy8gVGhlIGxpc3RlbmVyIGlzIHJlbW92ZWQgYWZ0ZXIgaXQncyBpbnZva2VkIG9uY2VcbiAgfVxuXG4gIGZ1bmN0aW9uIGluaXRDb25maWcoKSB7XG4gICAgY29uZmlnID0gbmV3IENvbmZpZygna25pZ2h0X21vdmVzX2dhbWUnKTtcbiAgICBhbmltYXRpb25MZW5ndGhPcHRpb24gPSBjb25maWcuZ2V0Q29uZmlnT3B0aW9uKCdBbmltYXRpb24gbGVuZ3RoIChtcyknLCAzMDApO1xuXG4gICAgbWF4UGF0aHNUb0Rpc3BsYXlPcHRpb24gPSBjb25maWcuZ2V0Q29uZmlnT3B0aW9uKCdNYXggcGF0aHMgdG8gc2hvdycsIDYpO1xuXG4gICAgY29uZmlnRm9ybSA9IG5ldyBDb25maWdGb3JtKGNvbmZpZyk7XG4gICAgY29uZmlnRm9ybS5hZGRMaW5rVG9ET00oJ2NvbmZpZycpO1xuICB9XG48L3NjcmlwdD5cblxuPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy9tZXJpZGEuY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiPlxuXG48ZGl2IGNsYXNzPVwiY29sdW1uc1wiPlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGNvbHVtbjIgaXMtNi1kZXNrdG9wXCI+XG4gICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICA8Q2hlc3Nib2FyZFxuICAgICAgICB7Y2hlc3Nncm91bmRDb25maWd9XG4gICAgICAgIGJpbmQ6Y2hlc3Nncm91bmQ9e2NoZXNzZ3JvdW5kfVxuICAgICAgICBiaW5kOnNpemU9e2JvYXJkV2lkdGh9XG4gICAgICAvPlxuICAgIDwvZGl2PlxuXG4gICAgeyNpZiBnYW1lUnVubmluZ31cbiAgICAgIDxwcm9ncmVzcyBjbGFzcz1cInByb2dyZXNzIHtwcm9ncmVzc0NsYXNzfVwiIHZhbHVlPVwieyRzZWNvbmRQcm9ncmVzc31cIiBtYXg9XCI2MFwiXG4gICAgICAgICAgICAgICAgc3R5bGU9XCJ3aWR0aDoge2JvYXJkV2lkdGh9cHg7XCI+PC9wcm9ncmVzcz5cbiAgICB7L2lmfVxuXG4gICAgPGRpdiBjbGFzcz1cImZpeGVkLWdyaWQgaGFzLTMtY29sc1wiIHN0eWxlPVwid2lkdGg6IHtib2FyZFdpZHRofXB4XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiZ3JpZFwiPlxuICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiIGlkPVwiMVwiIG9uOmNsaWNrPXsoKSA9PiBwcm9jZXNzQnV0dG9uKCcxJyl9IGJpbmQ6dGhpcz17YnV0dG9uMX0+MTwvYnV0dG9uPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNlbGxcIj5cbiAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIiBpZD1cIjJcIiBvbjpjbGljaz17KCkgPT4gcHJvY2Vzc0J1dHRvbignMicpfSBiaW5kOnRoaXM9e2J1dHRvbjJ9PjI8L2J1dHRvbj5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCIgaWQ9XCIzXCIgb246Y2xpY2s9eygpID0+IHByb2Nlc3NCdXR0b24oJzMnKX0gYmluZDp0aGlzPXtidXR0b24zfT4zPC9idXR0b24+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiIGlkPVwiNFwiIG9uOmNsaWNrPXsoKSA9PiBwcm9jZXNzQnV0dG9uKCc0Jyl9IGJpbmQ6dGhpcz17YnV0dG9uNH0+NDwvYnV0dG9uPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNlbGxcIj5cbiAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIiBpZD1cIjVcIiBvbjpjbGljaz17KCkgPT4gcHJvY2Vzc0J1dHRvbignNScpfSBiaW5kOnRoaXM9e2J1dHRvbjV9PjU8L2J1dHRvbj5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCIgaWQ9XCI2XCIgb246Y2xpY2s9eygpID0+IHByb2Nlc3NCdXR0b24oJzYnKX0gYmluZDp0aGlzPXtidXR0b242fT42PC9idXR0b24+XG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9kaXY+XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuXG4gIDxkaXYgY2xhc3M9XCJjb2x1bW4gY29sdW1uMSBpcy0zLWRlc2t0b3BcIj5cbiAgICA8ZGl2IGNsYXNzPVwiYm94IHNjb3JlLWNvbnRhaW5lclwiPlxuICAgICAgPGRpdiBjbGFzcz1cImNvbnRhaW5lciBoYXMtdGV4dC1jZW50ZXJlZFwiPlxuICAgICAgICA8aDIgY2xhc3M9XCJpcy1zaXplLTVcIj5Db3JyZWN0PC9oMj5cbiAgICAgICAgPGRpdiBjbGFzcz1cInNjb3JlIGlzLXNpemUtMlwiPntjb3JyZWN0Q291bnR9PC9kaXY+XG4gICAgICAgIDxoMiBjbGFzcz1cImlzLXNpemUtNVwiPkluY29ycmVjdDwvaDI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJzY29yZSBpcy1zaXplLTJcIj57aW5jb3JyZWN0Q291bnR9PC9kaXY+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgICA8ZGl2IGNsYXNzPVwiYm94XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiY29udGFpbmVyIGhhcy10ZXh0LWNlbnRlcmVkXCI+XG4gICAgICAgIDxoMiBjbGFzcz1cImlzLXNpemUtNVwiPkhpZ2ggU2NvcmU8L2gyPlxuICAgICAgICA8ZGl2IGNsYXNzPVwic2NvcmUgaXMtc2l6ZS0yXCI+e2hpZ2hTY29yZX08L2Rpdj5cbiAgICAgICAgPGJ1dHRvbiBpZD1cInN0YXJ0VGltZWRHYW1lXCIgZGlzYWJsZWQ9e3N0YXJ0VGltZWRHYW1lQnV0dG9uRGlzYWJsZWR9IG9uOmNsaWNrPXtzdGFydFRpbWVkR2FtZX1cbiAgICAgICAgICAgICAgICBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCI+U3RhcnQgVGltZWQgR2FtZVxuICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgeyNpZiB0aW1lUmVtYWluaW5nID4gMH1cbiAgICAgICAgICA8ZGl2IGlkPVwidGltZXJcIj57dGltZVJlbWFpbmluZ308L2Rpdj5cbiAgICAgICAgey9pZn1cbiAgICAgIDwvZGl2PlxuICAgIDwvZGl2PlxuICAgIDxkaXYgY2xhc3M9XCJib3hcIj5cbiAgICAgIDxkaXYgY2xhc3M9XCJjb250YWluZXIgaGFzLXRleHQtY2VudGVyZWRcIj5cbiAgICAgICAgeyNpZiAhYW5zd2VyU2hvd259XG4gICAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLWluZm9cIiBkaXNhYmxlZD17YW5zd2VyU2hvd24gfHwgZ2FtZVJ1bm5pbmd9IG9uOmNsaWNrfHByZXZlbnREZWZhdWx0PXsoKSA9PiB7XG4gICAgICAgICAgaWYgKHBvc2l0aW9uRGF0YSkge1xuICAgICAgICAgICAgYW5zd2VyU2hvd24gPSB0cnVlO1xuICAgICAgICAgICAgY29uc3QgY29ycmVjdFBhdGhzID0gcG9zaXRpb25EYXRhLnBhdGhzO1xuICAgICAgICAgICAgY29uc3QgcmFuZG9tbHlTb3J0ZWQgPSBzb3J0UmFuZG9tbHkoY29ycmVjdFBhdGhzKTtcbiAgICAgICAgICAgIGdyb3VwZWRQYXRocyA9IHNvcnRSYW5kb21seShnZXRHcm91cGVkUGF0aHMocmFuZG9tbHlTb3J0ZWQpKTtcbiAgICAgICAgICAgIGdyb3VwSW5kZXggPSAwO1xuICAgICAgICAgIH1cbiAgICAgICAgfX0+U2hvdyBhbnN3ZXJcbiAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICB7OmVsc2V9XG4gICAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLWxpbmtcIiBvbjpjbGljaz17KCkgPT4ge1xuICAgICAgICAgICAgICBjbGVhckRyYXdpbmdzKCk7XG4gICAgICAgICAgICAgIGFuc3dlclNob3duID0gZmFsc2U7XG4gICAgICAgICAgICB9fT5cbiAgICAgICAgICAgICAgQ2xlYXJcbiAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgICAgeyNpZiBncm91cGVkUGF0aHMubGVuZ3RoID4gMX1cbiAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImJ1dHRvbnMgaGFzLWFkZG9uc1wiPlxuICAgICAgICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b25cIiBvbjpjbGljaz17ZGVjcmVtZW50R3JvdXBJbmRleH0gZGlzYWJsZWQ9e2Rpc2FibGVQcmV2fT4mbGFxdW87PC9idXR0b24+XG4gICAgICAgICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvblwiIG9uOmNsaWNrPXtpbmNyZW1lbnRHcm91cEluZGV4fSBkaXNhYmxlZD17ZGlzYWJsZU5leHR9PiZyYXF1bzs8L2J1dHRvbj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICB7L2lmfVxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9jayBoYXMtdGV4dC1sZWZ0XCI+XG4gICAgICAgICAgICA8ZGl2PlxuICAgICAgICAgICAgICBNaW5pbXVtICMgb2YgbW92ZXM6IHtnZXRNaW5pbXVtTW92ZXNGb3JDdXJyZW50UG9zaXRpb24oKX1cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgPGRpdj5cbiAgICAgICAgICAgICAgVG90YWwgdW5pcXVlIHBhdGhzOiB7cG9zaXRpb25EYXRhLnBhdGhzLmxlbmd0aH1cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICB7L2lmfVxuICAgICAgPC9kaXY+XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuXG5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5jZWxsIGJ1dHRvbiB7XG4gICAgd2lkdGg6IDEwMCU7XG4gICAgZGlzcGxheTogaW5saW5lLWJsb2NrO1xuICB9XG5cbiAgLmJvYXJkLXdyYXBwZXIge1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG5cbiAgLmNvcnJlY3Qge1xuICAgIGNvbG9yOiBncmVlbjtcbiAgfVxuXG4gIC5pbmNvcnJlY3Qge1xuICAgIGNvbG9yOiByZWQ7XG4gIH1cblxuICBAa2V5ZnJhbWVzIGluY29ycmVjdEFuc3dlciB7XG4gICAgMjUlIHtcbiAgICAgIGJhY2tncm91bmQtY29sb3I6IHJlZDtcbiAgICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlWCgtMTBweCk7XG4gICAgfVxuICAgIDUwJSB7XG4gICAgICBiYWNrZ3JvdW5kLWNvbG9yOiByZWQ7XG4gICAgICB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoMTBweCk7XG4gICAgfVxuICAgIDc1JSB7XG4gICAgICBiYWNrZ3JvdW5kLWNvbG9yOiByZWQ7XG4gICAgICB0cmFuc2Zvcm06IHRyYW5zbGF0ZVgoLTEwcHgpO1xuICAgIH1cbiAgICAxMDAlIHtcbiAgICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlWCgwcHgpO1xuICAgIH1cbiAgfVxuXG4gIC5pbmNvcnJlY3RBbnN3ZXIge1xuICAgIGFuaW1hdGlvbjogaW5jb3JyZWN0QW5zd2VyIDFzIGxpbmVhcjtcbiAgfVxuXG4gIEBrZXlmcmFtZXMgY29ycmVjdEFuc3dlciB7XG4gICAgNTAlIHtcbiAgICAgIGJhY2tncm91bmQtY29sb3I6IGdyZWVuO1xuICAgICAgdHJhbnNmb3JtOiBzY2FsZSgxLjAxKTtcbiAgICB9XG4gICAgMTAwJSB7XG4gICAgICB0cmFuc2Zvcm06IHNjYWxlKDEpO1xuICAgIH1cbiAgfVxuXG4gIC5jb3JyZWN0QW5zd2VyIHtcbiAgICBhbmltYXRpb246IGNvcnJlY3RBbnN3ZXIgMC43NXMgbGluZWFyO1xuICB9XG48L3N0eWxlPlxuXG5cblxuXG5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFpZ0JFLG1CQUFLLENBQUMsb0JBQU8sQ0FDWCxLQUFLLENBQUUsSUFBSSxDQUNYLE9BQU8sQ0FBRSxZQUNYLENBRUEsMENBQWUsQ0FDYixLQUFLLENBQUUsSUFDVCxDQUVBLG9DQUFTLENBQ1AsS0FBSyxDQUFFLEtBQ1QsQ0FFQSxzQ0FBVyxDQUNULEtBQUssQ0FBRSxHQUNULENBRUEsV0FBVyw2QkFBZ0IsQ0FDekIsR0FBSSxDQUNGLGdCQUFnQixDQUFFLEdBQUcsQ0FDckIsU0FBUyxDQUFFLFdBQVcsS0FBSyxDQUM3QixDQUNBLEdBQUksQ0FDRixnQkFBZ0IsQ0FBRSxHQUFHLENBQ3JCLFNBQVMsQ0FBRSxXQUFXLElBQUksQ0FDNUIsQ0FDQSxHQUFJLENBQ0YsZ0JBQWdCLENBQUUsR0FBRyxDQUNyQixTQUFTLENBQUUsV0FBVyxLQUFLLENBQzdCLENBQ0EsSUFBSyxDQUNILFNBQVMsQ0FBRSxXQUFXLEdBQUcsQ0FDM0IsQ0FDRixDQUVBLDRDQUFpQixDQUNmLFNBQVMsQ0FBRSw2QkFBZSxDQUFDLEVBQUUsQ0FBQyxNQUNoQyxDQUVBLFdBQVcsMkJBQWMsQ0FDdkIsR0FBSSxDQUNGLGdCQUFnQixDQUFFLEtBQUssQ0FDdkIsU0FBUyxDQUFFLE1BQU0sSUFBSSxDQUN2QixDQUNBLElBQUssQ0FDSCxTQUFTLENBQUUsTUFBTSxDQUFDLENBQ3BCLENBQ0YsQ0FFQSwwQ0FBZSxDQUNiLFNBQVMsQ0FBRSwyQkFBYSxDQUFDLEtBQUssQ0FBQyxNQUNqQyJ9 */");
 }
 
-// (467:4) {#if gameRunning}
+// (417:4) {#if gameRunning}
 function create_if_block_3(ctx) {
 	let progress;
 	let progress_class_value;
@@ -3171,26 +3652,26 @@ function create_if_block_3(ctx) {
 	const block = {
 		c: function create() {
 			progress = element("progress");
-			attr_dev(progress, "class", progress_class_value = "progress " + /*progressClass*/ ctx[10] + " svelte-djrxqv");
-			progress.value = /*$secondProgress*/ ctx[24];
+			attr_dev(progress, "class", progress_class_value = "progress " + /*progressClass*/ ctx[9] + " svelte-djrxqv");
+			progress.value = /*$secondProgress*/ ctx[21];
 			attr_dev(progress, "max", "60");
-			set_style(progress, "width", /*boardWidth*/ ctx[15] + "px");
-			add_location(progress, file, 467, 6, 12566);
+			set_style(progress, "width", /*boardWidth*/ ctx[14] + "px");
+			add_location(progress, file, 417, 6, 10659);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, progress, anchor);
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*progressClass*/ 1024 && progress_class_value !== (progress_class_value = "progress " + /*progressClass*/ ctx[10] + " svelte-djrxqv")) {
+			if (dirty[0] & /*progressClass*/ 512 && progress_class_value !== (progress_class_value = "progress " + /*progressClass*/ ctx[9] + " svelte-djrxqv")) {
 				attr_dev(progress, "class", progress_class_value);
 			}
 
-			if (dirty[0] & /*$secondProgress*/ 16777216) {
-				prop_dev(progress, "value", /*$secondProgress*/ ctx[24]);
+			if (dirty[0] & /*$secondProgress*/ 2097152) {
+				prop_dev(progress, "value", /*$secondProgress*/ ctx[21]);
 			}
 
-			if (dirty[0] & /*boardWidth*/ 32768) {
-				set_style(progress, "width", /*boardWidth*/ ctx[15] + "px");
+			if (dirty[0] & /*boardWidth*/ 16384) {
+				set_style(progress, "width", /*boardWidth*/ ctx[14] + "px");
 			}
 		},
 		d: function destroy(detaching) {
@@ -3204,14 +3685,14 @@ function create_if_block_3(ctx) {
 		block,
 		id: create_if_block_3.name,
 		type: "if",
-		source: "(467:4) {#if gameRunning}",
+		source: "(417:4) {#if gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (512:8) {#if timeRemaining > 0}
+// (462:8) {#if timeRemaining > 0}
 function create_if_block_2(ctx) {
 	let div;
 	let t;
@@ -3219,16 +3700,16 @@ function create_if_block_2(ctx) {
 	const block = {
 		c: function create() {
 			div = element("div");
-			t = text(/*timeRemaining*/ ctx[9]);
+			t = text(/*timeRemaining*/ ctx[8]);
 			attr_dev(div, "id", "timer");
-			add_location(div, file, 512, 10, 14555);
+			add_location(div, file, 462, 10, 12648);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
 			append_dev(div, t);
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*timeRemaining*/ 512) set_data_dev(t, /*timeRemaining*/ ctx[9]);
+			if (dirty[0] & /*timeRemaining*/ 256) set_data_dev(t, /*timeRemaining*/ ctx[8]);
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
@@ -3241,14 +3722,14 @@ function create_if_block_2(ctx) {
 		block,
 		id: create_if_block_2.name,
 		type: "if",
-		source: "(512:8) {#if timeRemaining > 0}",
+		source: "(462:8) {#if timeRemaining > 0}",
 		ctx
 	});
 
 	return block;
 }
 
-// (532:8) {:else}
+// (482:8) {:else}
 function create_else_block(ctx) {
 	let div0;
 	let button;
@@ -3259,7 +3740,7 @@ function create_else_block(ctx) {
 	let t5;
 	let div2;
 	let t6;
-	let t7_value = /*positionData*/ ctx[6].paths.length + "";
+	let t7_value = /*positionData*/ ctx[5].paths.length + "";
 	let t7;
 	let mounted;
 	let dispose;
@@ -3275,19 +3756,19 @@ function create_else_block(ctx) {
 			t2 = space();
 			div3 = element("div");
 			div1 = element("div");
-			div1.textContent = `Minimum # of moves: ${/*getMinimumMovesForCurrentPosition*/ ctx[27]()}`;
+			div1.textContent = `Minimum # of moves: ${/*getMinimumMovesForCurrentPosition*/ ctx[25]()}`;
 			t5 = space();
 			div2 = element("div");
 			t6 = text("Total unique paths: ");
 			t7 = text(t7_value);
 			attr_dev(button, "class", "button is-link");
-			add_location(button, file, 533, 12, 15284);
+			add_location(button, file, 483, 12, 13377);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 532, 10, 15252);
-			add_location(div1, file, 547, 12, 15878);
-			add_location(div2, file, 550, 12, 15987);
+			add_location(div0, file, 482, 10, 13345);
+			add_location(div1, file, 497, 12, 13971);
+			add_location(div2, file, 500, 12, 14080);
 			attr_dev(div3, "class", "block has-text-left");
-			add_location(div3, file, 546, 10, 15832);
+			add_location(div3, file, 496, 10, 13925);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div0, anchor);
@@ -3303,7 +3784,7 @@ function create_else_block(ctx) {
 			append_dev(div2, t7);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler_7*/ ctx[49], false, false);
+				dispose = listen_dev(button, "click", /*click_handler_7*/ ctx[46], false, false);
 				mounted = true;
 			}
 		},
@@ -3321,7 +3802,7 @@ function create_else_block(ctx) {
 				if_block = null;
 			}
 
-			if (dirty[0] & /*positionData*/ 64 && t7_value !== (t7_value = /*positionData*/ ctx[6].paths.length + "")) set_data_dev(t7, t7_value);
+			if (dirty[0] & /*positionData*/ 32 && t7_value !== (t7_value = /*positionData*/ ctx[5].paths.length + "")) set_data_dev(t7, t7_value);
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
@@ -3340,14 +3821,14 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(532:8) {:else}",
+		source: "(482:8) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (519:8) {#if !answerShown}
+// (469:8) {#if !answerShown}
 function create_if_block(ctx) {
 	let div;
 	let button;
@@ -3363,9 +3844,9 @@ function create_if_block(ctx) {
 			t = text("Show answer");
 			attr_dev(button, "class", "button is-info");
 			button.disabled = button_disabled_value = /*answerShown*/ ctx[1] || /*gameRunning*/ ctx[0];
-			add_location(button, file, 520, 12, 14770);
+			add_location(button, file, 470, 12, 12863);
 			attr_dev(div, "class", "block");
-			add_location(div, file, 519, 10, 14738);
+			add_location(div, file, 469, 10, 12831);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -3373,7 +3854,7 @@ function create_if_block(ctx) {
 			append_dev(button, t);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", prevent_default(/*click_handler_6*/ ctx[48]), false, true);
+				dispose = listen_dev(button, "click", prevent_default(/*click_handler_6*/ ctx[45]), false, true);
 				mounted = true;
 			}
 		},
@@ -3396,14 +3877,14 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(519:8) {#if !answerShown}",
+		source: "(469:8) {#if !answerShown}",
 		ctx
 	});
 
 	return block;
 }
 
-// (540:12) {#if groupedPaths.length > 1}
+// (490:12) {#if groupedPaths.length > 1}
 function create_if_block_1(ctx) {
 	let div;
 	let button0;
@@ -3423,13 +3904,13 @@ function create_if_block_1(ctx) {
 			button1_1 = element("button");
 			t2 = text("»");
 			attr_dev(button0, "class", "button");
-			button0.disabled = /*disablePrev*/ ctx[12];
-			add_location(button0, file, 541, 16, 15562);
+			button0.disabled = /*disablePrev*/ ctx[11];
+			add_location(button0, file, 491, 16, 13655);
 			attr_dev(button1_1, "class", "button");
-			button1_1.disabled = /*disableNext*/ ctx[11];
-			add_location(button1_1, file, 542, 16, 15672);
+			button1_1.disabled = /*disableNext*/ ctx[10];
+			add_location(button1_1, file, 492, 16, 13765);
 			attr_dev(div, "class", "buttons has-addons");
-			add_location(div, file, 540, 14, 15513);
+			add_location(div, file, 490, 14, 13606);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -3441,20 +3922,20 @@ function create_if_block_1(ctx) {
 
 			if (!mounted) {
 				dispose = [
-					listen_dev(button0, "click", /*decrementGroupIndex*/ ctx[30], false, false),
-					listen_dev(button1_1, "click", /*incrementGroupIndex*/ ctx[29], false, false)
+					listen_dev(button0, "click", /*decrementGroupIndex*/ ctx[28], false, false),
+					listen_dev(button1_1, "click", /*incrementGroupIndex*/ ctx[27], false, false)
 				];
 
 				mounted = true;
 			}
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*disablePrev*/ 4096) {
-				prop_dev(button0, "disabled", /*disablePrev*/ ctx[12]);
+			if (dirty[0] & /*disablePrev*/ 2048) {
+				prop_dev(button0, "disabled", /*disablePrev*/ ctx[11]);
 			}
 
-			if (dirty[0] & /*disableNext*/ 2048) {
-				prop_dev(button1_1, "disabled", /*disableNext*/ ctx[11]);
+			if (dirty[0] & /*disableNext*/ 1024) {
+				prop_dev(button1_1, "disabled", /*disableNext*/ ctx[10]);
 			}
 		},
 		d: function destroy(detaching) {
@@ -3471,7 +3952,7 @@ function create_if_block_1(ctx) {
 		block,
 		id: create_if_block_1.name,
 		type: "if",
-		source: "(540:12) {#if groupedPaths.length > 1}",
+		source: "(490:12) {#if groupedPaths.length > 1}",
 		ctx
 	});
 
@@ -3481,62 +3962,89 @@ function create_if_block_1(ctx) {
 function create_fragment(ctx) {
 	let link;
 	let t0;
-	let div21;
-	let div10;
-	let div1;
+	let div20;
+	let div9;
 	let div0;
+	let chessboard;
+	let updating_chessground;
+	let updating_size;
 	let t1;
 	let t2;
-	let div9;
 	let div8;
-	let div2;
+	let div7;
+	let div1;
 	let button0;
 	let t4;
-	let div3;
+	let div2;
 	let button1_1;
 	let t6;
-	let div4;
+	let div3;
 	let button2_1;
 	let t8;
-	let div5;
+	let div4;
 	let button3_1;
 	let t10;
-	let div6;
+	let div5;
 	let button4_1;
 	let t12;
-	let div7;
+	let div6;
 	let button5_1;
 	let t14;
-	let div20;
-	let div14;
+	let div19;
 	let div13;
+	let div12;
 	let h20;
 	let t16;
-	let div11;
+	let div10;
 	let t17;
 	let t18;
 	let h21;
 	let t20;
-	let div12;
+	let div11;
 	let t21;
 	let t22;
-	let div17;
 	let div16;
+	let div15;
 	let h22;
 	let t24;
-	let div15;
+	let div14;
 	let t25;
 	let t26;
 	let button6_1;
 	let t27;
 	let t28;
 	let t29;
-	let div19;
 	let div18;
+	let div17;
+	let current;
 	let mounted;
 	let dispose;
+
+	function chessboard_chessground_binding(value) {
+		/*chessboard_chessground_binding*/ ctx[31](value);
+	}
+
+	function chessboard_size_binding(value) {
+		/*chessboard_size_binding*/ ctx[32](value);
+	}
+
+	let chessboard_props = {
+		chessgroundConfig: /*chessgroundConfig*/ ctx[23]
+	};
+
+	if (/*chessground*/ ctx[4] !== void 0) {
+		chessboard_props.chessground = /*chessground*/ ctx[4];
+	}
+
+	if (/*boardWidth*/ ctx[14] !== void 0) {
+		chessboard_props.size = /*boardWidth*/ ctx[14];
+	}
+
+	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
+	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
+	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
 	let if_block0 = /*gameRunning*/ ctx[0] && create_if_block_3(ctx);
-	let if_block1 = /*timeRemaining*/ ctx[9] > 0 && create_if_block_2(ctx);
+	let if_block1 = /*timeRemaining*/ ctx[8] > 0 && create_if_block_2(ctx);
 
 	function select_block_type(ctx, dirty) {
 		if (!/*answerShown*/ ctx[1]) return create_if_block;
@@ -3550,150 +4058,145 @@ function create_fragment(ctx) {
 		c: function create() {
 			link = element("link");
 			t0 = space();
-			div21 = element("div");
-			div10 = element("div");
-			div1 = element("div");
+			div20 = element("div");
+			div9 = element("div");
 			div0 = element("div");
+			create_component(chessboard.$$.fragment);
 			t1 = space();
 			if (if_block0) if_block0.c();
 			t2 = space();
-			div9 = element("div");
 			div8 = element("div");
-			div2 = element("div");
+			div7 = element("div");
+			div1 = element("div");
 			button0 = element("button");
 			button0.textContent = "1";
 			t4 = space();
-			div3 = element("div");
+			div2 = element("div");
 			button1_1 = element("button");
 			button1_1.textContent = "2";
 			t6 = space();
-			div4 = element("div");
+			div3 = element("div");
 			button2_1 = element("button");
 			button2_1.textContent = "3";
 			t8 = space();
-			div5 = element("div");
+			div4 = element("div");
 			button3_1 = element("button");
 			button3_1.textContent = "4";
 			t10 = space();
-			div6 = element("div");
+			div5 = element("div");
 			button4_1 = element("button");
 			button4_1.textContent = "5";
 			t12 = space();
-			div7 = element("div");
+			div6 = element("div");
 			button5_1 = element("button");
 			button5_1.textContent = "6";
 			t14 = space();
-			div20 = element("div");
-			div14 = element("div");
+			div19 = element("div");
 			div13 = element("div");
+			div12 = element("div");
 			h20 = element("h2");
 			h20.textContent = "Correct";
 			t16 = space();
-			div11 = element("div");
-			t17 = text(/*correctCount*/ ctx[7]);
+			div10 = element("div");
+			t17 = text(/*correctCount*/ ctx[6]);
 			t18 = space();
 			h21 = element("h2");
 			h21.textContent = "Incorrect";
 			t20 = space();
-			div12 = element("div");
-			t21 = text(/*incorrectCount*/ ctx[8]);
+			div11 = element("div");
+			t21 = text(/*incorrectCount*/ ctx[7]);
 			t22 = space();
-			div17 = element("div");
 			div16 = element("div");
+			div15 = element("div");
 			h22 = element("h2");
 			h22.textContent = "High Score";
 			t24 = space();
-			div15 = element("div");
-			t25 = text(/*highScore*/ ctx[13]);
+			div14 = element("div");
+			t25 = text(/*highScore*/ ctx[12]);
 			t26 = space();
 			button6_1 = element("button");
 			t27 = text("Start Timed Game");
 			t28 = space();
 			if (if_block1) if_block1.c();
 			t29 = space();
-			div19 = element("div");
 			div18 = element("div");
+			div17 = element("div");
 			if_block2.c();
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", "/piece-css/merida.css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 456, 0, 12135);
-			attr_dev(div0, "class", "board-container is2d");
-			set_style(div0, "width", /*boardWidth*/ ctx[15] + "px");
-			set_style(div0, "height", /*boardHeight*/ ctx[4] + "px");
-			set_style(div0, "position", "relative");
-			add_location(div0, file, 461, 6, 12364);
-			attr_dev(div1, "class", "board-wrapper mb-3 svelte-djrxqv");
-			add_location(div1, file, 460, 4, 12300);
+			add_location(link, file, 404, 0, 10332);
+			attr_dev(div0, "class", "block");
+			add_location(div0, file, 408, 4, 10474);
 			attr_dev(button0, "class", "button is-primary svelte-djrxqv");
 			attr_dev(button0, "id", "1");
-			add_location(button0, file, 474, 10, 12846);
-			attr_dev(div2, "class", "cell svelte-djrxqv");
-			add_location(div2, file, 473, 8, 12817);
+			add_location(button0, file, 424, 10, 10939);
+			attr_dev(div1, "class", "cell svelte-djrxqv");
+			add_location(div1, file, 423, 8, 10910);
 			attr_dev(button1_1, "class", "button is-primary svelte-djrxqv");
 			attr_dev(button1_1, "id", "2");
-			add_location(button1_1, file, 477, 10, 13006);
-			attr_dev(div3, "class", "cell svelte-djrxqv");
-			add_location(div3, file, 476, 8, 12977);
+			add_location(button1_1, file, 427, 10, 11099);
+			attr_dev(div2, "class", "cell svelte-djrxqv");
+			add_location(div2, file, 426, 8, 11070);
 			attr_dev(button2_1, "class", "button is-primary svelte-djrxqv");
 			attr_dev(button2_1, "id", "3");
-			add_location(button2_1, file, 480, 10, 13166);
-			attr_dev(div4, "class", "cell svelte-djrxqv");
-			add_location(div4, file, 479, 8, 13137);
+			add_location(button2_1, file, 430, 10, 11259);
+			attr_dev(div3, "class", "cell svelte-djrxqv");
+			add_location(div3, file, 429, 8, 11230);
 			attr_dev(button3_1, "class", "button is-primary svelte-djrxqv");
 			attr_dev(button3_1, "id", "4");
-			add_location(button3_1, file, 483, 10, 13326);
-			attr_dev(div5, "class", "cell svelte-djrxqv");
-			add_location(div5, file, 482, 8, 13297);
+			add_location(button3_1, file, 433, 10, 11419);
+			attr_dev(div4, "class", "cell svelte-djrxqv");
+			add_location(div4, file, 432, 8, 11390);
 			attr_dev(button4_1, "class", "button is-primary svelte-djrxqv");
 			attr_dev(button4_1, "id", "5");
-			add_location(button4_1, file, 486, 10, 13486);
-			attr_dev(div6, "class", "cell svelte-djrxqv");
-			add_location(div6, file, 485, 8, 13457);
+			add_location(button4_1, file, 436, 10, 11579);
+			attr_dev(div5, "class", "cell svelte-djrxqv");
+			add_location(div5, file, 435, 8, 11550);
 			attr_dev(button5_1, "class", "button is-primary svelte-djrxqv");
 			attr_dev(button5_1, "id", "6");
-			add_location(button5_1, file, 489, 10, 13646);
-			attr_dev(div7, "class", "cell svelte-djrxqv");
-			add_location(div7, file, 488, 8, 13617);
-			attr_dev(div8, "class", "grid");
-			add_location(div8, file, 472, 6, 12790);
-			attr_dev(div9, "class", "fixed-grid has-3-cols");
-			set_style(div9, "width", /*boardWidth*/ ctx[15] + "px");
-			add_location(div9, file, 471, 4, 12718);
-			attr_dev(div10, "class", "column column2 is-6-desktop");
-			add_location(div10, file, 459, 2, 12231);
+			add_location(button5_1, file, 439, 10, 11739);
+			attr_dev(div6, "class", "cell svelte-djrxqv");
+			add_location(div6, file, 438, 8, 11710);
+			attr_dev(div7, "class", "grid");
+			add_location(div7, file, 422, 6, 10883);
+			attr_dev(div8, "class", "fixed-grid has-3-cols");
+			set_style(div8, "width", /*boardWidth*/ ctx[14] + "px");
+			add_location(div8, file, 421, 4, 10811);
+			attr_dev(div9, "class", "column column2 is-6-desktop");
+			add_location(div9, file, 407, 2, 10428);
 			attr_dev(h20, "class", "is-size-5");
-			add_location(h20, file, 498, 8, 13941);
-			attr_dev(div11, "class", "score is-size-2");
-			add_location(div11, file, 499, 8, 13984);
+			add_location(h20, file, 448, 8, 12034);
+			attr_dev(div10, "class", "score is-size-2");
+			add_location(div10, file, 449, 8, 12077);
 			attr_dev(h21, "class", "is-size-5");
-			add_location(h21, file, 500, 8, 14042);
-			attr_dev(div12, "class", "score is-size-2");
-			add_location(div12, file, 501, 8, 14087);
-			attr_dev(div13, "class", "container has-text-centered");
-			add_location(div13, file, 497, 6, 13891);
-			attr_dev(div14, "class", "box score-container");
-			add_location(div14, file, 496, 4, 13851);
+			add_location(h21, file, 450, 8, 12135);
+			attr_dev(div11, "class", "score is-size-2");
+			add_location(div11, file, 451, 8, 12180);
+			attr_dev(div12, "class", "container has-text-centered");
+			add_location(div12, file, 447, 6, 11984);
+			attr_dev(div13, "class", "box score-container");
+			add_location(div13, file, 446, 4, 11944);
 			attr_dev(h22, "class", "is-size-5");
-			add_location(h22, file, 506, 8, 14241);
-			attr_dev(div15, "class", "score is-size-2");
-			add_location(div15, file, 507, 8, 14287);
+			add_location(h22, file, 456, 8, 12334);
+			attr_dev(div14, "class", "score is-size-2");
+			add_location(div14, file, 457, 8, 12380);
 			attr_dev(button6_1, "id", "startTimedGame");
-			button6_1.disabled = /*startTimedGameButtonDisabled*/ ctx[14];
+			button6_1.disabled = /*startTimedGameButtonDisabled*/ ctx[13];
 			attr_dev(button6_1, "class", "button is-primary");
-			add_location(button6_1, file, 508, 8, 14342);
-			attr_dev(div16, "class", "container has-text-centered");
-			add_location(div16, file, 505, 6, 14191);
-			attr_dev(div17, "class", "box");
-			add_location(div17, file, 504, 4, 14167);
-			attr_dev(div18, "class", "container has-text-centered");
-			add_location(div18, file, 517, 6, 14659);
-			attr_dev(div19, "class", "box");
-			add_location(div19, file, 516, 4, 14635);
-			attr_dev(div20, "class", "column column1 is-3-desktop");
-			add_location(div20, file, 495, 2, 13805);
-			attr_dev(div21, "class", "columns");
-			add_location(div21, file, 458, 0, 12207);
+			add_location(button6_1, file, 458, 8, 12435);
+			attr_dev(div15, "class", "container has-text-centered");
+			add_location(div15, file, 455, 6, 12284);
+			attr_dev(div16, "class", "box");
+			add_location(div16, file, 454, 4, 12260);
+			attr_dev(div17, "class", "container has-text-centered");
+			add_location(div17, file, 467, 6, 12752);
+			attr_dev(div18, "class", "box");
+			add_location(div18, file, 466, 4, 12728);
+			attr_dev(div19, "class", "column column1 is-3-desktop");
+			add_location(div19, file, 445, 2, 11898);
+			attr_dev(div20, "class", "columns");
+			add_location(div20, file, 406, 0, 10404);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3701,93 +4204,99 @@ function create_fragment(ctx) {
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
 			insert_dev(target, t0, anchor);
-			insert_dev(target, div21, anchor);
-			append_dev(div21, div10);
-			append_dev(div10, div1);
-			append_dev(div1, div0);
-			/*div0_binding*/ ctx[33](div0);
-			/*div1_binding*/ ctx[34](div1);
-			append_dev(div10, t1);
-			if (if_block0) if_block0.m(div10, null);
-			append_dev(div10, t2);
-			append_dev(div10, div9);
+			insert_dev(target, div20, anchor);
+			append_dev(div20, div9);
+			append_dev(div9, div0);
+			mount_component(chessboard, div0, null);
+			append_dev(div9, t1);
+			if (if_block0) if_block0.m(div9, null);
+			append_dev(div9, t2);
 			append_dev(div9, div8);
-			append_dev(div8, div2);
-			append_dev(div2, button0);
-			/*button0_binding*/ ctx[36](button0);
-			append_dev(div8, t4);
-			append_dev(div8, div3);
-			append_dev(div3, button1_1);
-			/*button1_1_binding*/ ctx[38](button1_1);
-			append_dev(div8, t6);
-			append_dev(div8, div4);
-			append_dev(div4, button2_1);
-			/*button2_1_binding*/ ctx[40](button2_1);
-			append_dev(div8, t8);
-			append_dev(div8, div5);
-			append_dev(div5, button3_1);
-			/*button3_1_binding*/ ctx[42](button3_1);
-			append_dev(div8, t10);
-			append_dev(div8, div6);
-			append_dev(div6, button4_1);
-			/*button4_1_binding*/ ctx[44](button4_1);
-			append_dev(div8, t12);
 			append_dev(div8, div7);
-			append_dev(div7, button5_1);
-			/*button5_1_binding*/ ctx[46](button5_1);
-			/*div10_binding*/ ctx[47](div10);
-			append_dev(div21, t14);
-			append_dev(div21, div20);
-			append_dev(div20, div14);
-			append_dev(div14, div13);
-			append_dev(div13, h20);
-			append_dev(div13, t16);
-			append_dev(div13, div11);
-			append_dev(div11, t17);
-			append_dev(div13, t18);
-			append_dev(div13, h21);
-			append_dev(div13, t20);
-			append_dev(div13, div12);
-			append_dev(div12, t21);
-			append_dev(div20, t22);
-			append_dev(div20, div17);
-			append_dev(div17, div16);
-			append_dev(div16, h22);
-			append_dev(div16, t24);
-			append_dev(div16, div15);
-			append_dev(div15, t25);
-			append_dev(div16, t26);
-			append_dev(div16, button6_1);
-			append_dev(button6_1, t27);
-			append_dev(div16, t28);
-			if (if_block1) if_block1.m(div16, null);
-			append_dev(div20, t29);
+			append_dev(div7, div1);
+			append_dev(div1, button0);
+			/*button0_binding*/ ctx[34](button0);
+			append_dev(div7, t4);
+			append_dev(div7, div2);
+			append_dev(div2, button1_1);
+			/*button1_1_binding*/ ctx[36](button1_1);
+			append_dev(div7, t6);
+			append_dev(div7, div3);
+			append_dev(div3, button2_1);
+			/*button2_1_binding*/ ctx[38](button2_1);
+			append_dev(div7, t8);
+			append_dev(div7, div4);
+			append_dev(div4, button3_1);
+			/*button3_1_binding*/ ctx[40](button3_1);
+			append_dev(div7, t10);
+			append_dev(div7, div5);
+			append_dev(div5, button4_1);
+			/*button4_1_binding*/ ctx[42](button4_1);
+			append_dev(div7, t12);
+			append_dev(div7, div6);
+			append_dev(div6, button5_1);
+			/*button5_1_binding*/ ctx[44](button5_1);
+			append_dev(div20, t14);
 			append_dev(div20, div19);
+			append_dev(div19, div13);
+			append_dev(div13, div12);
+			append_dev(div12, h20);
+			append_dev(div12, t16);
+			append_dev(div12, div10);
+			append_dev(div10, t17);
+			append_dev(div12, t18);
+			append_dev(div12, h21);
+			append_dev(div12, t20);
+			append_dev(div12, div11);
+			append_dev(div11, t21);
+			append_dev(div19, t22);
+			append_dev(div19, div16);
+			append_dev(div16, div15);
+			append_dev(div15, h22);
+			append_dev(div15, t24);
+			append_dev(div15, div14);
+			append_dev(div14, t25);
+			append_dev(div15, t26);
+			append_dev(div15, button6_1);
+			append_dev(button6_1, t27);
+			append_dev(div15, t28);
+			if (if_block1) if_block1.m(div15, null);
+			append_dev(div19, t29);
 			append_dev(div19, div18);
-			if_block2.m(div18, null);
+			append_dev(div18, div17);
+			if_block2.m(div17, null);
+			current = true;
 
 			if (!mounted) {
 				dispose = [
-					listen_dev(button0, "click", /*click_handler*/ ctx[35], false, false),
-					listen_dev(button1_1, "click", /*click_handler_1*/ ctx[37], false, false),
-					listen_dev(button2_1, "click", /*click_handler_2*/ ctx[39], false, false),
-					listen_dev(button3_1, "click", /*click_handler_3*/ ctx[41], false, false),
-					listen_dev(button4_1, "click", /*click_handler_4*/ ctx[43], false, false),
-					listen_dev(button5_1, "click", /*click_handler_5*/ ctx[45], false, false),
-					listen_dev(button6_1, "click", /*startTimedGame*/ ctx[26], false, false)
+					listen_dev(button0, "click", /*click_handler*/ ctx[33], false, false),
+					listen_dev(button1_1, "click", /*click_handler_1*/ ctx[35], false, false),
+					listen_dev(button2_1, "click", /*click_handler_2*/ ctx[37], false, false),
+					listen_dev(button3_1, "click", /*click_handler_3*/ ctx[39], false, false),
+					listen_dev(button4_1, "click", /*click_handler_4*/ ctx[41], false, false),
+					listen_dev(button5_1, "click", /*click_handler_5*/ ctx[43], false, false),
+					listen_dev(button6_1, "click", /*startTimedGame*/ ctx[24], false, false)
 				];
 
 				mounted = true;
 			}
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*boardWidth*/ 32768) {
-				set_style(div0, "width", /*boardWidth*/ ctx[15] + "px");
+			const chessboard_changes = {};
+
+			if (!updating_chessground && dirty[0] & /*chessground*/ 16) {
+				updating_chessground = true;
+				chessboard_changes.chessground = /*chessground*/ ctx[4];
+				add_flush_callback(() => updating_chessground = false);
 			}
 
-			if (dirty[0] & /*boardHeight*/ 16) {
-				set_style(div0, "height", /*boardHeight*/ ctx[4] + "px");
+			if (!updating_size && dirty[0] & /*boardWidth*/ 16384) {
+				updating_size = true;
+				chessboard_changes.size = /*boardWidth*/ ctx[14];
+				add_flush_callback(() => updating_size = false);
 			}
+
+			chessboard.$set(chessboard_changes);
 
 			if (/*gameRunning*/ ctx[0]) {
 				if (if_block0) {
@@ -3795,32 +4304,32 @@ function create_fragment(ctx) {
 				} else {
 					if_block0 = create_if_block_3(ctx);
 					if_block0.c();
-					if_block0.m(div10, t2);
+					if_block0.m(div9, t2);
 				}
 			} else if (if_block0) {
 				if_block0.d(1);
 				if_block0 = null;
 			}
 
-			if (dirty[0] & /*boardWidth*/ 32768) {
-				set_style(div9, "width", /*boardWidth*/ ctx[15] + "px");
+			if (!current || dirty[0] & /*boardWidth*/ 16384) {
+				set_style(div8, "width", /*boardWidth*/ ctx[14] + "px");
 			}
 
-			if (dirty[0] & /*correctCount*/ 128) set_data_dev(t17, /*correctCount*/ ctx[7]);
-			if (dirty[0] & /*incorrectCount*/ 256) set_data_dev(t21, /*incorrectCount*/ ctx[8]);
-			if (dirty[0] & /*highScore*/ 8192) set_data_dev(t25, /*highScore*/ ctx[13]);
+			if (!current || dirty[0] & /*correctCount*/ 64) set_data_dev(t17, /*correctCount*/ ctx[6]);
+			if (!current || dirty[0] & /*incorrectCount*/ 128) set_data_dev(t21, /*incorrectCount*/ ctx[7]);
+			if (!current || dirty[0] & /*highScore*/ 4096) set_data_dev(t25, /*highScore*/ ctx[12]);
 
-			if (dirty[0] & /*startTimedGameButtonDisabled*/ 16384) {
-				prop_dev(button6_1, "disabled", /*startTimedGameButtonDisabled*/ ctx[14]);
+			if (!current || dirty[0] & /*startTimedGameButtonDisabled*/ 8192) {
+				prop_dev(button6_1, "disabled", /*startTimedGameButtonDisabled*/ ctx[13]);
 			}
 
-			if (/*timeRemaining*/ ctx[9] > 0) {
+			if (/*timeRemaining*/ ctx[8] > 0) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 				} else {
 					if_block1 = create_if_block_2(ctx);
 					if_block1.c();
-					if_block1.m(div16, null);
+					if_block1.m(div15, null);
 				}
 			} else if (if_block1) {
 				if_block1.d(1);
@@ -3835,29 +4344,34 @@ function create_fragment(ctx) {
 
 				if (if_block2) {
 					if_block2.c();
-					if_block2.m(div18, null);
+					if_block2.m(div17, null);
 				}
 			}
 		},
-		i: noop,
-		o: noop,
+		i: function intro(local) {
+			if (current) return;
+			transition_in(chessboard.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(chessboard.$$.fragment, local);
+			current = false;
+		},
 		d: function destroy(detaching) {
 			if (detaching) {
 				detach_dev(link);
 				detach_dev(t0);
-				detach_dev(div21);
+				detach_dev(div20);
 			}
 
-			/*div0_binding*/ ctx[33](null);
-			/*div1_binding*/ ctx[34](null);
+			destroy_component(chessboard);
 			if (if_block0) if_block0.d();
-			/*button0_binding*/ ctx[36](null);
-			/*button1_1_binding*/ ctx[38](null);
-			/*button2_1_binding*/ ctx[40](null);
-			/*button3_1_binding*/ ctx[42](null);
-			/*button4_1_binding*/ ctx[44](null);
-			/*button5_1_binding*/ ctx[46](null);
-			/*div10_binding*/ ctx[47](null);
+			/*button0_binding*/ ctx[34](null);
+			/*button1_1_binding*/ ctx[36](null);
+			/*button2_1_binding*/ ctx[38](null);
+			/*button3_1_binding*/ ctx[40](null);
+			/*button4_1_binding*/ ctx[42](null);
+			/*button5_1_binding*/ ctx[44](null);
 			if (if_block1) if_block1.d();
 			if_block2.d();
 			mounted = false;
@@ -3953,7 +4467,7 @@ function instance($$self, $$props, $$invalidate) {
 	validate_slots('KnightMoves', slots, []);
 	const secondProgress = tweened(0, { duration: 1000, easing: identity });
 	validate_store(secondProgress, 'secondProgress');
-	component_subscribe($$self, secondProgress, value => $$invalidate(24, $secondProgress = value));
+	component_subscribe($$self, secondProgress, value => $$invalidate(21, $secondProgress = value));
 	let chessground;
 	let jsonData = knightMovesData;
 	let positionData = null;
@@ -3977,20 +4491,13 @@ function instance($$self, $$props, $$invalidate) {
 	let config;
 	let configForm;
 	let startTimedGameButtonDisabled = false;
-	let resultText = '';
-	let resultTextClass = '';
-	let boardWidth = 512;
-	let boardHeight = 512;
-	let padding = 80;
+	let boardWidth;
 	let button1;
 	let button2;
 	let button3;
 	let button4;
 	let button5;
 	let button6;
-	let mainColumn;
-	let boardContainer;
-	let boardWrapper;
 
 	const customBrushes = {
 		brand1: {
@@ -4049,37 +4556,24 @@ function instance($$self, $$props, $$invalidate) {
 		}
 	};
 
+	initConfig();
+
+	let chessgroundConfig = {
+		fen: '8/8/8/8/8/8/8/8',
+		animation: {
+			enabled: true,
+			duration: animationLengthOption.getValue()
+		},
+		highlight: { lastMove: false },
+		draggable: false,
+		selectable: false,
+		drawable: { brushes: customBrushes }
+	};
+
 	onMount(() => {
-		initConfig();
-
-		chessground = Chessground(boardContainer, {
-			fen: '8/8/8/8/8/8/8/8',
-			animation: {
-				enabled: true,
-				duration: animationLengthOption.getValue()
-			},
-			highlight: { lastMove: false },
-			draggable: false,
-			selectable: false,
-			drawable: { brushes: customBrushes }
-		});
-
-		resize();
-		window.addEventListener('resize', resize);
 		initKeyboardShortcuts();
-		resize();
 		newPosition();
 	});
-
-	function resize() {
-		const width = boardWrapper.offsetWidth;
-		const totalHeight = window.innerHeight;
-		const minButtonHeight = 30;
-		const maxHeight = totalHeight - 2 * minButtonHeight - padding;
-		const boardDimensions = Math.min(width, maxHeight);
-		$$invalidate(4, boardHeight = boardDimensions);
-		$$invalidate(15, boardWidth = boardDimensions);
-	}
 
 	function getButton(id) {
 		switch (id) {
@@ -4113,10 +4607,10 @@ function instance($$self, $$props, $$invalidate) {
 
 	function startTimedGame() {
 		reset();
-		$$invalidate(14, startTimedGameButtonDisabled = true);
+		$$invalidate(13, startTimedGameButtonDisabled = true);
 		$$invalidate(0, gameRunning = true);
-		$$invalidate(9, timeRemaining = 60);
-		$$invalidate(32, timeElapsed = 0);
+		$$invalidate(8, timeRemaining = 60);
+		$$invalidate(30, timeElapsed = 0);
 		secondProgress.set(0);
 		newPosition();
 
@@ -4133,8 +4627,8 @@ function instance($$self, $$props, $$invalidate) {
 					clearInterval(timerInterval);
 				}
 
-				$$invalidate(9, timeRemaining -= 1);
-				$$invalidate(32, timeElapsed += 1);
+				$$invalidate(8, timeRemaining -= 1);
+				$$invalidate(30, timeElapsed += 1);
 				secondProgress.set(timeElapsed);
 			},
 			1000
@@ -4143,32 +4637,22 @@ function instance($$self, $$props, $$invalidate) {
 
 	function endGame() {
 		if (correctCount > highScore && gameRunning) {
-			$$invalidate(13, highScore = correctCount);
-		}
-
-		if (incorrectCount > 0) {
-			resultTextClass = 'incorrect';
-			resultText = `Incorrect, game over! The correct answer was ${getMinimumMovesForCurrentPosition()}. Your score was ${correctCount}.`;
-		} else {
-			resultTextClass = 'correct';
-			resultText = `Time's up! Your score was ${correctCount}.`;
+			$$invalidate(12, highScore = correctCount);
 		}
 
 		$$invalidate(0, gameRunning = false);
-		$$invalidate(9, timeRemaining = null);
-		$$invalidate(32, timeElapsed = null);
-		$$invalidate(7, correctCount = 0);
-		$$invalidate(8, incorrectCount = 0);
-		$$invalidate(14, startTimedGameButtonDisabled = false);
+		$$invalidate(8, timeRemaining = null);
+		$$invalidate(30, timeElapsed = null);
+		$$invalidate(6, correctCount = 0);
+		$$invalidate(7, incorrectCount = 0);
+		$$invalidate(13, startTimedGameButtonDisabled = false);
 	}
 
 	function reset() {
-		$$invalidate(7, correctCount = 0);
-		$$invalidate(8, incorrectCount = 0);
+		$$invalidate(6, correctCount = 0);
+		$$invalidate(7, incorrectCount = 0);
 		$$invalidate(0, gameRunning = false);
-		$$invalidate(14, startTimedGameButtonDisabled = false);
-		resultText = '';
-		resultTextClass = '';
+		$$invalidate(13, startTimedGameButtonDisabled = false);
 	}
 
 	function getMinimumMovesForCurrentPosition() {
@@ -4189,20 +4673,15 @@ function instance($$self, $$props, $$invalidate) {
 		const button = getButton(number);
 
 		if (number === minimum) {
-			$$invalidate(7, correctCount += 1);
+			$$invalidate(6, correctCount += 1);
 			animateElement(button, 'correctAnswer');
-			resultTextClass = 'correct';
-			resultText = `${number} was correct!`;
 			newPosition();
 		} else {
-			$$invalidate(8, incorrectCount += 1);
+			$$invalidate(7, incorrectCount += 1);
 			animateElement(button, 'incorrectAnswer');
 
 			if (gameRunning) {
 				endGame();
-			} else {
-				resultText = `${number} was incorrect. The correct answer was ${minimum}.`;
-				resultTextClass = 'incorrect';
 			}
 
 			const correctPaths = positionData.paths;
@@ -4319,7 +4798,7 @@ function instance($$self, $$props, $$invalidate) {
 		const squares = key.split('.');
 		knightSquare = squares[0];
 		kingSquare = squares[1];
-		$$invalidate(6, positionData = jsonData[key]);
+		$$invalidate(5, positionData = jsonData[key]);
 		const king = { role: 'king', color: 'black' };
 		const knight = { role: 'knight', color: 'white' };
 		const piecesDiff = new Map();
@@ -4349,18 +4828,14 @@ function instance($$self, $$props, $$invalidate) {
 		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<KnightMoves> was created with unknown prop '${key}'`);
 	});
 
-	function div0_binding($$value) {
-		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
-			boardContainer = $$value;
-			$$invalidate(22, boardContainer);
-		});
+	function chessboard_chessground_binding(value) {
+		chessground = value;
+		$$invalidate(4, chessground);
 	}
 
-	function div1_binding($$value) {
-		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
-			boardWrapper = $$value;
-			$$invalidate(23, boardWrapper);
-		});
+	function chessboard_size_binding(value) {
+		boardWidth = value;
+		$$invalidate(14, boardWidth);
 	}
 
 	const click_handler = () => processButton('1');
@@ -4368,7 +4843,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button0_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			button1 = $$value;
-			(($$invalidate(5, button1), $$invalidate(4, boardHeight)), $$invalidate(61, padding));
+			$$invalidate(15, button1);
 		});
 	}
 
@@ -4377,7 +4852,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button1_1_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			button2 = $$value;
-			((($$invalidate(16, button2), $$invalidate(4, boardHeight)), $$invalidate(5, button1)), $$invalidate(61, padding));
+			$$invalidate(16, button2);
 		});
 	}
 
@@ -4386,7 +4861,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button2_1_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			button3 = $$value;
-			((($$invalidate(17, button3), $$invalidate(4, boardHeight)), $$invalidate(5, button1)), $$invalidate(61, padding));
+			$$invalidate(17, button3);
 		});
 	}
 
@@ -4395,7 +4870,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button3_1_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			button4 = $$value;
-			((($$invalidate(18, button4), $$invalidate(4, boardHeight)), $$invalidate(5, button1)), $$invalidate(61, padding));
+			$$invalidate(18, button4);
 		});
 	}
 
@@ -4404,7 +4879,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button4_1_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			button5 = $$value;
-			((($$invalidate(19, button5), $$invalidate(4, boardHeight)), $$invalidate(5, button1)), $$invalidate(61, padding));
+			$$invalidate(19, button5);
 		});
 	}
 
@@ -4413,14 +4888,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button5_1_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			button6 = $$value;
-			((($$invalidate(20, button6), $$invalidate(4, boardHeight)), $$invalidate(5, button1)), $$invalidate(61, padding));
-		});
-	}
-
-	function div10_binding($$value) {
-		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
-			mainColumn = $$value;
-			$$invalidate(21, mainColumn);
+			$$invalidate(20, button6);
 		});
 	}
 
@@ -4443,7 +4911,7 @@ function instance($$self, $$props, $$invalidate) {
 		onMount,
 		tweened,
 		linear: identity,
-		Chessground,
+		Chessboard,
 		knightMovesData,
 		Config,
 		ConfigForm,
@@ -4472,22 +4940,15 @@ function instance($$self, $$props, $$invalidate) {
 		config,
 		configForm,
 		startTimedGameButtonDisabled,
-		resultText,
-		resultTextClass,
 		boardWidth,
-		boardHeight,
-		padding,
 		button1,
 		button2,
 		button3,
 		button4,
 		button5,
 		button6,
-		mainColumn,
-		boardContainer,
-		boardWrapper,
 		customBrushes,
-		resize,
+		chessgroundConfig,
 		getButton,
 		initKeyboardShortcuts,
 		startTimedGame,
@@ -4513,43 +4974,37 @@ function instance($$self, $$props, $$invalidate) {
 	});
 
 	$$self.$inject_state = $$props => {
-		if ('chessground' in $$props) chessground = $$props.chessground;
+		if ('chessground' in $$props) $$invalidate(4, chessground = $$props.chessground);
 		if ('jsonData' in $$props) jsonData = $$props.jsonData;
-		if ('positionData' in $$props) $$invalidate(6, positionData = $$props.positionData);
-		if ('correctCount' in $$props) $$invalidate(7, correctCount = $$props.correctCount);
-		if ('incorrectCount' in $$props) $$invalidate(8, incorrectCount = $$props.incorrectCount);
+		if ('positionData' in $$props) $$invalidate(5, positionData = $$props.positionData);
+		if ('correctCount' in $$props) $$invalidate(6, correctCount = $$props.correctCount);
+		if ('incorrectCount' in $$props) $$invalidate(7, incorrectCount = $$props.incorrectCount);
 		if ('gameRunning' in $$props) $$invalidate(0, gameRunning = $$props.gameRunning);
-		if ('timeRemaining' in $$props) $$invalidate(9, timeRemaining = $$props.timeRemaining);
-		if ('timeElapsed' in $$props) $$invalidate(32, timeElapsed = $$props.timeElapsed);
-		if ('progressClass' in $$props) $$invalidate(10, progressClass = $$props.progressClass);
+		if ('timeRemaining' in $$props) $$invalidate(8, timeRemaining = $$props.timeRemaining);
+		if ('timeElapsed' in $$props) $$invalidate(30, timeElapsed = $$props.timeElapsed);
+		if ('progressClass' in $$props) $$invalidate(9, progressClass = $$props.progressClass);
 		if ('animating' in $$props) animating = $$props.animating;
 		if ('answerShown' in $$props) $$invalidate(1, answerShown = $$props.answerShown);
 		if ('groupedPaths' in $$props) $$invalidate(2, groupedPaths = $$props.groupedPaths);
 		if ('groupIndex' in $$props) $$invalidate(3, groupIndex = $$props.groupIndex);
-		if ('disableNext' in $$props) $$invalidate(11, disableNext = $$props.disableNext);
-		if ('disablePrev' in $$props) $$invalidate(12, disablePrev = $$props.disablePrev);
-		if ('highScore' in $$props) $$invalidate(13, highScore = $$props.highScore);
+		if ('disableNext' in $$props) $$invalidate(10, disableNext = $$props.disableNext);
+		if ('disablePrev' in $$props) $$invalidate(11, disablePrev = $$props.disablePrev);
+		if ('highScore' in $$props) $$invalidate(12, highScore = $$props.highScore);
 		if ('maxPathsToDisplayOption' in $$props) maxPathsToDisplayOption = $$props.maxPathsToDisplayOption;
 		if ('animationLengthOption' in $$props) animationLengthOption = $$props.animationLengthOption;
 		if ('knightSquare' in $$props) knightSquare = $$props.knightSquare;
 		if ('kingSquare' in $$props) kingSquare = $$props.kingSquare;
 		if ('config' in $$props) config = $$props.config;
 		if ('configForm' in $$props) configForm = $$props.configForm;
-		if ('startTimedGameButtonDisabled' in $$props) $$invalidate(14, startTimedGameButtonDisabled = $$props.startTimedGameButtonDisabled);
-		if ('resultText' in $$props) resultText = $$props.resultText;
-		if ('resultTextClass' in $$props) resultTextClass = $$props.resultTextClass;
-		if ('boardWidth' in $$props) $$invalidate(15, boardWidth = $$props.boardWidth);
-		if ('boardHeight' in $$props) $$invalidate(4, boardHeight = $$props.boardHeight);
-		if ('padding' in $$props) $$invalidate(61, padding = $$props.padding);
-		if ('button1' in $$props) $$invalidate(5, button1 = $$props.button1);
+		if ('startTimedGameButtonDisabled' in $$props) $$invalidate(13, startTimedGameButtonDisabled = $$props.startTimedGameButtonDisabled);
+		if ('boardWidth' in $$props) $$invalidate(14, boardWidth = $$props.boardWidth);
+		if ('button1' in $$props) $$invalidate(15, button1 = $$props.button1);
 		if ('button2' in $$props) $$invalidate(16, button2 = $$props.button2);
 		if ('button3' in $$props) $$invalidate(17, button3 = $$props.button3);
 		if ('button4' in $$props) $$invalidate(18, button4 = $$props.button4);
 		if ('button5' in $$props) $$invalidate(19, button5 = $$props.button5);
 		if ('button6' in $$props) $$invalidate(20, button6 = $$props.button6);
-		if ('mainColumn' in $$props) $$invalidate(21, mainColumn = $$props.mainColumn);
-		if ('boardContainer' in $$props) $$invalidate(22, boardContainer = $$props.boardContainer);
-		if ('boardWrapper' in $$props) $$invalidate(23, boardWrapper = $$props.boardWrapper);
+		if ('chessgroundConfig' in $$props) $$invalidate(23, chessgroundConfig = $$props.chessgroundConfig);
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -4559,8 +5014,8 @@ function instance($$self, $$props, $$invalidate) {
 	$$self.$$.update = () => {
 		if ($$self.$$.dirty[0] & /*groupIndex, groupedPaths*/ 12) {
 			{
-				$$invalidate(11, disableNext = groupIndex >= groupedPaths.length - 1);
-				$$invalidate(12, disablePrev = groupIndex <= 0);
+				$$invalidate(10, disableNext = groupIndex >= groupedPaths.length - 1);
+				$$invalidate(11, disablePrev = groupIndex <= 0);
 			}
 		}
 
@@ -4572,39 +5027,20 @@ function instance($$self, $$props, $$invalidate) {
 			}
 		}
 
-		if ($$self.$$.dirty[0] & /*gameRunning*/ 1 | $$self.$$.dirty[1] & /*timeElapsed*/ 2) {
+		if ($$self.$$.dirty[0] & /*gameRunning, timeElapsed*/ 1073741825) {
 			{
 				if (gameRunning) {
 					const percentDone = timeElapsed / 60;
 
 					if (percentDone < 0.7) {
-						$$invalidate(10, progressClass = 'is-success');
+						$$invalidate(9, progressClass = 'is-success');
 					} else if (percentDone < 0.9) {
-						$$invalidate(10, progressClass = 'is-warning');
+						$$invalidate(9, progressClass = 'is-warning');
 					} else {
-						$$invalidate(10, progressClass = 'is-danger');
+						$$invalidate(9, progressClass = 'is-danger');
 					}
 				} else {
-					$$invalidate(10, progressClass = 'is-success');
-				}
-			}
-		}
-
-		if ($$self.$$.dirty[0] & /*boardHeight, button1*/ 48) {
-			{
-				const totalHeight = window.innerHeight;
-				const remainingHeight = totalHeight - boardHeight;
-
-				if (button1) {
-					const maxHeight = button1.offsetWidth;
-					const calculatedHeight = remainingHeight / 2 - padding;
-					const buttonHeight = Math.min(maxHeight, calculatedHeight);
-					$$invalidate(5, button1.style.height = `${buttonHeight}px`, button1);
-					$$invalidate(16, button2.style.height = `${buttonHeight}px`, button2);
-					$$invalidate(17, button3.style.height = `${buttonHeight}px`, button3);
-					$$invalidate(18, button4.style.height = `${buttonHeight}px`, button4);
-					$$invalidate(19, button5.style.height = `${buttonHeight}px`, button5);
-					$$invalidate(20, button6.style.height = `${buttonHeight}px`, button6);
+					$$invalidate(9, progressClass = 'is-success');
 				}
 			}
 		}
@@ -4615,8 +5051,7 @@ function instance($$self, $$props, $$invalidate) {
 		answerShown,
 		groupedPaths,
 		groupIndex,
-		boardHeight,
-		button1,
+		chessground,
 		positionData,
 		correctCount,
 		incorrectCount,
@@ -4627,16 +5062,15 @@ function instance($$self, $$props, $$invalidate) {
 		highScore,
 		startTimedGameButtonDisabled,
 		boardWidth,
+		button1,
 		button2,
 		button3,
 		button4,
 		button5,
 		button6,
-		mainColumn,
-		boardContainer,
-		boardWrapper,
 		$secondProgress,
 		secondProgress,
+		chessgroundConfig,
 		startTimedGame,
 		getMinimumMovesForCurrentPosition,
 		processButton,
@@ -4644,8 +5078,8 @@ function instance($$self, $$props, $$invalidate) {
 		decrementGroupIndex,
 		clearDrawings,
 		timeElapsed,
-		div0_binding,
-		div1_binding,
+		chessboard_chessground_binding,
+		chessboard_size_binding,
 		click_handler,
 		button0_binding,
 		click_handler_1,
@@ -4658,7 +5092,6 @@ function instance($$self, $$props, $$invalidate) {
 		button4_1_binding,
 		click_handler_5,
 		button5_1_binding,
-		div10_binding,
 		click_handler_6,
 		click_handler_7
 	];

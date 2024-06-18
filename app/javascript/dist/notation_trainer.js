@@ -3184,7 +3184,7 @@ persisted('global.boardStyle', 'brown');
 const file = "svelte/components/Chessboard.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tICdzdmVsdGUnO1xuICBpbXBvcnQgeyBDaGVzc2dyb3VuZCB9IGZyb20gXCJjaGVzc2dyb3VuZFwiO1xuICBpbXBvcnQgeyBwaWVjZVNldCB9IGZyb20gJy4uL3N0b3Jlcyc7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb247XG5cbiAgZXhwb3J0IGxldCBmZW47XG4gICQ6IHtcbiAgICBpZiAoY2hlc3Nncm91bmQgJiYgZmVuKSB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgICBmZW46IGZlbixcbiAgICAgICAgaGlnaGxpZ2h0OiB7XG4gICAgICAgICAgbGFzdE1vdmU6IGZhbHNlLFxuICAgICAgICAgIGNoZWNrOiBmYWxzZSxcbiAgICAgICAgfVxuICAgICAgfSlcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuXG4gIGxldCBzaXplO1xuICBsZXQgbWF4V2lkdGggPSAnNzB2aCc7XG5cbiAgJDoge1xuICAgIGlmIChvcmllbnRhdGlvbiAmJiBjaGVzc2dyb3VuZCkge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtvcmllbnRhdGlvbjogb3JpZW50YXRpb259KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiPlxuXG48ZGl2IGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCIgYmluZDpjbGllbnRXaWR0aD17c2l6ZX0+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmRcIlxuICAgIGJpbmQ6dGhpcz17Ym9hcmRDb250YWluZXJ9XG4gICAgc3R5bGU9XCJwb3NpdGlvbjogcmVsYXRpdmU7d2lkdGg6IHtzaXplfXB4OyBoZWlnaHQ6IHtzaXplfXB4XCI+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLmJvYXJkLXdyYXBwZXIge1xuICAgIHBvc2l0aW9uOiByZWxhdGl2ZTtcbiAgICB3aWR0aDogMTAwJTtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFpREUsNkJBQWUsQ0FDYixRQUFRLENBQUUsUUFBUSxDQUNsQixLQUFLLENBQUUsSUFDVCJ9 */");
+	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tICdzdmVsdGUnO1xuICBpbXBvcnQgeyBDaGVzc2dyb3VuZCB9IGZyb20gXCJjaGVzc2dyb3VuZFwiO1xuICBpbXBvcnQgeyBwaWVjZVNldCB9IGZyb20gJy4uL3N0b3Jlcyc7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb24gPSAnd2hpdGUnO1xuXG4gIGV4cG9ydCBsZXQgZmVuO1xuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH1cbiAgICAgIH0pXG4gICAgfVxuICB9XG5cbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZDtcblxuICBleHBvcnQgbGV0IHNpemU7XG4gIGxldCBtYXhXaWR0aCA9ICc3MHZoJztcblxuICAkOiB7XG4gICAgaWYgKG9yaWVudGF0aW9uICYmIGNoZXNzZ3JvdW5kKSB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe29yaWVudGF0aW9uOiBvcmllbnRhdGlvbn0pO1xuICAgIH1cbiAgfVxuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIGNoZXNzZ3JvdW5kID0gQ2hlc3Nncm91bmQoYm9hcmRDb250YWluZXIsIGNoZXNzZ3JvdW5kQ29uZmlnKTtcbiAgfSk7XG48L3NjcmlwdD5cblxuPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy97JHBpZWNlU2V0fS5jc3NcIiByZWw9XCJzdHlsZXNoZWV0XCI+XG5cbjxkaXYgY2xhc3M9XCJib2FyZC13cmFwcGVyXCIgc3R5bGU9XCJtYXgtd2lkdGg6IHttYXhXaWR0aH1cIiBiaW5kOmNsaWVudFdpZHRoPXtzaXplfT5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZFwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIj5cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuYm9hcmQtd3JhcHBlciB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQWlERSw2QkFBZSxDQUNiLFFBQVEsQ0FBRSxRQUFRLENBQ2xCLEtBQUssQ0FBRSxJQUNUIn0= */");
 }
 
 function create_fragment$1(ctx) {
@@ -3204,16 +3204,16 @@ function create_fragment$1(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 38, 0, 689);
+			add_location(link, file, 38, 0, 706);
 			attr_dev(div0, "class", "is2d");
 			set_style(div0, "position", "relative");
-			set_style(div0, "width", /*size*/ ctx[1] + "px");
-			set_style(div0, "height", /*size*/ ctx[1] + "px");
-			add_location(div0, file, 41, 2, 850);
+			set_style(div0, "width", /*size*/ ctx[0] + "px");
+			set_style(div0, "height", /*size*/ ctx[0] + "px");
+			add_location(div0, file, 41, 2, 867);
 			attr_dev(div1, "class", "board-wrapper svelte-16y75xy");
 			set_style(div1, "max-width", /*maxWidth*/ ctx[3]);
 			add_render_callback(() => /*div1_elementresize_handler*/ ctx[9].call(div1));
-			add_location(div1, file, 40, 0, 766);
+			add_location(div1, file, 40, 0, 783);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3231,12 +3231,12 @@ function create_fragment$1(ctx) {
 				attr_dev(link, "href", link_href_value);
 			}
 
-			if (dirty & /*size*/ 2) {
-				set_style(div0, "width", /*size*/ ctx[1] + "px");
+			if (dirty & /*size*/ 1) {
+				set_style(div0, "width", /*size*/ ctx[0] + "px");
 			}
 
-			if (dirty & /*size*/ 2) {
-				set_style(div0, "height", /*size*/ ctx[1] + "px");
+			if (dirty & /*size*/ 1) {
+				set_style(div0, "height", /*size*/ ctx[0] + "px");
 			}
 		},
 		i: noop,
@@ -3272,10 +3272,10 @@ function instance$1($$self, $$props, $$invalidate) {
 	validate_slots('Chessboard', slots, []);
 	let boardContainer;
 	let { chessgroundConfig = {} } = $$props;
-	let { orientation } = $$props;
+	let { orientation = 'white' } = $$props;
 	let { fen } = $$props;
 	let { chessground } = $$props;
-	let size;
+	let { size } = $$props;
 	let maxWidth = '70vh';
 
 	onMount(() => {
@@ -3283,10 +3283,6 @@ function instance$1($$self, $$props, $$invalidate) {
 	});
 
 	$$self.$$.on_mount.push(function () {
-		if (orientation === undefined && !('orientation' in $$props || $$self.$$.bound[$$self.$$.props['orientation']])) {
-			console.warn("<Chessboard> was created without expected prop 'orientation'");
-		}
-
 		if (fen === undefined && !('fen' in $$props || $$self.$$.bound[$$self.$$.props['fen']])) {
 			console.warn("<Chessboard> was created without expected prop 'fen'");
 		}
@@ -3294,9 +3290,13 @@ function instance$1($$self, $$props, $$invalidate) {
 		if (chessground === undefined && !('chessground' in $$props || $$self.$$.bound[$$self.$$.props['chessground']])) {
 			console.warn("<Chessboard> was created without expected prop 'chessground'");
 		}
+
+		if (size === undefined && !('size' in $$props || $$self.$$.bound[$$self.$$.props['size']])) {
+			console.warn("<Chessboard> was created without expected prop 'size'");
+		}
 	});
 
-	const writable_props = ['chessgroundConfig', 'orientation', 'fen', 'chessground'];
+	const writable_props = ['chessgroundConfig', 'orientation', 'fen', 'chessground', 'size'];
 
 	Object.keys($$props).forEach(key => {
 		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Chessboard> was created with unknown prop '${key}'`);
@@ -3305,13 +3305,13 @@ function instance$1($$self, $$props, $$invalidate) {
 	function div0_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			boardContainer = $$value;
-			$$invalidate(0, boardContainer);
+			$$invalidate(1, boardContainer);
 		});
 	}
 
 	function div1_elementresize_handler() {
 		size = this.clientWidth;
-		$$invalidate(1, size);
+		$$invalidate(0, size);
 	}
 
 	$$self.$$set = $$props => {
@@ -3319,6 +3319,7 @@ function instance$1($$self, $$props, $$invalidate) {
 		if ('orientation' in $$props) $$invalidate(6, orientation = $$props.orientation);
 		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
 		if ('chessground' in $$props) $$invalidate(4, chessground = $$props.chessground);
+		if ('size' in $$props) $$invalidate(0, size = $$props.size);
 	};
 
 	$$self.$capture_state = () => ({
@@ -3336,12 +3337,12 @@ function instance$1($$self, $$props, $$invalidate) {
 	});
 
 	$$self.$inject_state = $$props => {
-		if ('boardContainer' in $$props) $$invalidate(0, boardContainer = $$props.boardContainer);
+		if ('boardContainer' in $$props) $$invalidate(1, boardContainer = $$props.boardContainer);
 		if ('chessgroundConfig' in $$props) $$invalidate(5, chessgroundConfig = $$props.chessgroundConfig);
 		if ('orientation' in $$props) $$invalidate(6, orientation = $$props.orientation);
 		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
 		if ('chessground' in $$props) $$invalidate(4, chessground = $$props.chessground);
-		if ('size' in $$props) $$invalidate(1, size = $$props.size);
+		if ('size' in $$props) $$invalidate(0, size = $$props.size);
 		if ('maxWidth' in $$props) $$invalidate(3, maxWidth = $$props.maxWidth);
 	};
 
@@ -3371,8 +3372,8 @@ function instance$1($$self, $$props, $$invalidate) {
 	};
 
 	return [
-		boardContainer,
 		size,
+		boardContainer,
 		$pieceSet,
 		maxWidth,
 		chessground,
@@ -3398,7 +3399,8 @@ class Chessboard extends SvelteComponentDev {
 				chessgroundConfig: 5,
 				orientation: 6,
 				fen: 7,
-				chessground: 4
+				chessground: 4,
+				size: 0
 			},
 			add_css
 		);
@@ -3440,6 +3442,14 @@ class Chessboard extends SvelteComponentDev {
 	}
 
 	set chessground(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get size() {
+		throw new Error("<Chessboard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set size(value) {
 		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
 	}
 }
@@ -7123,7 +7133,7 @@ function instance($$self, $$props, $$invalidate) {
 
 	$$self.$capture_state = () => ({
 		onMount,
-		ChessBoard: Chessboard,
+		Chessboard,
 		parsePgn,
 		startingPosition,
 		Util,
