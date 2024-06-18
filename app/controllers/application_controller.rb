@@ -16,6 +16,9 @@ class ApplicationController < ActionController::Base
   def notation_trainer
   end
 
+  def global_config
+  end
+
   private
 
   def set_default_body_attributes

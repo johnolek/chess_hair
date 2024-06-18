@@ -45,6 +45,29 @@ function is_empty(obj) {
 	return Object.keys(obj).length === 0;
 }
 
+/** @returns {void} */
+function validate_store(store, name) {
+	if (store != null && typeof store.subscribe !== 'function') {
+		throw new Error(`'${name}' is not a store with a 'subscribe' method`);
+	}
+}
+
+function subscribe(store, ...callbacks) {
+	if (store == null) {
+		for (const callback of callbacks) {
+			callback(undefined);
+		}
+		return noop;
+	}
+	const unsub = store.subscribe(...callbacks);
+	return unsub.unsubscribe ? () => unsub.unsubscribe() : unsub;
+}
+
+/** @returns {void} */
+function component_subscribe(component, store, callback) {
+	component.$$.on_destroy.push(subscribe(store, callback));
+}
+
 /**
  * @param {Node} target
  * @param {Node} node
@@ -5494,10 +5517,171 @@ const parseSan = (pos, san) => {
     };
 };
 
+const subscriber_queue = [];
+
+/**
+ * Create a `Writable` store that allows both updating and reading by subscription.
+ *
+ * https://svelte.dev/docs/svelte-store#writable
+ * @template T
+ * @param {T} [value] initial value
+ * @param {import('./public.js').StartStopNotifier<T>} [start]
+ * @returns {import('./public.js').Writable<T>}
+ */
+function writable(value, start = noop) {
+	/** @type {import('./public.js').Unsubscriber} */
+	let stop;
+	/** @type {Set<import('./private.js').SubscribeInvalidateTuple<T>>} */
+	const subscribers = new Set();
+	/** @param {T} new_value
+	 * @returns {void}
+	 */
+	function set(new_value) {
+		if (safe_not_equal(value, new_value)) {
+			value = new_value;
+			if (stop) {
+				// store is ready
+				const run_queue = !subscriber_queue.length;
+				for (const subscriber of subscribers) {
+					subscriber[1]();
+					subscriber_queue.push(subscriber, value);
+				}
+				if (run_queue) {
+					for (let i = 0; i < subscriber_queue.length; i += 2) {
+						subscriber_queue[i][0](subscriber_queue[i + 1]);
+					}
+					subscriber_queue.length = 0;
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {import('./public.js').Updater<T>} fn
+	 * @returns {void}
+	 */
+	function update(fn) {
+		set(fn(value));
+	}
+
+	/**
+	 * @param {import('./public.js').Subscriber<T>} run
+	 * @param {import('./private.js').Invalidator<T>} [invalidate]
+	 * @returns {import('./public.js').Unsubscriber}
+	 */
+	function subscribe(run, invalidate = noop) {
+		/** @type {import('./private.js').SubscribeInvalidateTuple<T>} */
+		const subscriber = [run, invalidate];
+		subscribers.add(subscriber);
+		if (subscribers.size === 1) {
+			stop = start(set, update) || noop;
+		}
+		run(value);
+		return () => {
+			subscribers.delete(subscriber);
+			if (subscribers.size === 0 && stop) {
+				stop();
+				stop = null;
+			}
+		};
+	}
+	return { set, update, subscribe };
+}
+
+// index.ts
+var stores = {
+  local: {},
+  session: {}
+};
+function getStorage(type) {
+  return type === "local" ? localStorage : sessionStorage;
+}
+function persisted(key, initialValue, options) {
+  var _a, _b, _c, _d, _e, _f, _g, _h;
+  const serializer = (_a = void 0 ) != null ? _a : JSON;
+  const storageType = (_b = void 0 ) != null ? _b : "local";
+  const syncTabs = (_c = void 0 ) != null ? _c : true;
+  const onWriteError = (_e = (_d = void 0 ) != null ? _d : void 0 ) != null ? _e : (e) => console.error(`Error when writing value from persisted store "${key}" to ${storageType}`, e);
+  const onParseError = (_f = void 0 ) != null ? _f : (newVal, e) => console.error(`Error when parsing ${newVal ? '"' + newVal + '"' : "value"} from persisted store "${key}"`, e);
+  const beforeRead = (_g = void 0 ) != null ? _g : (val) => val;
+  const beforeWrite = (_h = void 0 ) != null ? _h : (val) => val;
+  const browser = typeof window !== "undefined" && typeof document !== "undefined";
+  const storage = browser ? getStorage(storageType) : null;
+  function updateStorage(key2, value) {
+    const newVal = beforeWrite(value);
+    try {
+      storage == null ? void 0 : storage.setItem(key2, serializer.stringify(newVal));
+    } catch (e) {
+      onWriteError(e);
+    }
+  }
+  function maybeLoadInitial() {
+    function serialize(json2) {
+      try {
+        return serializer.parse(json2);
+      } catch (e) {
+        onParseError(json2, e);
+      }
+    }
+    const json = storage == null ? void 0 : storage.getItem(key);
+    if (json == null)
+      return initialValue;
+    const serialized = serialize(json);
+    if (serialized == null)
+      return initialValue;
+    const newVal = beforeRead(serialized);
+    return newVal;
+  }
+  if (!stores[storageType][key]) {
+    const initial = maybeLoadInitial();
+    const store = writable(initial, (set2) => {
+      if (browser && storageType == "local" && syncTabs) {
+        const handleStorage = (event) => {
+          if (event.key === key && event.newValue) {
+            let newVal;
+            try {
+              newVal = serializer.parse(event.newValue);
+            } catch (e) {
+              onParseError(event.newValue, e);
+              return;
+            }
+            const processedVal = beforeRead(newVal);
+            set2(processedVal);
+          }
+        };
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+      }
+    });
+    const { subscribe, set } = store;
+    stores[storageType][key] = {
+      set(value) {
+        set(value);
+        updateStorage(key, value);
+      },
+      update(callback) {
+        return store.update((last) => {
+          const value = callback(last);
+          updateStorage(key, value);
+          return value;
+        });
+      },
+      reset() {
+        this.set(initialValue);
+      },
+      subscribe
+    };
+  }
+  return stores[storageType][key];
+}
+
+const pieceSet = persisted('global.pieceSet', 'merida');
+persisted('global.boardStyle', 'brown');
+
 /* svelte/NotationTrainer.svelte generated by Svelte v4.2.18 */
 const file = "svelte/NotationTrainer.svelte";
 
-// (179:8) {#if resultText}
+// (182:8) {#if resultText}
 function create_if_block(ctx) {
 	let div1;
 	let div0;
@@ -5510,9 +5694,9 @@ function create_if_block(ctx) {
 			div0 = element("div");
 			t = text(/*resultText*/ ctx[4]);
 			attr_dev(div0, "class", div0_class_value = "" + (/*resultClass*/ ctx[5] + " is-size-3"));
-			add_location(div0, file, 180, 12, 4546);
+			add_location(div0, file, 183, 12, 4592);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file, 179, 10, 4514);
+			add_location(div1, file, 182, 10, 4560);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div1, anchor);
@@ -5537,7 +5721,7 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(179:8) {#if resultText}",
+		source: "(182:8) {#if resultText}",
 		ctx
 	});
 
@@ -5546,6 +5730,7 @@ function create_if_block(ctx) {
 
 function create_fragment(ctx) {
 	let link;
+	let link_href_value;
 	let t0;
 	let div6;
 	let div5;
@@ -5610,31 +5795,31 @@ function create_fragment(ctx) {
 			t12 = space();
 			if (if_block) if_block.c();
 			attr_dev(link, "id", "piece-sprite");
-			attr_dev(link, "href", "/piece-css/merida.css");
+			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[9] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 161, 0, 3767);
-			add_location(h1, file, 164, 4, 3915);
-			add_location(p0, file, 166, 6, 3971);
-			add_location(p1, file, 167, 6, 4008);
+			add_location(link, file, 164, 0, 3808);
+			add_location(h1, file, 167, 4, 3961);
+			add_location(p0, file, 169, 6, 4017);
+			add_location(p1, file, 170, 6, 4054);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 165, 4, 3945);
+			add_location(div0, file, 168, 4, 3991);
 			attr_dev(div1, "class", "is2d");
 			set_style(div1, "position", "relative");
 			set_style(div1, "width", /*boardWidth*/ ctx[6] + "px");
 			set_style(div1, "height", /*boardWidth*/ ctx[6] + "px");
-			add_location(div1, file, 170, 6, 4123);
+			add_location(div1, file, 173, 6, 4169);
 			attr_dev(div2, "class", "board-wrapper block");
-			add_location(div2, file, 169, 4, 4058);
+			add_location(div2, file, 172, 4, 4104);
 			attr_dev(span, "class", "is-size-1");
-			add_location(span, file, 175, 8, 4351);
+			add_location(span, file, 178, 8, 4397);
 			attr_dev(div3, "class", "container has-text-centered");
-			add_location(div3, file, 174, 6, 4301);
+			add_location(div3, file, 177, 6, 4347);
 			attr_dev(div4, "class", "block");
-			add_location(div4, file, 173, 4, 4275);
+			add_location(div4, file, 176, 4, 4321);
 			attr_dev(div5, "class", "column is-6-widescreen");
-			add_location(div5, file, 163, 2, 3874);
+			add_location(div5, file, 166, 2, 3920);
 			attr_dev(div6, "class", "columns is-centered");
-			add_location(div6, file, 162, 0, 3838);
+			add_location(div6, file, 165, 0, 3884);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -5657,8 +5842,8 @@ function create_fragment(ctx) {
 			append_dev(div5, t8);
 			append_dev(div5, div2);
 			append_dev(div2, div1);
-			/*div1_binding*/ ctx[12](div1);
-			/*div2_binding*/ ctx[13](div2);
+			/*div1_binding*/ ctx[13](div1);
+			/*div2_binding*/ ctx[14](div2);
 			append_dev(div5, t9);
 			append_dev(div5, div4);
 			append_dev(div4, div3);
@@ -5669,6 +5854,10 @@ function create_fragment(ctx) {
 			if (if_block) if_block.m(div3, null);
 		},
 		p: function update(ctx, [dirty]) {
+			if (dirty & /*$pieceSet*/ 512 && link_href_value !== (link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[9] + ".css")) {
+				attr_dev(link, "href", link_href_value);
+			}
+
 			if (dirty & /*correctCount*/ 4) set_data_dev(t4, /*correctCount*/ ctx[2]);
 			if (dirty & /*incorrectCount*/ 8) set_data_dev(t7, /*incorrectCount*/ ctx[3]);
 
@@ -5710,8 +5899,8 @@ function create_fragment(ctx) {
 				detach_dev(div6);
 			}
 
-			/*div1_binding*/ ctx[12](null);
-			/*div2_binding*/ ctx[13](null);
+			/*div1_binding*/ ctx[13](null);
+			/*div2_binding*/ ctx[14](null);
 			if (if_block) if_block.d();
 		}
 	};
@@ -5728,6 +5917,9 @@ function create_fragment(ctx) {
 }
 
 function instance($$self, $$props, $$invalidate) {
+	let $pieceSet;
+	validate_store(pieceSet, 'pieceSet');
+	component_subscribe($$self, pieceSet, $$value => $$invalidate(9, $pieceSet = $$value));
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('NotationTrainer', slots, []);
 	let correctCount = 0;
@@ -5780,7 +5972,7 @@ function instance($$self, $$props, $$invalidate) {
 			nextNode = allNodes[i + 1];
 		}
 
-		$$invalidate(11, fen = makeFen(position.toSetup()));
+		$$invalidate(12, fen = makeFen(position.toSetup()));
 		const nextMove = parseSan(position, nextNode.data.san);
 		const from = makeSquare(nextMove.from);
 		const to = makeSquare(nextMove.to);
@@ -5793,7 +5985,7 @@ function instance($$self, $$props, $$invalidate) {
 				});
 
 				chessground.move(from, to);
-				$$invalidate(9, answerValue = '');
+				$$invalidate(10, answerValue = '');
 				answerAllowed = true;
 			},
 			1000
@@ -5844,7 +6036,7 @@ function instance($$self, $$props, $$invalidate) {
 		window.addEventListener('resize', resize);
 		window.addEventListener('keydown', handleKeydown);
 
-		$$invalidate(10, chessground = Chessground(boardContainer, {
+		$$invalidate(11, chessground = Chessground(boardContainer, {
 			fen: '8/8/8/8/8/8/8/8',
 			coordinates: false,
 			animation: { enabled: true },
@@ -5887,6 +6079,7 @@ function instance($$self, $$props, $$invalidate) {
 		parseSan,
 		makeFen,
 		makeSquare,
+		pieceSet,
 		correctCount,
 		incorrectCount,
 		correctAnswer,
@@ -5904,7 +6097,8 @@ function instance($$self, $$props, $$invalidate) {
 		resize,
 		newPosition,
 		handleAnswer,
-		handleKeydown
+		handleKeydown,
+		$pieceSet
 	});
 
 	$$self.$inject_state = $$props => {
@@ -5912,7 +6106,7 @@ function instance($$self, $$props, $$invalidate) {
 		if ('incorrectCount' in $$props) $$invalidate(3, incorrectCount = $$props.incorrectCount);
 		if ('correctAnswer' in $$props) correctAnswer = $$props.correctAnswer;
 		if ('answerAllowed' in $$props) answerAllowed = $$props.answerAllowed;
-		if ('answerValue' in $$props) $$invalidate(9, answerValue = $$props.answerValue);
+		if ('answerValue' in $$props) $$invalidate(10, answerValue = $$props.answerValue);
 		if ('resultText' in $$props) $$invalidate(4, resultText = $$props.resultText);
 		if ('resultClass' in $$props) $$invalidate(5, resultClass = $$props.resultClass);
 		if ('answerRank' in $$props) $$invalidate(0, answerRank = $$props.answerRank);
@@ -5920,8 +6114,8 @@ function instance($$self, $$props, $$invalidate) {
 		if ('boardWidth' in $$props) $$invalidate(6, boardWidth = $$props.boardWidth);
 		if ('boardWrapper' in $$props) $$invalidate(7, boardWrapper = $$props.boardWrapper);
 		if ('boardContainer' in $$props) $$invalidate(8, boardContainer = $$props.boardContainer);
-		if ('chessground' in $$props) $$invalidate(10, chessground = $$props.chessground);
-		if ('fen' in $$props) $$invalidate(11, fen = $$props.fen);
+		if ('chessground' in $$props) $$invalidate(11, chessground = $$props.chessground);
+		if ('fen' in $$props) $$invalidate(12, fen = $$props.fen);
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -5931,11 +6125,11 @@ function instance($$self, $$props, $$invalidate) {
 	$$self.$$.update = () => {
 		if ($$self.$$.dirty & /*answerFile, answerRank*/ 3) {
 			{
-				$$invalidate(9, answerValue = `${answerFile}${answerRank}`);
+				$$invalidate(10, answerValue = `${answerFile}${answerRank}`);
 			}
 		}
 
-		if ($$self.$$.dirty & /*answerValue*/ 512) {
+		if ($$self.$$.dirty & /*answerValue*/ 1024) {
 			{
 				if (answerValue.length === 2) {
 					handleAnswer();
@@ -5943,7 +6137,7 @@ function instance($$self, $$props, $$invalidate) {
 			}
 		}
 
-		if ($$self.$$.dirty & /*chessground, fen*/ 3072) {
+		if ($$self.$$.dirty & /*chessground, fen*/ 6144) {
 			{
 				if (chessground && fen) {
 					chessground.set({
@@ -5965,6 +6159,7 @@ function instance($$self, $$props, $$invalidate) {
 		boardWidth,
 		boardWrapper,
 		boardContainer,
+		$pieceSet,
 		answerValue,
 		chessground,
 		fen,

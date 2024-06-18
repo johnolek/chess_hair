@@ -1,6 +1,8 @@
 <script>
   import Config from "src/local_config";
   import { blur } from 'svelte/transition';
+  import { boardStyle } from './stores';
+  import { onMount } from 'svelte';
 
   const config = new Config();
   const themeOption = config.getConfigOption('theme', 'dark');
@@ -29,6 +31,15 @@
       document.documentElement.style.transition = originalTransition;
     }, 500);
   }
+
+  boardStyle.subscribe((value) => {
+    console.log(document.body);
+    document.body.dataset.board = value;
+  });
+
+  onMount(() => {
+    document.body.dataset.board = $boardStyle;
+  });
 </script>
 
 <div>

@@ -7,6 +7,7 @@ Rails.application.routes.draw do
 
   get 'daily-games', to: 'application#daily_games'
   get 'notation-trainer', to: 'application#notation_trainer'
+  get 'config', to: 'application#global_config'
 
   root "application#knight_moves"
 end

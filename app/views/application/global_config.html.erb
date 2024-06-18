@@ -1,0 +1,14 @@
+<% content_for :title, 'Global Config' %>
+<% content_for :head do %>
+  <%= javascript_import_module_tag 'dist/global_config' %>
+  <script type="module">
+    import GlobalConfig from 'dist/global_config';
+    document.addEventListener('DOMContentLoaded', () => {
+      new GlobalConfig({
+        target: document.getElementById('main'),
+      })
+    });
+  </script>
+<% end %>
+
+<div id="main"></div>

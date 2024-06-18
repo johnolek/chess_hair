@@ -23,6 +23,9 @@ importers:
       sass:
         specifier: ^1.77.5
         version: 1.77.5
+      svelte-persisted-store:
+        specifier: ^0.11.0
+        version: 0.11.0(svelte@4.2.18)
     devDependencies:
       '@rollup/plugin-node-resolve':
         specifier: ^15.2.3
@@ -358,6 +361,12 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
+  svelte-persisted-store@0.11.0:
+    resolution: {integrity: sha512-9RgJ5DrawGyyfK22A80cfu8Jose3CV8YjEZKz9Tn94rQ0tWyEmYr+XI+wrVF6wjRbW99JMDSVcFRiM3XzVJj/w==}
+    engines: {node: '>=0.14'}
+    peerDependencies:
+      svelte: ^3.48.0 || ^4.0.0 || ^5.0.0-next.0
+
   svelte@4.2.18:
     resolution: {integrity: sha512-d0FdzYIiAePqRJEb90WlJDkjUEx42xhivxN8muUBmfZnP+tzUgz12DJ2hRJi8sIHCME7jeK1PTMgKPSfTd8JrA==}
     engines: {node: '>=16'}
@@ -669,6 +678,10 @@ snapshots:
   source-map-js@1.2.0: {}
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  svelte-persisted-store@0.11.0(svelte@4.2.18):
+    dependencies:
+      svelte: 4.2.18
 
   svelte@4.2.18:
     dependencies:

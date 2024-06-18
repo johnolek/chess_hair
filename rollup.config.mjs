@@ -66,5 +66,14 @@ export default [
       name: 'NotationTrainer',
       file: 'app/javascript/dist/notation_trainer.js'
     },
-  }
+  },
+  {
+    ...sharedConfig,
+    input: './svelte/GlobalConfig.svelte',
+    output: {
+      ...sharedOutputOptions,
+      name: 'GlobalConfig',
+      file: 'app/javascript/dist/global_config.js'
+    },
+  },
 ]

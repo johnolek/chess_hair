@@ -7,6 +7,7 @@
   import { parseSan } from "chessops/san";
   import { makeFen } from "chessops/fen";
   import { makeSquare } from "chessops/util";
+  import { pieceSet } from './stores';
 
   let correctCount = 0;
   let incorrectCount = 0;
@@ -24,6 +25,8 @@
   let boardContainer;
   let chessground;
   let fen;
+
+
 
   $: {
     answerValue = `${answerFile}${answerRank}`;
@@ -159,7 +162,7 @@
   });
 </script>
 
-<link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet">
+<link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet">
 <div class="columns is-centered">
   <div class="column is-6-widescreen">
     <h1>Notation Trainer</h1>

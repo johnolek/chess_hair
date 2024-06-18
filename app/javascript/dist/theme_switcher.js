@@ -46,6 +46,29 @@ function is_empty(obj) {
 	return Object.keys(obj).length === 0;
 }
 
+/** @returns {void} */
+function validate_store(store, name) {
+	if (store != null && typeof store.subscribe !== 'function') {
+		throw new Error(`'${name}' is not a store with a 'subscribe' method`);
+	}
+}
+
+function subscribe(store, ...callbacks) {
+	if (store == null) {
+		for (const callback of callbacks) {
+			callback(undefined);
+		}
+		return noop;
+	}
+	const unsub = store.subscribe(...callbacks);
+	return unsub.unsubscribe ? () => unsub.unsubscribe() : unsub;
+}
+
+/** @returns {void} */
+function component_subscribe(component, store, callback) {
+	component.$$.on_destroy.push(subscribe(store, callback));
+}
+
 /** @param {number | string} value
  * @returns {[number, string]}
  */
@@ -96,6 +119,15 @@ function loop(callback) {
 		}
 	};
 }
+
+/** @type {typeof globalThis} */
+const globals =
+	typeof window !== 'undefined'
+		? window
+		: typeof globalThis !== 'undefined'
+		? globalThis
+		: // @ts-ignore Node typings have this
+		  global;
 
 /**
  * @param {Node} target
@@ -375,6 +407,29 @@ let current_component;
 /** @returns {void} */
 function set_current_component(component) {
 	current_component = component;
+}
+
+function get_current_component() {
+	if (!current_component) throw new Error('Function called outside component initialization');
+	return current_component;
+}
+
+/**
+ * The `onMount` function schedules a callback to run as soon as the component has been mounted to the DOM.
+ * It must be called during the component's initialisation (but doesn't need to live *inside* the component;
+ * it can be called from an external module).
+ *
+ * If a function is returned _synchronously_ from `onMount`, it will be called when the component is unmounted.
+ *
+ * `onMount` does not run inside a [server-side component](https://svelte.dev/docs#run-time-server-side-component-api).
+ *
+ * https://svelte.dev/docs/svelte#onmount
+ * @template T
+ * @param {() => import('./private.js').NotFunction<T> | Promise<import('./private.js').NotFunction<T>> | (() => any)} fn
+ * @returns {void}
+ */
+function onMount(fn) {
+	get_current_component().$$.on_mount.push(fn);
 }
 
 const dirty_components = [];
@@ -1203,14 +1258,177 @@ function blur(
 	};
 }
 
+const subscriber_queue = [];
+
+/**
+ * Create a `Writable` store that allows both updating and reading by subscription.
+ *
+ * https://svelte.dev/docs/svelte-store#writable
+ * @template T
+ * @param {T} [value] initial value
+ * @param {import('./public.js').StartStopNotifier<T>} [start]
+ * @returns {import('./public.js').Writable<T>}
+ */
+function writable(value, start = noop) {
+	/** @type {import('./public.js').Unsubscriber} */
+	let stop;
+	/** @type {Set<import('./private.js').SubscribeInvalidateTuple<T>>} */
+	const subscribers = new Set();
+	/** @param {T} new_value
+	 * @returns {void}
+	 */
+	function set(new_value) {
+		if (safe_not_equal(value, new_value)) {
+			value = new_value;
+			if (stop) {
+				// store is ready
+				const run_queue = !subscriber_queue.length;
+				for (const subscriber of subscribers) {
+					subscriber[1]();
+					subscriber_queue.push(subscriber, value);
+				}
+				if (run_queue) {
+					for (let i = 0; i < subscriber_queue.length; i += 2) {
+						subscriber_queue[i][0](subscriber_queue[i + 1]);
+					}
+					subscriber_queue.length = 0;
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {import('./public.js').Updater<T>} fn
+	 * @returns {void}
+	 */
+	function update(fn) {
+		set(fn(value));
+	}
+
+	/**
+	 * @param {import('./public.js').Subscriber<T>} run
+	 * @param {import('./private.js').Invalidator<T>} [invalidate]
+	 * @returns {import('./public.js').Unsubscriber}
+	 */
+	function subscribe(run, invalidate = noop) {
+		/** @type {import('./private.js').SubscribeInvalidateTuple<T>} */
+		const subscriber = [run, invalidate];
+		subscribers.add(subscriber);
+		if (subscribers.size === 1) {
+			stop = start(set, update) || noop;
+		}
+		run(value);
+		return () => {
+			subscribers.delete(subscriber);
+			if (subscribers.size === 0 && stop) {
+				stop();
+				stop = null;
+			}
+		};
+	}
+	return { set, update, subscribe };
+}
+
+// index.ts
+var stores = {
+  local: {},
+  session: {}
+};
+function getStorage(type) {
+  return type === "local" ? localStorage : sessionStorage;
+}
+function persisted(key, initialValue, options) {
+  var _a, _b, _c, _d, _e, _f, _g, _h;
+  const serializer = (_a = void 0 ) != null ? _a : JSON;
+  const storageType = (_b = void 0 ) != null ? _b : "local";
+  const syncTabs = (_c = void 0 ) != null ? _c : true;
+  const onWriteError = (_e = (_d = void 0 ) != null ? _d : void 0 ) != null ? _e : (e) => console.error(`Error when writing value from persisted store "${key}" to ${storageType}`, e);
+  const onParseError = (_f = void 0 ) != null ? _f : (newVal, e) => console.error(`Error when parsing ${newVal ? '"' + newVal + '"' : "value"} from persisted store "${key}"`, e);
+  const beforeRead = (_g = void 0 ) != null ? _g : (val) => val;
+  const beforeWrite = (_h = void 0 ) != null ? _h : (val) => val;
+  const browser = typeof window !== "undefined" && typeof document !== "undefined";
+  const storage = browser ? getStorage(storageType) : null;
+  function updateStorage(key2, value) {
+    const newVal = beforeWrite(value);
+    try {
+      storage == null ? void 0 : storage.setItem(key2, serializer.stringify(newVal));
+    } catch (e) {
+      onWriteError(e);
+    }
+  }
+  function maybeLoadInitial() {
+    function serialize(json2) {
+      try {
+        return serializer.parse(json2);
+      } catch (e) {
+        onParseError(json2, e);
+      }
+    }
+    const json = storage == null ? void 0 : storage.getItem(key);
+    if (json == null)
+      return initialValue;
+    const serialized = serialize(json);
+    if (serialized == null)
+      return initialValue;
+    const newVal = beforeRead(serialized);
+    return newVal;
+  }
+  if (!stores[storageType][key]) {
+    const initial = maybeLoadInitial();
+    const store = writable(initial, (set2) => {
+      if (browser && storageType == "local" && syncTabs) {
+        const handleStorage = (event) => {
+          if (event.key === key && event.newValue) {
+            let newVal;
+            try {
+              newVal = serializer.parse(event.newValue);
+            } catch (e) {
+              onParseError(event.newValue, e);
+              return;
+            }
+            const processedVal = beforeRead(newVal);
+            set2(processedVal);
+          }
+        };
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+      }
+    });
+    const { subscribe, set } = store;
+    stores[storageType][key] = {
+      set(value) {
+        set(value);
+        updateStorage(key, value);
+      },
+      update(callback) {
+        return store.update((last) => {
+          const value = callback(last);
+          updateStorage(key, value);
+          return value;
+        });
+      },
+      reset() {
+        this.set(initialValue);
+      },
+      subscribe
+    };
+  }
+  return stores[storageType][key];
+}
+
+persisted('global.pieceSet', 'merida');
+const boardStyle = persisted('global.boardStyle', 'brown');
+
 /* svelte/ThemeSwitcher.svelte generated by Svelte v4.2.18 */
+
+const { console: console_1 } = globals;
 const file = "svelte/ThemeSwitcher.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-x6infa", "svg.svelte-x6infa{position:absolute}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiVGhlbWVTd2l0Y2hlci5zdmVsdGUiLCJzb3VyY2VzIjpbIlRoZW1lU3dpdGNoZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgYmx1ciB9IGZyb20gJ3N2ZWx0ZS90cmFuc2l0aW9uJztcblxuICBjb25zdCBjb25maWcgPSBuZXcgQ29uZmlnKCk7XG4gIGNvbnN0IHRoZW1lT3B0aW9uID0gY29uZmlnLmdldENvbmZpZ09wdGlvbigndGhlbWUnLCAnZGFyaycpO1xuICB0aGVtZU9wdGlvbi5zZXRBbGxvd2VkVmFsdWVzKCdsaWdodCcsICdkYXJrJyk7XG5cbiAgbGV0IHRoZW1lID0gdGhlbWVPcHRpb24uZ2V0VmFsdWUoKTtcblxuICBsZXQgb3RoZXJUaGVtZSA9IHRoZW1lID09PSAnZGFyaycgPyAnbGlnaHQnIDogJ2RhcmsnO1xuXG4gICQ6IHtcbiAgICBvdGhlclRoZW1lID0gdGhlbWUgPT09ICdkYXJrJyA/ICdsaWdodCcgOiAnZGFyayc7XG4gIH1cblxuICAkOiB7XG4gICAgY29uc3Qgb3JpZ2luYWxUcmFuc2l0aW9uID0gZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LnN0eWxlLnRyYW5zaXRpb247XG4gICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LnN0eWxlLnRyYW5zaXRpb24gPSAnYWxsIDAuNXMgZWFzZSc7XG4gICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LmNsYXNzTGlzdC5hZGQodGhlbWUpO1xuICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5kYXRhc2V0LnRoZW1lID0gdGhlbWU7XG4gICAgdGhlbWVPcHRpb24uc2V0VmFsdWUodGhlbWUpO1xuICAgIGlmICh0aGVtZSA9PT0gJ2xpZ2h0Jykge1xuICAgICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LmNsYXNzTGlzdC5yZW1vdmUoJ2RhcmsnKTtcbiAgICB9IGVsc2Uge1xuICAgICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LmNsYXNzTGlzdC5yZW1vdmUoJ2xpZ2h0Jyk7XG4gICAgfVxuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LnN0eWxlLnRyYW5zaXRpb24gPSBvcmlnaW5hbFRyYW5zaXRpb247XG4gICAgfSwgNTAwKTtcbiAgfVxuPC9zY3JpcHQ+XG5cbjxkaXY+XG4gICAgPGJ1dHRvblxuICAgICAgY2xhc3M9XCJpY29uXCJcbiAgICAgIHRpdGxlPVwiU3dpdGNoIHRvIHtvdGhlclRoZW1lfSBtb2RlXCJcbiAgICAgIG9uOmNsaWNrPXtcbiAgICAgICAgKCkgPT4geyB0aGVtZSA9IG90aGVyVGhlbWU7IH1cbiAgICAgIH1cbiAgICA+XG4gICAgICB7I2lmIHRoZW1lID09PSAnbGlnaHQnfVxuICAgICAgICA8IS0tIE1vb24gLS0+XG4gICAgICAgIDxzdmcgdHJhbnNpdGlvbjpibHVyIHN0eWxlPVwiZmlsbDogdmFyKC0tYnVsbWEtbGluaylcIiB4bWxucz1cImh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnXCIgdmlld0JveD1cIjAgMCAzODQgNTEyXCI+XG4gICAgICAgICAgPHBhdGhcbiAgICAgICAgICAgIGQ9XCJNMjIzLjUgMzJDMTAwIDMyIDAgMTMyLjMgMCAyNTZTMTAwIDQ4MCAyMjMuNSA0ODBjNjAuNiAwIDExNS41LTI0LjIgMTU1LjgtNjMuNGM1LTQuOSA2LjMtMTIuNSAzLjEtMTguN3MtMTAuMS05LjctMTctOC41Yy05LjggMS43LTE5LjggMi42LTMwLjEgMi42Yy05Ni45IDAtMTc1LjUtNzguOC0xNzUuNS0xNzZjMC02NS44IDM2LTEyMy4xIDg5LjMtMTUzLjNjNi4xLTMuNSA5LjItMTAuNSA3LjctMTcuM3MtNy4zLTExLjktMTQuMy0xMi41Yy02LjMtLjUtMTIuNi0uOC0xOS0uOHpcIi8+XG4gICAgICAgIDwvc3ZnPlxuICAgICAgezplbHNlfVxuICAgICAgICA8IS0tIFN1biAtLT5cbiAgICAgICAgPHN2ZyB0cmFuc2l0aW9uOmJsdXIgc3R5bGU9XCJmaWxsOiB2YXIoLS1idWxtYS13YXJuaW5nKVwiIHhtbG5zPVwiaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmdcIiB2aWV3Qm94PVwiMCAwIDUxMiA1MTJcIj5cbiAgICAgICAgICA8cGF0aFxuICAgICAgICAgICAgZD1cIk0zNzUuNyAxOS43Yy0xLjUtOC02LjktMTQuNy0xNC40LTE3LjhzLTE2LjEtMi4yLTIyLjggMi40TDI1NiA2MS4xIDE3My41IDQuMmMtNi43LTQuNi0xNS4zLTUuNS0yMi44LTIuNHMtMTIuOSA5LjgtMTQuNCAxNy44bC0xOC4xIDk4LjVMMTkuNyAxMzYuM2MtOCAxLjUtMTQuNyA2LjktMTcuOCAxNC40cy0yLjIgMTYuMSAyLjQgMjIuOEw2MS4xIDI1NiA0LjIgMzM4LjVjLTQuNiA2LjctNS41IDE1LjMtMi40IDIyLjhzOS44IDEzIDE3LjggMTQuNGw5OC41IDE4LjEgMTguMSA5OC41YzEuNSA4IDYuOSAxNC43IDE0LjQgMTcuOHMxNi4xIDIuMiAyMi44LTIuNEwyNTYgNDUwLjlsODIuNSA1Ni45YzYuNyA0LjYgMTUuMyA1LjUgMjIuOCAyLjRzMTIuOS05LjggMTQuNC0xNy44bDE4LjEtOTguNSA5OC41LTE4LjFjOC0xLjUgMTQuNy02LjkgMTcuOC0xNC40czIuMi0xNi4xLTIuNC0yMi44TDQ1MC45IDI1Nmw1Ni45LTgyLjVjNC42LTYuNyA1LjUtMTUuMyAyLjQtMjIuOHMtOS44LTEyLjktMTcuOC0xNC40bC05OC41LTE4LjFMMzc1LjcgMTkuN3pNMjY5LjYgMTEwbDY1LjYtNDUuMiAxNC40IDc4LjNjMS44IDkuOCA5LjUgMTcuNSAxOS4zIDE5LjNsNzguMyAxNC40TDQwMiAyNDIuNGMtNS43IDguMi01LjcgMTkgMCAyNy4ybDQ1LjIgNjUuNi03OC4zIDE0LjRjLTkuOCAxLjgtMTcuNSA5LjUtMTkuMyAxOS4zbC0xNC40IDc4LjNMMjY5LjYgNDAyYy04LjItNS43LTE5LTUuNy0yNy4yIDBsLTY1LjYgNDUuMi0xNC40LTc4LjNjLTEuOC05LjgtOS41LTE3LjUtMTkuMy0xOS4zTDY0LjggMzM1LjIgMTEwIDI2OS42YzUuNy04LjIgNS43LTE5IDAtMjcuMkw2NC44IDE3Ni44bDc4LjMtMTQuNGM5LjgtMS44IDE3LjUtOS41IDE5LjMtMTkuM2wxNC40LTc4LjNMMjQyLjQgMTEwYzguMiA1LjcgMTkgNS43IDI3LjIgMHpNMjU2IDM2OGExMTIgMTEyIDAgMSAwIDAtMjI0IDExMiAxMTIgMCAxIDAgMCAyMjR6TTE5MiAyNTZhNjQgNjQgMCAxIDEgMTI4IDAgNjQgNjQgMCAxIDEgLTEyOCAwelwiLz5cbiAgICAgICAgPC9zdmc+XG4gICAgICB7L2lmfVxuICAgIDwvYnV0dG9uPlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgc3ZnIHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBMERFLGlCQUFJLENBQ0YsUUFBUSxDQUFFLFFBQ1oifQ== */");
+	append_styles(target, "svelte-x6infa", "svg.svelte-x6infa{position:absolute}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiVGhlbWVTd2l0Y2hlci5zdmVsdGUiLCJzb3VyY2VzIjpbIlRoZW1lU3dpdGNoZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgYmx1ciB9IGZyb20gJ3N2ZWx0ZS90cmFuc2l0aW9uJztcbiAgaW1wb3J0IHsgYm9hcmRTdHlsZSB9IGZyb20gJy4vc3RvcmVzJztcbiAgaW1wb3J0IHsgb25Nb3VudCB9IGZyb20gJ3N2ZWx0ZSc7XG5cbiAgY29uc3QgY29uZmlnID0gbmV3IENvbmZpZygpO1xuICBjb25zdCB0aGVtZU9wdGlvbiA9IGNvbmZpZy5nZXRDb25maWdPcHRpb24oJ3RoZW1lJywgJ2RhcmsnKTtcbiAgdGhlbWVPcHRpb24uc2V0QWxsb3dlZFZhbHVlcygnbGlnaHQnLCAnZGFyaycpO1xuXG4gIGxldCB0aGVtZSA9IHRoZW1lT3B0aW9uLmdldFZhbHVlKCk7XG5cbiAgbGV0IG90aGVyVGhlbWUgPSB0aGVtZSA9PT0gJ2RhcmsnID8gJ2xpZ2h0JyA6ICdkYXJrJztcblxuICAkOiB7XG4gICAgb3RoZXJUaGVtZSA9IHRoZW1lID09PSAnZGFyaycgPyAnbGlnaHQnIDogJ2RhcmsnO1xuICB9XG5cbiAgJDoge1xuICAgIGNvbnN0IG9yaWdpbmFsVHJhbnNpdGlvbiA9IGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5zdHlsZS50cmFuc2l0aW9uO1xuICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5zdHlsZS50cmFuc2l0aW9uID0gJ2FsbCAwLjVzIGVhc2UnO1xuICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QuYWRkKHRoZW1lKTtcbiAgICBkb2N1bWVudC5kb2N1bWVudEVsZW1lbnQuZGF0YXNldC50aGVtZSA9IHRoZW1lO1xuICAgIHRoZW1lT3B0aW9uLnNldFZhbHVlKHRoZW1lKTtcbiAgICBpZiAodGhlbWUgPT09ICdsaWdodCcpIHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QucmVtb3ZlKCdkYXJrJyk7XG4gICAgfSBlbHNlIHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QucmVtb3ZlKCdsaWdodCcpO1xuICAgIH1cbiAgICBzZXRUaW1lb3V0KCgpID0+IHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5zdHlsZS50cmFuc2l0aW9uID0gb3JpZ2luYWxUcmFuc2l0aW9uO1xuICAgIH0sIDUwMCk7XG4gIH1cblxuICBib2FyZFN0eWxlLnN1YnNjcmliZSgodmFsdWUpID0+IHtcbiAgICBjb25zb2xlLmxvZyhkb2N1bWVudC5ib2R5KTtcbiAgICBkb2N1bWVudC5ib2R5LmRhdGFzZXQuYm9hcmQgPSB2YWx1ZTtcbiAgfSk7XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgZG9jdW1lbnQuYm9keS5kYXRhc2V0LmJvYXJkID0gJGJvYXJkU3R5bGU7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXY+XG4gICAgPGJ1dHRvblxuICAgICAgY2xhc3M9XCJpY29uXCJcbiAgICAgIHRpdGxlPVwiU3dpdGNoIHRvIHtvdGhlclRoZW1lfSBtb2RlXCJcbiAgICAgIG9uOmNsaWNrPXtcbiAgICAgICAgKCkgPT4geyB0aGVtZSA9IG90aGVyVGhlbWU7IH1cbiAgICAgIH1cbiAgICA+XG4gICAgICB7I2lmIHRoZW1lID09PSAnbGlnaHQnfVxuICAgICAgICA8IS0tIE1vb24gLS0+XG4gICAgICAgIDxzdmcgdHJhbnNpdGlvbjpibHVyIHN0eWxlPVwiZmlsbDogdmFyKC0tYnVsbWEtbGluaylcIiB4bWxucz1cImh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnXCIgdmlld0JveD1cIjAgMCAzODQgNTEyXCI+XG4gICAgICAgICAgPHBhdGhcbiAgICAgICAgICAgIGQ9XCJNMjIzLjUgMzJDMTAwIDMyIDAgMTMyLjMgMCAyNTZTMTAwIDQ4MCAyMjMuNSA0ODBjNjAuNiAwIDExNS41LTI0LjIgMTU1LjgtNjMuNGM1LTQuOSA2LjMtMTIuNSAzLjEtMTguN3MtMTAuMS05LjctMTctOC41Yy05LjggMS43LTE5LjggMi42LTMwLjEgMi42Yy05Ni45IDAtMTc1LjUtNzguOC0xNzUuNS0xNzZjMC02NS44IDM2LTEyMy4xIDg5LjMtMTUzLjNjNi4xLTMuNSA5LjItMTAuNSA3LjctMTcuM3MtNy4zLTExLjktMTQuMy0xMi41Yy02LjMtLjUtMTIuNi0uOC0xOS0uOHpcIi8+XG4gICAgICAgIDwvc3ZnPlxuICAgICAgezplbHNlfVxuICAgICAgICA8IS0tIFN1biAtLT5cbiAgICAgICAgPHN2ZyB0cmFuc2l0aW9uOmJsdXIgc3R5bGU9XCJmaWxsOiB2YXIoLS1idWxtYS13YXJuaW5nKVwiIHhtbG5zPVwiaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmdcIiB2aWV3Qm94PVwiMCAwIDUxMiA1MTJcIj5cbiAgICAgICAgICA8cGF0aFxuICAgICAgICAgICAgZD1cIk0zNzUuNyAxOS43Yy0xLjUtOC02LjktMTQuNy0xNC40LTE3LjhzLTE2LjEtMi4yLTIyLjggMi40TDI1NiA2MS4xIDE3My41IDQuMmMtNi43LTQuNi0xNS4zLTUuNS0yMi44LTIuNHMtMTIuOSA5LjgtMTQuNCAxNy44bC0xOC4xIDk4LjVMMTkuNyAxMzYuM2MtOCAxLjUtMTQuNyA2LjktMTcuOCAxNC40cy0yLjIgMTYuMSAyLjQgMjIuOEw2MS4xIDI1NiA0LjIgMzM4LjVjLTQuNiA2LjctNS41IDE1LjMtMi40IDIyLjhzOS44IDEzIDE3LjggMTQuNGw5OC41IDE4LjEgMTguMSA5OC41YzEuNSA4IDYuOSAxNC43IDE0LjQgMTcuOHMxNi4xIDIuMiAyMi44LTIuNEwyNTYgNDUwLjlsODIuNSA1Ni45YzYuNyA0LjYgMTUuMyA1LjUgMjIuOCAyLjRzMTIuOS05LjggMTQuNC0xNy44bDE4LjEtOTguNSA5OC41LTE4LjFjOC0xLjUgMTQuNy02LjkgMTcuOC0xNC40czIuMi0xNi4xLTIuNC0yMi44TDQ1MC45IDI1Nmw1Ni45LTgyLjVjNC42LTYuNyA1LjUtMTUuMyAyLjQtMjIuOHMtOS44LTEyLjktMTcuOC0xNC40bC05OC41LTE4LjFMMzc1LjcgMTkuN3pNMjY5LjYgMTEwbDY1LjYtNDUuMiAxNC40IDc4LjNjMS44IDkuOCA5LjUgMTcuNSAxOS4zIDE5LjNsNzguMyAxNC40TDQwMiAyNDIuNGMtNS43IDguMi01LjcgMTkgMCAyNy4ybDQ1LjIgNjUuNi03OC4zIDE0LjRjLTkuOCAxLjgtMTcuNSA5LjUtMTkuMyAxOS4zbC0xNC40IDc4LjNMMjY5LjYgNDAyYy04LjItNS43LTE5LTUuNy0yNy4yIDBsLTY1LjYgNDUuMi0xNC40LTc4LjNjLTEuOC05LjgtOS41LTE3LjUtMTkuMy0xOS4zTDY0LjggMzM1LjIgMTEwIDI2OS42YzUuNy04LjIgNS43LTE5IDAtMjcuMkw2NC44IDE3Ni44bDc4LjMtMTQuNGM5LjgtMS44IDE3LjUtOS41IDE5LjMtMTkuM2wxNC40LTc4LjNMMjQyLjQgMTEwYzguMiA1LjcgMTkgNS43IDI3LjIgMHpNMjU2IDM2OGExMTIgMTEyIDAgMSAwIDAtMjI0IDExMiAxMTIgMCAxIDAgMCAyMjR6TTE5MiAyNTZhNjQgNjQgMCAxIDEgMTI4IDAgNjQgNjQgMCAxIDEgLTEyOCAwelwiLz5cbiAgICAgICAgPC9zdmc+XG4gICAgICB7L2lmfVxuICAgIDwvYnV0dG9uPlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgc3ZnIHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBcUVFLGlCQUFJLENBQ0YsUUFBUSxDQUFFLFFBQ1oifQ== */");
 }
 
-// (48:6) {:else}
+// (59:6) {:else}
 function create_else_block(ctx) {
 	let svg;
 	let path;
@@ -1222,12 +1440,12 @@ function create_else_block(ctx) {
 			svg = svg_element("svg");
 			path = svg_element("path");
 			attr_dev(path, "d", "M375.7 19.7c-1.5-8-6.9-14.7-14.4-17.8s-16.1-2.2-22.8 2.4L256 61.1 173.5 4.2c-6.7-4.6-15.3-5.5-22.8-2.4s-12.9 9.8-14.4 17.8l-18.1 98.5L19.7 136.3c-8 1.5-14.7 6.9-17.8 14.4s-2.2 16.1 2.4 22.8L61.1 256 4.2 338.5c-4.6 6.7-5.5 15.3-2.4 22.8s9.8 13 17.8 14.4l98.5 18.1 18.1 98.5c1.5 8 6.9 14.7 14.4 17.8s16.1 2.2 22.8-2.4L256 450.9l82.5 56.9c6.7 4.6 15.3 5.5 22.8 2.4s12.9-9.8 14.4-17.8l18.1-98.5 98.5-18.1c8-1.5 14.7-6.9 17.8-14.4s2.2-16.1-2.4-22.8L450.9 256l56.9-82.5c4.6-6.7 5.5-15.3 2.4-22.8s-9.8-12.9-17.8-14.4l-98.5-18.1L375.7 19.7zM269.6 110l65.6-45.2 14.4 78.3c1.8 9.8 9.5 17.5 19.3 19.3l78.3 14.4L402 242.4c-5.7 8.2-5.7 19 0 27.2l45.2 65.6-78.3 14.4c-9.8 1.8-17.5 9.5-19.3 19.3l-14.4 78.3L269.6 402c-8.2-5.7-19-5.7-27.2 0l-65.6 45.2-14.4-78.3c-1.8-9.8-9.5-17.5-19.3-19.3L64.8 335.2 110 269.6c5.7-8.2 5.7-19 0-27.2L64.8 176.8l78.3-14.4c9.8-1.8 17.5-9.5 19.3-19.3l14.4-78.3L242.4 110c8.2 5.7 19 5.7 27.2 0zM256 368a112 112 0 1 0 0-224 112 112 0 1 0 0 224zM192 256a64 64 0 1 1 128 0 64 64 0 1 1 -128 0z");
-			add_location(path, file, 50, 10, 1773);
+			add_location(path, file, 61, 10, 2038);
 			set_style(svg, "fill", "var(--bulma-warning)");
 			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
 			attr_dev(svg, "viewBox", "0 0 512 512");
 			attr_dev(svg, "class", "svelte-x6infa");
-			add_location(svg, file, 49, 8, 1649);
+			add_location(svg, file, 60, 8, 1914);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, svg, anchor);
@@ -1268,14 +1486,14 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(48:6) {:else}",
+		source: "(59:6) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (42:6) {#if theme === 'light'}
+// (53:6) {#if theme === 'light'}
 function create_if_block(ctx) {
 	let svg;
 	let path;
@@ -1287,12 +1505,12 @@ function create_if_block(ctx) {
 			svg = svg_element("svg");
 			path = svg_element("path");
 			attr_dev(path, "d", "M223.5 32C100 32 0 132.3 0 256S100 480 223.5 480c60.6 0 115.5-24.2 155.8-63.4c5-4.9 6.3-12.5 3.1-18.7s-10.1-9.7-17-8.5c-9.8 1.7-19.8 2.6-30.1 2.6c-96.9 0-175.5-78.8-175.5-176c0-65.8 36-123.1 89.3-153.3c6.1-3.5 9.2-10.5 7.7-17.3s-7.3-11.9-14.3-12.5c-6.3-.5-12.6-.8-19-.8z");
-			add_location(path, file, 44, 10, 1296);
+			add_location(path, file, 55, 10, 1561);
 			set_style(svg, "fill", "var(--bulma-link)");
 			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
 			attr_dev(svg, "viewBox", "0 0 384 512");
 			attr_dev(svg, "class", "svelte-x6infa");
-			add_location(svg, file, 43, 8, 1175);
+			add_location(svg, file, 54, 8, 1440);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, svg, anchor);
@@ -1333,7 +1551,7 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(42:6) {#if theme === 'light'}",
+		source: "(53:6) {#if theme === 'light'}",
 		ctx
 	});
 
@@ -1366,8 +1584,8 @@ function create_fragment(ctx) {
 			if_block.c();
 			attr_dev(button, "class", "icon");
 			attr_dev(button, "title", button_title_value = "Switch to " + /*otherTheme*/ ctx[1] + " mode");
-			add_location(button, file, 34, 4, 977);
-			add_location(div, file, 33, 0, 967);
+			add_location(button, file, 45, 4, 1242);
+			add_location(div, file, 44, 0, 1232);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1438,6 +1656,9 @@ function create_fragment(ctx) {
 }
 
 function instance($$self, $$props, $$invalidate) {
+	let $boardStyle;
+	validate_store(boardStyle, 'boardStyle');
+	component_subscribe($$self, boardStyle, $$value => $$invalidate(3, $boardStyle = $$value));
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('ThemeSwitcher', slots, []);
 	const config = new Config();
@@ -1445,10 +1666,20 @@ function instance($$self, $$props, $$invalidate) {
 	themeOption.setAllowedValues('light', 'dark');
 	let theme = themeOption.getValue();
 	let otherTheme = theme === 'dark' ? 'light' : 'dark';
+
+	boardStyle.subscribe(value => {
+		console.log(document.body);
+		document.body.dataset.board = value;
+	});
+
+	onMount(() => {
+		document.body.dataset.board = $boardStyle;
+	});
+
 	const writable_props = [];
 
 	Object.keys($$props).forEach(key => {
-		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ThemeSwitcher> was created with unknown prop '${key}'`);
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1.warn(`<ThemeSwitcher> was created with unknown prop '${key}'`);
 	});
 
 	const click_handler = () => {
@@ -1458,10 +1689,13 @@ function instance($$self, $$props, $$invalidate) {
 	$$self.$capture_state = () => ({
 		Config,
 		blur,
+		boardStyle,
+		onMount,
 		config,
 		themeOption,
 		theme,
-		otherTheme
+		otherTheme,
+		$boardStyle
 	});
 
 	$$self.$inject_state = $$props => {
