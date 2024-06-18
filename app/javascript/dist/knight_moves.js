@@ -3714,45 +3714,64 @@ function tweened(value, defaults = {}) {
 const file$1 = "svelte/components/ProgressTimer.svelte";
 
 function add_css$1(target) {
-	append_styles(target, "svelte-q3473n", "progress.svelte-q3473n{width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHJvZ3Jlc3NUaW1lci5zdmVsdGUiLCJzb3VyY2VzIjpbIlByb2dyZXNzVGltZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQsIG9uRGVzdHJveSwgY3JlYXRlRXZlbnREaXNwYXRjaGVyIH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IHsgdHdlZW5lZCB9IGZyb20gJ3N2ZWx0ZS9tb3Rpb24nO1xuICBpbXBvcnQgeyBsaW5lYXIgfSBmcm9tICdzdmVsdGUvZWFzaW5nJztcblxuICBjb25zdCBzZWNvbmRQcm9ncmVzcyA9IHR3ZWVuZWQoMCwge1xuICAgIGR1cmF0aW9uOiAxMDAwLFxuICAgIGVhc2luZzogbGluZWFyLFxuICB9KTtcblxuICBleHBvcnQgbGV0IG1heCA9IDYwO1xuICBleHBvcnQgbGV0IHdpZHRoO1xuXG4gIGxldCB1cGRhdGVJbnRlcnZhbDtcblxuICBjb25zdCBkaXNwYXRjaCA9IGNyZWF0ZUV2ZW50RGlzcGF0Y2hlcigpO1xuXG4gIG9uTW91bnQoKCkgPT57XG4gICAgdXBkYXRlSW50ZXJ2YWwgPSBzZXRJbnRlcnZhbCgoKSA9PiB7XG4gICAgICBzZWNvbmRQcm9ncmVzcy51cGRhdGUoKHByZXZpb3VzKSA9PiBwcmV2aW91cyArIDEpO1xuICAgICAgaWYgKCRzZWNvbmRQcm9ncmVzcyA+PSBtYXgpIHtcbiAgICAgICAgY2xlYXJJbnRlcnZhbCh1cGRhdGVJbnRlcnZhbCk7XG4gICAgICAgIGRpc3BhdGNoKCdjb21wbGV0ZScpO1xuICAgICAgfVxuICAgIH0sIDEwMDApO1xuICB9KTtcblxuICBvbkRlc3Ryb3koKCkgPT4gY2xlYXJJbnRlcnZhbCh1cGRhdGVJbnRlcnZhbCkpO1xuPC9zY3JpcHQ+XG5cbjxwcm9ncmVzc1xuICBjbGFzcz1cInByb2dyZXNzIGlzLXN1Y2Nlc3NcIlxuICB2YWx1ZT1cInskc2Vjb25kUHJvZ3Jlc3N9XCJcbiAgbWF4PXttYXh9XG4gIHN0eWxlPVwid2lkdGg6IHt3aWR0aH1weFwiXG4+PC9wcm9ncmVzcz5cblxuPHN0eWxlPlxuICBwcm9ncmVzcyB7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBc0NFLHNCQUFTLENBQ1AsS0FBSyxDQUFFLElBQ1QifQ== */");
+	append_styles(target, "svelte-l2ukrv", "progress.svelte-l2ukrv{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHJvZ3Jlc3NUaW1lci5zdmVsdGUiLCJzb3VyY2VzIjpbIlByb2dyZXNzVGltZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQsIG9uRGVzdHJveSwgY3JlYXRlRXZlbnREaXNwYXRjaGVyIH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IHsgdHdlZW5lZCB9IGZyb20gJ3N2ZWx0ZS9tb3Rpb24nO1xuICBpbXBvcnQgeyBsaW5lYXIgfSBmcm9tICdzdmVsdGUvZWFzaW5nJztcblxuICBjb25zdCBzZWNvbmRQcm9ncmVzcyA9IHR3ZWVuZWQoMCwge1xuICAgIGR1cmF0aW9uOiAxMDAwLFxuICAgIGVhc2luZzogbGluZWFyLFxuICB9KTtcblxuICBleHBvcnQgbGV0IG1heCA9IDYwO1xuICBleHBvcnQgbGV0IHdpZHRoO1xuXG4gIGxldCB0aW1lUmVtYWluaW5nO1xuXG4gIGNvbnN0IGRpc3BhdGNoID0gY3JlYXRlRXZlbnREaXNwYXRjaGVyKCk7XG5cbiAgJDoge1xuICAgIHRpbWVSZW1haW5pbmcgPSBtYXggLSAkc2Vjb25kUHJvZ3Jlc3M7XG4gIH1cblxuICAkOiB7XG4gICAgaWYgKHRpbWVSZW1haW5pbmcgPD0gMCkge1xuICAgICAgZGlzcGF0Y2goJ2NvbXBsZXRlJyk7XG4gICAgICBjbGVhckludGVydmFsKHVwZGF0ZUludGVydmFsKTtcbiAgICB9XG4gIH1cblxuICBsZXQgdXBkYXRlSW50ZXJ2YWw7XG5cbiAgb25Nb3VudCgoKSA9PntcbiAgICB1cGRhdGVJbnRlcnZhbCA9IHNldEludGVydmFsKCgpID0+IHtcbiAgICAgIHNlY29uZFByb2dyZXNzLnVwZGF0ZSgocHJldmlvdXMpID0+IHByZXZpb3VzICsgMSk7XG4gICAgfSwgMTAwMCk7XG4gIH0pO1xuXG4gIG9uRGVzdHJveSgoKSA9PiBjbGVhckludGVydmFsKHVwZGF0ZUludGVydmFsKSk7XG48L3NjcmlwdD5cblxuPGRpdiBjbGFzcz1cImRpdlwiIHN0eWxlPVwid2lkdGg6IHt3aWR0aH1weFwiPlxuICA8cHJvZ3Jlc3NcbiAgICBjbGFzcz1cInByb2dyZXNzIGlzLXN1Y2Nlc3MgbWItMFwiXG4gICAgdmFsdWU9XCJ7JHNlY29uZFByb2dyZXNzfVwiXG4gICAgbWF4PXttYXh9XG4gID48L3Byb2dyZXNzPlxuICA8ZGl2IGNsYXNzPVwiaGFzLXRleHQtY2VudGVyZWQgaXMtc2l6ZS0zXCI+XG4gICAge3RpbWVSZW1haW5pbmcudG9GaXhlZCgyKX1cbiAgPC9kaXY+XG48L2Rpdj5cblxuXG48c3R5bGU+XG4gIHByb2dyZXNzIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBb0RFLHNCQUFTLENBQ1AsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QifQ== */");
 }
 
 function create_fragment$1(ctx) {
+	let div1;
 	let progress;
+	let t0;
+	let div0;
+	let t1_value = /*timeRemaining*/ ctx[2].toFixed(2) + "";
+	let t1;
 
 	const block = {
 		c: function create() {
+			div1 = element("div");
 			progress = element("progress");
-			attr_dev(progress, "class", "progress is-success svelte-q3473n");
-			progress.value = /*$secondProgress*/ ctx[2];
+			t0 = space();
+			div0 = element("div");
+			t1 = text(t1_value);
+			attr_dev(progress, "class", "progress is-success mb-0 svelte-l2ukrv");
+			progress.value = /*$secondProgress*/ ctx[3];
 			attr_dev(progress, "max", /*max*/ ctx[0]);
-			set_style(progress, "width", /*width*/ ctx[1] + "px");
-			add_location(progress, file$1, 30, 0, 672);
+			add_location(progress, file$1, 40, 2, 794);
+			attr_dev(div0, "class", "has-text-centered is-size-3");
+			add_location(div0, file$1, 45, 2, 902);
+			attr_dev(div1, "class", "div");
+			set_style(div1, "width", /*width*/ ctx[1] + "px");
+			add_location(div1, file$1, 39, 0, 749);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, progress, anchor);
+			insert_dev(target, div1, anchor);
+			append_dev(div1, progress);
+			append_dev(div1, t0);
+			append_dev(div1, div0);
+			append_dev(div0, t1);
 		},
 		p: function update(ctx, [dirty]) {
-			if (dirty & /*$secondProgress*/ 4) {
-				prop_dev(progress, "value", /*$secondProgress*/ ctx[2]);
+			if (dirty & /*$secondProgress*/ 8) {
+				prop_dev(progress, "value", /*$secondProgress*/ ctx[3]);
 			}
 
 			if (dirty & /*max*/ 1) {
 				attr_dev(progress, "max", /*max*/ ctx[0]);
 			}
 
+			if (dirty & /*timeRemaining*/ 4 && t1_value !== (t1_value = /*timeRemaining*/ ctx[2].toFixed(2) + "")) set_data_dev(t1, t1_value);
+
 			if (dirty & /*width*/ 2) {
-				set_style(progress, "width", /*width*/ ctx[1] + "px");
+				set_style(div1, "width", /*width*/ ctx[1] + "px");
 			}
 		},
 		i: noop,
 		o: noop,
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(progress);
+				detach_dev(div1);
 			}
 		}
 	};
@@ -3774,24 +3793,20 @@ function instance$1($$self, $$props, $$invalidate) {
 	validate_slots('ProgressTimer', slots, []);
 	const secondProgress = tweened(0, { duration: 1000, easing: identity });
 	validate_store(secondProgress, 'secondProgress');
-	component_subscribe($$self, secondProgress, value => $$invalidate(2, $secondProgress = value));
+	component_subscribe($$self, secondProgress, value => $$invalidate(3, $secondProgress = value));
 	let { max = 60 } = $$props;
 	let { width } = $$props;
-	let updateInterval;
+	let timeRemaining;
 	const dispatch = createEventDispatcher();
+	let updateInterval;
 
 	onMount(() => {
-		updateInterval = setInterval(
+		$$invalidate(5, updateInterval = setInterval(
 			() => {
 				secondProgress.update(previous => previous + 1);
-
-				if ($secondProgress >= max) {
-					clearInterval(updateInterval);
-					dispatch('complete');
-				}
 			},
 			1000
-		);
+		));
 	});
 
 	onDestroy(() => clearInterval(updateInterval));
@@ -3822,22 +3837,41 @@ function instance$1($$self, $$props, $$invalidate) {
 		secondProgress,
 		max,
 		width,
-		updateInterval,
+		timeRemaining,
 		dispatch,
+		updateInterval,
 		$secondProgress
 	});
 
 	$$self.$inject_state = $$props => {
 		if ('max' in $$props) $$invalidate(0, max = $$props.max);
 		if ('width' in $$props) $$invalidate(1, width = $$props.width);
-		if ('updateInterval' in $$props) updateInterval = $$props.updateInterval;
+		if ('timeRemaining' in $$props) $$invalidate(2, timeRemaining = $$props.timeRemaining);
+		if ('updateInterval' in $$props) $$invalidate(5, updateInterval = $$props.updateInterval);
 	};
 
 	if ($$props && "$$inject" in $$props) {
 		$$self.$inject_state($$props.$$inject);
 	}
 
-	return [max, width, $secondProgress, secondProgress];
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*max, $secondProgress*/ 9) {
+			{
+				$$invalidate(2, timeRemaining = max - $secondProgress);
+			}
+		}
+
+		if ($$self.$$.dirty & /*timeRemaining, updateInterval*/ 36) {
+			{
+				if (timeRemaining <= 0) {
+					dispatch('complete');
+					clearInterval(updateInterval);
+				}
+			}
+		}
+	};
+
+	return [max, width, timeRemaining, $secondProgress, secondProgress, updateInterval];
 }
 
 class ProgressTimer extends SvelteComponentDev {

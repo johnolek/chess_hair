@@ -11,32 +11,47 @@
   export let max = 60;
   export let width;
 
-  let updateInterval;
+  let timeRemaining;
 
   const dispatch = createEventDispatcher();
+
+  $: {
+    timeRemaining = max - $secondProgress;
+  }
+
+  $: {
+    if (timeRemaining <= 0) {
+      dispatch('complete');
+      clearInterval(updateInterval);
+    }
+  }
+
+  let updateInterval;
 
   onMount(() =>{
     updateInterval = setInterval(() => {
       secondProgress.update((previous) => previous + 1);
-      if ($secondProgress >= max) {
-        clearInterval(updateInterval);
-        dispatch('complete');
-      }
     }, 1000);
   });
 
   onDestroy(() => clearInterval(updateInterval));
 </script>
 
-<progress
-  class="progress is-success"
-  value="{$secondProgress}"
-  max={max}
-  style="width: {width}px"
-></progress>
+<div class="div" style="width: {width}px">
+  <progress
+    class="progress is-success mb-0"
+    value="{$secondProgress}"
+    max={max}
+  ></progress>
+  <div class="has-text-centered is-size-3">
+    {timeRemaining.toFixed(2)}
+  </div>
+</div>
+
 
 <style>
   progress {
+    position: relative;
     width: 100%;
   }
 </style>

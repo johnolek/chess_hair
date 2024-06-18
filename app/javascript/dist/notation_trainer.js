@@ -4,6 +4,21 @@ import { getRandomGame } from 'src/random_games';
 /** @returns {void} */
 function noop() {}
 
+const identity = (x) => x;
+
+/**
+ * @template T
+ * @template S
+ * @param {T} tar
+ * @param {S} src
+ * @returns {T & S}
+ */
+function assign(tar, src) {
+	// @ts-ignore
+	for (const k in src) tar[k] = src[k];
+	return /** @type {T & S} */ (tar);
+}
+
 /** @returns {void} */
 function add_location(element, file, line, column, char) {
 	element.__svelte_meta = {
@@ -66,6 +81,49 @@ function subscribe(store, ...callbacks) {
 /** @returns {void} */
 function component_subscribe(component, store, callback) {
 	component.$$.on_destroy.push(subscribe(store, callback));
+}
+
+const is_client = typeof window !== 'undefined';
+
+/** @type {() => number} */
+let now = is_client ? () => window.performance.now() : () => Date.now();
+
+let raf = is_client ? (cb) => requestAnimationFrame(cb) : noop;
+
+const tasks = new Set();
+
+/**
+ * @param {number} now
+ * @returns {void}
+ */
+function run_tasks(now) {
+	tasks.forEach((task) => {
+		if (!task.c(now)) {
+			tasks.delete(task);
+			task.f();
+		}
+	});
+	if (tasks.size !== 0) raf(run_tasks);
+}
+
+/**
+ * Creates a new task that runs on each raf frame
+ * until it returns a falsy value or is aborted
+ * @param {import('./private.js').TaskCallback} callback
+ * @returns {import('./private.js').Task}
+ */
+function loop(callback) {
+	/** @type {import('./private.js').TaskEntry} */
+	let task;
+	if (tasks.size === 0) raf(run_tasks);
+	return {
+		promise: new Promise((fulfill) => {
+			tasks.add((task = { c: callback, f: fulfill }));
+		}),
+		abort() {
+			tasks.delete(task);
+		}
+	};
 }
 
 /**
@@ -284,6 +342,13 @@ function add_iframe_resize_listener(node, fn) {
 }
 
 /**
+ * @returns {void} */
+function toggle_class(element, name, toggle) {
+	// The `!!` is required because an `undefined` flag means flipping the current state.
+	element.classList.toggle(name, !!toggle);
+}
+
+/**
  * @template T
  * @param {string} type
  * @param {T} [detail]
@@ -344,6 +409,60 @@ function get_current_component() {
  */
 function onMount(fn) {
 	get_current_component().$$.on_mount.push(fn);
+}
+
+/**
+ * Schedules a callback to run immediately before the component is unmounted.
+ *
+ * Out of `onMount`, `beforeUpdate`, `afterUpdate` and `onDestroy`, this is the
+ * only one that runs inside a server-side component.
+ *
+ * https://svelte.dev/docs/svelte#ondestroy
+ * @param {() => any} fn
+ * @returns {void}
+ */
+function onDestroy(fn) {
+	get_current_component().$$.on_destroy.push(fn);
+}
+
+/**
+ * Creates an event dispatcher that can be used to dispatch [component events](https://svelte.dev/docs#template-syntax-component-directives-on-eventname).
+ * Event dispatchers are functions that can take two arguments: `name` and `detail`.
+ *
+ * Component events created with `createEventDispatcher` create a
+ * [CustomEvent](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent).
+ * These events do not [bubble](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#Event_bubbling_and_capture).
+ * The `detail` argument corresponds to the [CustomEvent.detail](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/detail)
+ * property and can contain any type of data.
+ *
+ * The event dispatcher can be typed to narrow the allowed event names and the type of the `detail` argument:
+ * ```ts
+ * const dispatch = createEventDispatcher<{
+ *  loaded: never; // does not take a detail argument
+ *  change: string; // takes a detail argument of type string, which is required
+ *  optional: number | null; // takes an optional detail argument of type number
+ * }>();
+ * ```
+ *
+ * https://svelte.dev/docs/svelte#createeventdispatcher
+ * @template {Record<string, any>} [EventMap=any]
+ * @returns {import('./public.js').EventDispatcher<EventMap>}
+ */
+function createEventDispatcher() {
+	const component = get_current_component();
+	return (type, detail, { cancelable = false } = {}) => {
+		const callbacks = component.$$.callbacks[type];
+		if (callbacks) {
+			// TODO are there situations where events could be dispatched
+			// in a server (non-DOM) environment?
+			const event = custom_event(/** @type {string} */ (type), detail, { cancelable });
+			callbacks.slice().forEach((fn) => {
+				fn.call(component, event);
+			});
+			return !event.defaultPrevented;
+		}
+		return true;
+	};
 }
 
 const dirty_components = [];
@@ -480,6 +599,25 @@ const outroing = new Set();
 let outros;
 
 /**
+ * @returns {void} */
+function group_outros() {
+	outros = {
+		r: 0,
+		c: [],
+		p: outros // parent group
+	};
+}
+
+/**
+ * @returns {void} */
+function check_outros() {
+	if (!outros.r) {
+		run_all(outros.c);
+	}
+	outros = outros.p;
+}
+
+/**
  * @param {import('./private.js').Fragment} block
  * @param {0 | 1} [local]
  * @returns {void}
@@ -504,8 +642,14 @@ function transition_out(block, local, detach, callback) {
 		outroing.add(block);
 		outros.c.push(() => {
 			outroing.delete(block);
+			if (callback) {
+				if (detach) block.d(1);
+				callback();
+			}
 		});
 		block.o(local);
+	} else if (callback) {
+		callback();
 	}
 }
 
@@ -845,6 +989,17 @@ function attr_dev(node, attribute, value) {
 	attr(node, attribute, value);
 	if (value == null) dispatch_dev('SvelteDOMRemoveAttribute', { node, attribute });
 	else dispatch_dev('SvelteDOMSetAttribute', { node, attribute, value });
+}
+
+/**
+ * @param {Element} node
+ * @param {string} property
+ * @param {any} [value]
+ * @returns {void}
+ */
+function prop_dev(node, property, value) {
+	node[property] = value;
+	dispatch_dev('SvelteDOMSetProperty', { node, property, value });
 }
 
 /**
@@ -3181,13 +3336,13 @@ const pieceSet = persisted('global.pieceSet', 'merida');
 persisted('global.boardStyle', 'brown');
 
 /* svelte/components/Chessboard.svelte generated by Svelte v4.2.18 */
-const file = "svelte/components/Chessboard.svelte";
+const file$1 = "svelte/components/Chessboard.svelte";
 
-function add_css(target) {
+function add_css$2(target) {
 	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tICdzdmVsdGUnO1xuICBpbXBvcnQgeyBDaGVzc2dyb3VuZCB9IGZyb20gXCJjaGVzc2dyb3VuZFwiO1xuICBpbXBvcnQgeyBwaWVjZVNldCB9IGZyb20gJy4uL3N0b3Jlcyc7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb24gPSAnd2hpdGUnO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH1cbiAgICAgIH0pXG4gICAgfVxuICB9XG5cbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZDtcblxuICBleHBvcnQgbGV0IHNpemU7XG4gIGxldCBtYXhXaWR0aCA9ICc3MHZoJztcblxuICAkOiB7XG4gICAgaWYgKG9yaWVudGF0aW9uICYmIGNoZXNzZ3JvdW5kKSB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe29yaWVudGF0aW9uOiBvcmllbnRhdGlvbn0pO1xuICAgIH1cbiAgfVxuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIGNoZXNzZ3JvdW5kID0gQ2hlc3Nncm91bmQoYm9hcmRDb250YWluZXIsIGNoZXNzZ3JvdW5kQ29uZmlnKTtcbiAgfSk7XG48L3NjcmlwdD5cblxuPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy97JHBpZWNlU2V0fS5jc3NcIiByZWw9XCJzdHlsZXNoZWV0XCI+XG5cbjxkaXYgY2xhc3M9XCJib2FyZC13cmFwcGVyXCIgc3R5bGU9XCJtYXgtd2lkdGg6IHttYXhXaWR0aH1cIiBiaW5kOmNsaWVudFdpZHRoPXtzaXplfT5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZFwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIj5cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuYm9hcmQtd3JhcHBlciB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQWtERSw2QkFBZSxDQUNiLFFBQVEsQ0FBRSxRQUFRLENBQ2xCLEtBQUssQ0FBRSxJQUNUIn0= */");
 }
 
-function create_fragment$1(ctx) {
+function create_fragment$2(ctx) {
 	let link;
 	let link_href_value;
 	let t;
@@ -3204,16 +3359,16 @@ function create_fragment$1(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 39, 0, 714);
+			add_location(link, file$1, 39, 0, 714);
 			attr_dev(div0, "class", "is2d");
 			set_style(div0, "position", "relative");
 			set_style(div0, "width", /*size*/ ctx[0] + "px");
 			set_style(div0, "height", /*size*/ ctx[0] + "px");
-			add_location(div0, file, 42, 2, 875);
+			add_location(div0, file$1, 42, 2, 875);
 			attr_dev(div1, "class", "board-wrapper svelte-16y75xy");
 			set_style(div1, "max-width", /*maxWidth*/ ctx[3]);
 			add_render_callback(() => /*div1_elementresize_handler*/ ctx[9].call(div1));
-			add_location(div1, file, 41, 0, 791);
+			add_location(div1, file$1, 41, 0, 791);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3255,7 +3410,7 @@ function create_fragment$1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_fragment$1.name,
+		id: create_fragment$2.name,
 		type: "component",
 		source: "",
 		ctx
@@ -3264,7 +3419,7 @@ function create_fragment$1(ctx) {
 	return block;
 }
 
-function instance$1($$self, $$props, $$invalidate) {
+function instance$2($$self, $$props, $$invalidate) {
 	let $pieceSet;
 	validate_store(pieceSet, 'pieceSet');
 	component_subscribe($$self, pieceSet, $$value => $$invalidate(2, $pieceSet = $$value));
@@ -3388,8 +3543,8 @@ class Chessboard extends SvelteComponentDev {
 		init(
 			this,
 			options,
-			instance$1,
-			create_fragment$1,
+			instance$2,
+			create_fragment$2,
 			safe_not_equal,
 			{
 				chessgroundConfig: 5,
@@ -3398,14 +3553,14 @@ class Chessboard extends SvelteComponentDev {
 				chessground: 4,
 				size: 0
 			},
-			add_css
+			add_css$2
 		);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
 			tagName: "Chessboard",
 			options,
-			id: create_fragment$1.name
+			id: create_fragment$2.name
 		});
 	}
 
@@ -6174,8 +6329,326 @@ const parseSan = (pos, san) => {
     };
 };
 
+/**
+ * @param {any} obj
+ * @returns {boolean}
+ */
+function is_date(obj) {
+	return Object.prototype.toString.call(obj) === '[object Date]';
+}
+
+/** @returns {(t: any) => any} */
+function get_interpolator(a, b) {
+	if (a === b || a !== a) return () => a;
+	const type = typeof a;
+	if (type !== typeof b || Array.isArray(a) !== Array.isArray(b)) {
+		throw new Error('Cannot interpolate values of different type');
+	}
+	if (Array.isArray(a)) {
+		const arr = b.map((bi, i) => {
+			return get_interpolator(a[i], bi);
+		});
+		return (t) => arr.map((fn) => fn(t));
+	}
+	if (type === 'object') {
+		if (!a || !b) throw new Error('Object cannot be null');
+		if (is_date(a) && is_date(b)) {
+			a = a.getTime();
+			b = b.getTime();
+			const delta = b - a;
+			return (t) => new Date(a + t * delta);
+		}
+		const keys = Object.keys(b);
+		const interpolators = {};
+		keys.forEach((key) => {
+			interpolators[key] = get_interpolator(a[key], b[key]);
+		});
+		return (t) => {
+			const result = {};
+			keys.forEach((key) => {
+				result[key] = interpolators[key](t);
+			});
+			return result;
+		};
+	}
+	if (type === 'number') {
+		const delta = b - a;
+		return (t) => a + t * delta;
+	}
+	throw new Error(`Cannot interpolate ${type} values`);
+}
+
+/**
+ * A tweened store in Svelte is a special type of store that provides smooth transitions between state values over time.
+ *
+ * https://svelte.dev/docs/svelte-motion#tweened
+ * @template T
+ * @param {T} [value]
+ * @param {import('./private.js').TweenedOptions<T>} [defaults]
+ * @returns {import('./public.js').Tweened<T>}
+ */
+function tweened(value, defaults = {}) {
+	const store = writable(value);
+	/** @type {import('../internal/private.js').Task} */
+	let task;
+	let target_value = value;
+	/**
+	 * @param {T} new_value
+	 * @param {import('./private.js').TweenedOptions<T>} [opts]
+	 */
+	function set(new_value, opts) {
+		if (value == null) {
+			store.set((value = new_value));
+			return Promise.resolve();
+		}
+		target_value = new_value;
+		let previous_task = task;
+		let started = false;
+		let {
+			delay = 0,
+			duration = 400,
+			easing = identity,
+			interpolate = get_interpolator
+		} = assign(assign({}, defaults), opts);
+		if (duration === 0) {
+			if (previous_task) {
+				previous_task.abort();
+				previous_task = null;
+			}
+			store.set((value = target_value));
+			return Promise.resolve();
+		}
+		const start = now() + delay;
+		let fn;
+		task = loop((now) => {
+			if (now < start) return true;
+			if (!started) {
+				fn = interpolate(value, new_value);
+				if (typeof duration === 'function') duration = duration(value, new_value);
+				started = true;
+			}
+			if (previous_task) {
+				previous_task.abort();
+				previous_task = null;
+			}
+			const elapsed = now - start;
+			if (elapsed > /** @type {number} */ (duration)) {
+				store.set((value = new_value));
+				return false;
+			}
+			// @ts-ignore
+			store.set((value = fn(easing(elapsed / duration))));
+			return true;
+		});
+		return task.promise;
+	}
+	return {
+		set,
+		update: (fn, opts) => set(fn(target_value, value), opts),
+		subscribe: store.subscribe
+	};
+}
+
+/* svelte/components/ProgressTimer.svelte generated by Svelte v4.2.18 */
+const file = "svelte/components/ProgressTimer.svelte";
+
+function add_css$1(target) {
+	append_styles(target, "svelte-l2ukrv", "progress.svelte-l2ukrv{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHJvZ3Jlc3NUaW1lci5zdmVsdGUiLCJzb3VyY2VzIjpbIlByb2dyZXNzVGltZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQsIG9uRGVzdHJveSwgY3JlYXRlRXZlbnREaXNwYXRjaGVyIH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IHsgdHdlZW5lZCB9IGZyb20gJ3N2ZWx0ZS9tb3Rpb24nO1xuICBpbXBvcnQgeyBsaW5lYXIgfSBmcm9tICdzdmVsdGUvZWFzaW5nJztcblxuICBjb25zdCBzZWNvbmRQcm9ncmVzcyA9IHR3ZWVuZWQoMCwge1xuICAgIGR1cmF0aW9uOiAxMDAwLFxuICAgIGVhc2luZzogbGluZWFyLFxuICB9KTtcblxuICBleHBvcnQgbGV0IG1heCA9IDYwO1xuICBleHBvcnQgbGV0IHdpZHRoO1xuXG4gIGxldCB0aW1lUmVtYWluaW5nO1xuXG4gIGNvbnN0IGRpc3BhdGNoID0gY3JlYXRlRXZlbnREaXNwYXRjaGVyKCk7XG5cbiAgJDoge1xuICAgIHRpbWVSZW1haW5pbmcgPSBtYXggLSAkc2Vjb25kUHJvZ3Jlc3M7XG4gIH1cblxuICAkOiB7XG4gICAgaWYgKHRpbWVSZW1haW5pbmcgPD0gMCkge1xuICAgICAgZGlzcGF0Y2goJ2NvbXBsZXRlJyk7XG4gICAgICBjbGVhckludGVydmFsKHVwZGF0ZUludGVydmFsKTtcbiAgICB9XG4gIH1cblxuICBsZXQgdXBkYXRlSW50ZXJ2YWw7XG5cbiAgb25Nb3VudCgoKSA9PntcbiAgICB1cGRhdGVJbnRlcnZhbCA9IHNldEludGVydmFsKCgpID0+IHtcbiAgICAgIHNlY29uZFByb2dyZXNzLnVwZGF0ZSgocHJldmlvdXMpID0+IHByZXZpb3VzICsgMSk7XG4gICAgfSwgMTAwMCk7XG4gIH0pO1xuXG4gIG9uRGVzdHJveSgoKSA9PiBjbGVhckludGVydmFsKHVwZGF0ZUludGVydmFsKSk7XG48L3NjcmlwdD5cblxuPGRpdiBjbGFzcz1cImRpdlwiIHN0eWxlPVwid2lkdGg6IHt3aWR0aH1weFwiPlxuICA8cHJvZ3Jlc3NcbiAgICBjbGFzcz1cInByb2dyZXNzIGlzLXN1Y2Nlc3MgbWItMFwiXG4gICAgdmFsdWU9XCJ7JHNlY29uZFByb2dyZXNzfVwiXG4gICAgbWF4PXttYXh9XG4gID48L3Byb2dyZXNzPlxuICA8ZGl2IGNsYXNzPVwiaGFzLXRleHQtY2VudGVyZWQgaXMtc2l6ZS0zXCI+XG4gICAge3RpbWVSZW1haW5pbmcudG9GaXhlZCgyKX1cbiAgPC9kaXY+XG48L2Rpdj5cblxuXG48c3R5bGU+XG4gIHByb2dyZXNzIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBb0RFLHNCQUFTLENBQ1AsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QifQ== */");
+}
+
+function create_fragment$1(ctx) {
+	let div1;
+	let progress;
+	let t0;
+	let div0;
+	let t1_value = /*timeRemaining*/ ctx[2].toFixed(2) + "";
+	let t1;
+
+	const block = {
+		c: function create() {
+			div1 = element("div");
+			progress = element("progress");
+			t0 = space();
+			div0 = element("div");
+			t1 = text(t1_value);
+			attr_dev(progress, "class", "progress is-success mb-0 svelte-l2ukrv");
+			progress.value = /*$secondProgress*/ ctx[3];
+			attr_dev(progress, "max", /*max*/ ctx[0]);
+			add_location(progress, file, 40, 2, 794);
+			attr_dev(div0, "class", "has-text-centered is-size-3");
+			add_location(div0, file, 45, 2, 902);
+			attr_dev(div1, "class", "div");
+			set_style(div1, "width", /*width*/ ctx[1] + "px");
+			add_location(div1, file, 39, 0, 749);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div1, anchor);
+			append_dev(div1, progress);
+			append_dev(div1, t0);
+			append_dev(div1, div0);
+			append_dev(div0, t1);
+		},
+		p: function update(ctx, [dirty]) {
+			if (dirty & /*$secondProgress*/ 8) {
+				prop_dev(progress, "value", /*$secondProgress*/ ctx[3]);
+			}
+
+			if (dirty & /*max*/ 1) {
+				attr_dev(progress, "max", /*max*/ ctx[0]);
+			}
+
+			if (dirty & /*timeRemaining*/ 4 && t1_value !== (t1_value = /*timeRemaining*/ ctx[2].toFixed(2) + "")) set_data_dev(t1, t1_value);
+
+			if (dirty & /*width*/ 2) {
+				set_style(div1, "width", /*width*/ ctx[1] + "px");
+			}
+		},
+		i: noop,
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div1);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$1.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$1($$self, $$props, $$invalidate) {
+	let $secondProgress;
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('ProgressTimer', slots, []);
+	const secondProgress = tweened(0, { duration: 1000, easing: identity });
+	validate_store(secondProgress, 'secondProgress');
+	component_subscribe($$self, secondProgress, value => $$invalidate(3, $secondProgress = value));
+	let { max = 60 } = $$props;
+	let { width } = $$props;
+	let timeRemaining;
+	const dispatch = createEventDispatcher();
+	let updateInterval;
+
+	onMount(() => {
+		$$invalidate(5, updateInterval = setInterval(
+			() => {
+				secondProgress.update(previous => previous + 1);
+			},
+			1000
+		));
+	});
+
+	onDestroy(() => clearInterval(updateInterval));
+
+	$$self.$$.on_mount.push(function () {
+		if (width === undefined && !('width' in $$props || $$self.$$.bound[$$self.$$.props['width']])) {
+			console.warn("<ProgressTimer> was created without expected prop 'width'");
+		}
+	});
+
+	const writable_props = ['max', 'width'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ProgressTimer> was created with unknown prop '${key}'`);
+	});
+
+	$$self.$$set = $$props => {
+		if ('max' in $$props) $$invalidate(0, max = $$props.max);
+		if ('width' in $$props) $$invalidate(1, width = $$props.width);
+	};
+
+	$$self.$capture_state = () => ({
+		onMount,
+		onDestroy,
+		createEventDispatcher,
+		tweened,
+		linear: identity,
+		secondProgress,
+		max,
+		width,
+		timeRemaining,
+		dispatch,
+		updateInterval,
+		$secondProgress
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('max' in $$props) $$invalidate(0, max = $$props.max);
+		if ('width' in $$props) $$invalidate(1, width = $$props.width);
+		if ('timeRemaining' in $$props) $$invalidate(2, timeRemaining = $$props.timeRemaining);
+		if ('updateInterval' in $$props) $$invalidate(5, updateInterval = $$props.updateInterval);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*max, $secondProgress*/ 9) {
+			{
+				$$invalidate(2, timeRemaining = max - $secondProgress);
+			}
+		}
+
+		if ($$self.$$.dirty & /*timeRemaining, updateInterval*/ 36) {
+			{
+				if (timeRemaining <= 0) {
+					dispatch('complete');
+					clearInterval(updateInterval);
+				}
+			}
+		}
+	};
+
+	return [max, width, timeRemaining, $secondProgress, secondProgress, updateInterval];
+}
+
+class ProgressTimer extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$1, create_fragment$1, safe_not_equal, { max: 0, width: 1 }, add_css$1);
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "ProgressTimer",
+			options,
+			id: create_fragment$1.name
+		});
+	}
+
+	get max() {
+		throw new Error("<ProgressTimer>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set max(value) {
+		throw new Error("<ProgressTimer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get width() {
+		throw new Error("<ProgressTimer>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set width(value) {
+		throw new Error("<ProgressTimer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+}
+
 /* svelte/NotationTrainer.svelte generated by Svelte v4.2.18 */
 const file_1 = "svelte/NotationTrainer.svelte";
+
+function add_css(target) {
+	append_styles(target, "svelte-1wmfybg", "button.selected.svelte-1wmfybg{background:var(--bulma-success)}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSIsInNvdXJjZXMiOlsiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IENoZXNzYm9hcmQgZnJvbSAnLi9jb21wb25lbnRzL0NoZXNzYm9hcmQuc3ZlbHRlJztcblxuICBpbXBvcnQgeyBwYXJzZVBnbiwgc3RhcnRpbmdQb3NpdGlvbiB9IGZyb20gJ2NoZXNzb3BzL3Bnbic7XG4gIGltcG9ydCB7IFV0aWwgfSBmcm9tICdzcmMvdXRpbCc7XG4gIGltcG9ydCB7IGdldFJhbmRvbUdhbWUgfSBmcm9tIFwic3JjL3JhbmRvbV9nYW1lc1wiO1xuICBpbXBvcnQgeyBwYXJzZVNhbiB9IGZyb20gXCJjaGVzc29wcy9zYW5cIjtcbiAgaW1wb3J0IHsgbWFrZUZlbiB9IGZyb20gXCJjaGVzc29wcy9mZW5cIjtcbiAgaW1wb3J0IHsgbWFrZVNxdWFyZSB9IGZyb20gXCJjaGVzc29wcy91dGlsXCI7XG4gIGltcG9ydCB7IHBlcnNpc3RlZCB9IGZyb20gXCJzdmVsdGUtcGVyc2lzdGVkLXN0b3JlXCI7XG4gIGltcG9ydCBQcm9ncmVzc1RpbWVyIGZyb20gXCIuL2NvbXBvbmVudHMvUHJvZ3Jlc3NUaW1lci5zdmVsdGVcIjtcblxuICBjb25zdCBvcmllbnRhdGlvbiA9IHBlcnNpc3RlZCgnbm90YXRpb24ub3JpZW50YXRpb24nLCAnd2hpdGUnKTtcblxuICBsZXQgY29ycmVjdENvdW50ID0gMDtcbiAgbGV0IGluY29ycmVjdENvdW50ID0gMDtcbiAgbGV0IGNvcnJlY3RBbnN3ZXI7XG4gIGxldCBhbnN3ZXJBbGxvd2VkO1xuICBsZXQgYW5zd2VyVmFsdWUgPSAnJztcbiAgbGV0IHJlc3VsdFRleHQ7XG4gIGxldCByZXN1bHRDbGFzcztcblxuICBsZXQgYW5zd2VyUmFuayA9ICcnO1xuICBsZXQgYW5zd2VyRmlsZSA9ICcnO1xuXG4gIGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHtcbiAgICBmZW46ICc4LzgvOC84LzgvOC84LzgnLFxuICAgIGNvb3JkaW5hdGVzOiBmYWxzZSxcbiAgICBhbmltYXRpb246IHtcbiAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgfSxcbiAgICBoaWdobGlnaHQ6IHtcbiAgICAgIGxhc3RNb3ZlOiB0cnVlLFxuICAgIH0sXG4gICAgZHJhZ2dhYmxlOiB7XG4gICAgICBlbmFibGVkOiBmYWxzZSxcbiAgICB9LFxuICAgIHNlbGVjdGFibGU6IHtcbiAgICAgIGVuYWJsZWQ6IGZhbHNlLFxuICAgIH0sXG4gICAgb3JpZW50YXRpb246ICRvcmllbnRhdGlvbixcbiAgfTtcbiAgbGV0IGJvYXJkU2l6ZTtcbiAgbGV0IGNoZXNzZ3JvdW5kO1xuICBsZXQgZmVuO1xuXG4gIC8vIEdhbWUgc3R1ZmZcbiAgbGV0IGdhbWVSdW5uaW5nID0gZmFsc2U7XG4gIGxldCBoaWdoU2NvcmUgPSAwO1xuICBsZXQgbWF4VGltZSA9IDA7XG4gIGxldCBjb3JyZWN0Qm9udXMgPSAyO1xuICBsZXQgaW5jb3JyZWN0UGVuYWx0eSA9IDEwO1xuXG4gICQ6IHtcbiAgICBhbnN3ZXJWYWx1ZSA9IGAke2Fuc3dlckZpbGV9JHthbnN3ZXJSYW5rfWA7XG4gIH1cblxuICAkOiB7XG4gICAgaWYgKGFuc3dlclZhbHVlLmxlbmd0aCA9PT0gMikge1xuICAgICAgaGFuZGxlQW5zd2VyKCk7XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gbmV3UG9zaXRpb24oKSB7XG4gICAgYW5zd2VyQWxsb3dlZCA9IGZhbHNlO1xuICAgIGNvbnN0IGdhbWUgPSBnZXRSYW5kb21HYW1lKCk7XG4gICAgY29uc3QgcGduR2FtZSA9IHBhcnNlUGduKGdhbWUucGduKVswXTtcbiAgICBjb25zdCB0b3RhbFBsaWVzID0gWy4uLnBnbkdhbWUubW92ZXMubWFpbmxpbmUoKV0ubGVuZ3RoO1xuXG4gICAgY29uc3QgcmFuZG9tID0gVXRpbC5nZXRSYW5kb21JbnRCZXR3ZWVuKDEsIHRvdGFsUGxpZXMgLSAxKTtcbiAgICBjb25zdCBwb3NpdGlvblJlc3VsdCA9IHN0YXJ0aW5nUG9zaXRpb24ocGduR2FtZS5oZWFkZXJzKTtcbiAgICBjb25zdCBwb3NpdGlvbiA9IHBvc2l0aW9uUmVzdWx0LnVud3JhcCgpO1xuICAgIGNvbnN0IGFsbE5vZGVzID0gWy4uLnBnbkdhbWUubW92ZXMubWFpbmxpbmVOb2RlcygpXTtcblxuICAgIGlmIChbJ08tTycsICdPLU8tTyddLmluY2x1ZGVzKGFsbE5vZGVzW3JhbmRvbV0uZGF0YS5zYW4pKSB7XG4gICAgICAvLyBTa2lwIGNhc3RsZXNcbiAgICAgIHJldHVybiBuZXdQb3NpdGlvbigpO1xuICAgIH1cblxuICAgIGxldCBpO1xuICAgIGxldCBtb3ZlO1xuICAgIGxldCBuZXh0Tm9kZTtcblxuICAgIGZvciAoaSA9IDA7IGkgPCByYW5kb207IGkrKykge1xuICAgICAgY29uc3Qgbm9kZSA9IGFsbE5vZGVzW2ldO1xuICAgICAgbW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBub2RlLmRhdGEuc2FuKTtcbiAgICAgIHBvc2l0aW9uLnBsYXkobW92ZSk7XG4gICAgICBuZXh0Tm9kZSA9IGFsbE5vZGVzW2kgKyAxXTtcbiAgICB9XG4gICAgZmVuID0gbWFrZUZlbihwb3NpdGlvbi50b1NldHVwKCkpO1xuXG4gICAgY29uc3QgbmV4dE1vdmUgPSBwYXJzZVNhbihwb3NpdGlvbiwgbmV4dE5vZGUuZGF0YS5zYW4pO1xuICAgIGNvbnN0IGZyb20gPSBtYWtlU3F1YXJlKG5leHRNb3ZlLmZyb20pO1xuICAgIGNvbnN0IHRvID0gbWFrZVNxdWFyZShuZXh0TW92ZS50byk7XG4gICAgY29ycmVjdEFuc3dlciA9IHRvO1xuXG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgICBoaWdobGlnaHQ6IHtcbiAgICAgICAgICBsYXN0TW92ZTogdHJ1ZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH1cbiAgICAgIH0pO1xuICAgICAgY2hlc3Nncm91bmQubW92ZShmcm9tLCB0byk7XG4gICAgICBhbnN3ZXJWYWx1ZSA9ICcnO1xuICAgICAgYW5zd2VyQWxsb3dlZCA9IHRydWU7XG4gICAgfSwgMjAwKVxuICB9XG5cbiAgZnVuY3Rpb24gaGFuZGxlQW5zd2VyKCkge1xuICAgIGlmICghYW5zd2VyQWxsb3dlZCkge1xuICAgICAgcmV0dXJuO1xuICAgIH1cbiAgICBpZiAoYW5zd2VyVmFsdWUubGVuZ3RoICE9PSAyKSB7XG4gICAgICByZXR1cm47XG4gICAgfVxuICAgIGlmIChhbnN3ZXJWYWx1ZS50b0xvd2VyQ2FzZSgpLnRyaW0oKSA9PT0gY29ycmVjdEFuc3dlci50b0xvd2VyQ2FzZSgpKSB7XG4gICAgICByZXN1bHRUZXh0ID0gYCR7YW5zd2VyVmFsdWV9IHdhcyBjb3JyZWN0IWA7XG4gICAgICByZXN1bHRDbGFzcyA9ICdjb3JyZWN0JztcbiAgICAgIG1heFRpbWUgKz0gY29ycmVjdEJvbnVzO1xuICAgICAgY29ycmVjdENvdW50Kys7XG4gICAgfSBlbHNlIHtcbiAgICAgIHJlc3VsdFRleHQgPSBgJHthbnN3ZXJWYWx1ZX0gd2FzIGluY29ycmVjdC4gQ29ycmVjdCBhbnN3ZXIgd2FzICR7Y29ycmVjdEFuc3dlcn0uYFxuICAgICAgcmVzdWx0Q2xhc3MgPSAnaW5jb3JyZWN0JztcbiAgICAgIG1heFRpbWUgLT0gaW5jb3JyZWN0UGVuYWx0eTtcbiAgICAgIGluY29ycmVjdENvdW50Kys7XG4gICAgfVxuICAgIGFuc3dlclJhbmsgPSAnJztcbiAgICBhbnN3ZXJGaWxlID0gJyc7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfVxuXG4gIGNvbnN0IGZpbGVzID0gWydhJywgJ2InLCAnYycsICdkJywgJ2UnLCAnZicsICdnJywgJ2gnXTtcbiAgY29uc3QgcmFua3MgPSBbJzEnLCAnMicsICczJywgJzQnLCAnNScgLCc2JywgJzcnLCAnOCddO1xuXG4gIGZ1bmN0aW9uIGhhbmRsZUtleWRvd24oZXZlbnQpIHtcbiAgICBjb25zdCBrZXkgPSBldmVudC5rZXkudG9Mb3dlckNhc2UoKTtcbiAgICBpZiAoa2V5ID09PSAnYmFja3NwYWNlJykge1xuICAgICAgYW5zd2VyUmFuayA9ICcnO1xuICAgICAgYW5zd2VyRmlsZSA9ICcnO1xuICAgICAgcmV0dXJuO1xuICAgIH1cblxuICAgIGlmIChmaWxlcy5pbmNsdWRlcyhrZXkpKSB7XG4gICAgICBhbnN3ZXJGaWxlID0ga2V5O1xuICAgIH0gZWxzZSBpZiAocmFua3MuaW5jbHVkZXMoa2V5KSkge1xuICAgICAgYW5zd2VyUmFuayA9IGtleTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBzdGFydEdhbWUoKSB7XG4gICAgZ2FtZVJ1bm5pbmcgPSB0cnVlO1xuICAgIG1heFRpbWUgPSAzMDtcbiAgICBjb3JyZWN0Q291bnQgPSAwO1xuICAgIGluY29ycmVjdENvdW50ID0gMDtcbiAgICBuZXdQb3NpdGlvbigpO1xuICB9XG5cbiAgZnVuY3Rpb24gZW5kR2FtZSgpIHtcbiAgICBnYW1lUnVubmluZyA9IGZhbHNlO1xuICAgIGlmIChjb3JyZWN0Q291bnQgPiBoaWdoU2NvcmUpIHtcbiAgICAgIGhpZ2hTY29yZSA9IGNvcnJlY3RDb3VudDtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICB3aW5kb3cuYWRkRXZlbnRMaXN0ZW5lcigna2V5ZG93bicsIGhhbmRsZUtleWRvd24pO1xuICAgIG5ld1Bvc2l0aW9uKCk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXYgY2xhc3M9XCJjb2x1bW5zIGlzLWNlbnRlcmVkXCI+XG4gIDxkaXYgY2xhc3M9XCJjb2x1bW4gaXMtNi1kZXNrdG9wXCI+XG4gICAgPGgxPk5vdGF0aW9uIFRyYWluZXI8L2gxPlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgeyNpZiAkb3JpZW50YXRpb24gPT09ICd3aGl0ZSd9XG4gICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtc21hbGxcIiBvbjpjbGljaz17KCkgPT4ge1xuICAgICAgICAgIG9yaWVudGF0aW9uLnNldCgnYmxhY2snKTtcbiAgICAgICAgfX0+VmlldyBhcyBibGFjazwvYnV0dG9uPlxuICAgICAgezplbHNlfVxuICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXNtYWxsXCIgb246Y2xpY2s9eygpID0+IHtcbiAgICAgICAgICBvcmllbnRhdGlvbi5zZXQoJ3doaXRlJyk7XG4gICAgICAgIH19PlZpZXcgYXMgd2hpdGU8L2J1dHRvbj5cbiAgICAgIHsvaWZ9XG4gICAgICB7I2lmICFnYW1lUnVubmluZ31cbiAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1zbWFsbFwiIG9uOmNsaWNrPXtzdGFydEdhbWV9PlN0YXJ0IEdhbWU8L2J1dHRvbj5cbiAgICAgIHsvaWZ9XG4gICAgPC9kaXY+XG4gICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICA8cD5Db3JyZWN0OiB7Y29ycmVjdENvdW50fTwvcD5cbiAgICAgIDxwPkluY29ycmVjdDoge2luY29ycmVjdENvdW50fTwvcD5cbiAgICAgIDxwPkhpZ2ggU2NvcmU6IHtoaWdoU2NvcmV9PC9wPlxuICAgIDwvZGl2PlxuXG4gICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICA8Q2hlc3Nib2FyZFxuICAgICAgICB7Y2hlc3Nncm91bmRDb25maWd9XG4gICAgICAgIGJpbmQ6ZmVuPXtmZW59XG4gICAgICAgIGJpbmQ6Y2hlc3Nncm91bmQ9e2NoZXNzZ3JvdW5kfVxuICAgICAgICBvcmllbnRhdGlvbj17JG9yaWVudGF0aW9ufVxuICAgICAgICBiaW5kOnNpemU9e2JvYXJkU2l6ZX1cbiAgICAgIC8+XG4gICAgPC9kaXY+XG4gICAgeyNpZiBnYW1lUnVubmluZ31cbiAgICAgIDxQcm9ncmVzc1RpbWVyIG1heD17bWF4VGltZX0gd2lkdGg9e2JvYXJkU2l6ZX0gb246Y29tcGxldGU9e2VuZEdhbWV9PjwvUHJvZ3Jlc3NUaW1lcj5cbiAgICB7L2lmfVxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgPGRpdiBjbGFzcz1cImNvbHVtbnNcIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNvbHVtblwiPlxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJmaXhlZC1ncmlkIGhhcy04LWNvbHNcIj5cbiAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJncmlkXCI+XG4gICAgICAgICAgICAgIHsjZWFjaCBmaWxlcyBhcyBmaWxlfVxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgICAgICAgICA8YnV0dG9uIGNsYXNzOnNlbGVjdGVkPXthbnN3ZXJGaWxlID09PSBmaWxlfSBjbGFzcz1cImJ1dHRvbiBpcy1sYXJnZVwiIG9uOmNsaWNrPXsoKSA9PiBhbnN3ZXJGaWxlID0gZmlsZX0+e2ZpbGV9PC9idXR0b24+XG4gICAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICAgIHsvZWFjaH1cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvZGl2PlxuICAgICAgPGRpdiBjbGFzcz1cImNvbHVtbnNcIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNvbHVtblwiPlxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJmaXhlZC1ncmlkIGhhcy04LWNvbHNcIj5cbiAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJncmlkXCI+XG4gICAgICAgICAgICAgIHsjZWFjaCByYW5rcyBhcyByYW5rfVxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgICAgICAgICA8YnV0dG9uIGNsYXNzOnNlbGVjdGVkPXthbnN3ZXJSYW5rID09PSByYW5rfSBjbGFzcz1cImJ1dHRvbiBpcy1sYXJnZVwiIG9uOmNsaWNrPXsoKSA9PiBhbnN3ZXJSYW5rID0gcmFua30+e3Jhbmt9PC9idXR0b24+XG4gICAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICAgIHsvZWFjaH1cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvZGl2PlxuICAgIDwvZGl2PlxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIGJ1dHRvbi5zZWxlY3RlZCB7XG4gICAgYmFja2dyb3VuZDogdmFyKC0tYnVsbWEtc3VjY2Vzcyk7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBK09FLE1BQU0sd0JBQVUsQ0FDZCxVQUFVLENBQUUsSUFBSSxlQUFlLENBQ2pDIn0= */");
+}
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
@@ -6189,7 +6662,7 @@ function get_each_context_1(ctx, list, i) {
 	return child_ctx;
 }
 
-// (195:6) {:else}
+// (181:6) {:else}
 function create_else_block(ctx) {
 	let button;
 	let mounted;
@@ -6200,7 +6673,7 @@ function create_else_block(ctx) {
 			button = element("button");
 			button.textContent = "View as white";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 195, 8, 4602);
+			add_location(button, file_1, 181, 8, 4320);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
@@ -6225,15 +6698,15 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(195:6) {:else}",
+		source: "(181:6) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (191:6) {#if $orientation === 'white'}
-function create_if_block_3(ctx) {
+// (177:6) {#if $orientation === 'white'}
+function create_if_block_2(ctx) {
 	let button;
 	let mounted;
 	let dispose;
@@ -6243,7 +6716,7 @@ function create_if_block_3(ctx) {
 			button = element("button");
 			button.textContent = "View as black";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 191, 8, 4460);
+			add_location(button, file_1, 177, 8, 4178);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
@@ -6266,17 +6739,17 @@ function create_if_block_3(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_3.name,
+		id: create_if_block_2.name,
 		type: "if",
-		source: "(191:6) {#if $orientation === 'white'}",
+		source: "(177:6) {#if $orientation === 'white'}",
 		ctx
 	});
 
 	return block;
 }
 
-// (200:6) {#if !gameRunning}
-function create_if_block_2(ctx) {
+// (186:6) {#if !gameRunning}
+function create_if_block_1(ctx) {
 	let button;
 	let mounted;
 	let dispose;
@@ -6286,13 +6759,13 @@ function create_if_block_2(ctx) {
 			button = element("button");
 			button.textContent = "Start Game";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 200, 8, 4767);
+			add_location(button, file_1, 186, 8, 4485);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*startGame*/ ctx[16], false);
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[15], false);
 				mounted = true;
 			}
 		},
@@ -6309,81 +6782,55 @@ function create_if_block_2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_2.name,
-		type: "if",
-		source: "(200:6) {#if !gameRunning}",
-		ctx
-	});
-
-	return block;
-}
-
-// (205:6) {#if gameRunning}
-function create_if_block_1(ctx) {
-	let t_value = /*remainingTime*/ ctx[3].toFixed(2) + "";
-	let t;
-
-	const block = {
-		c: function create() {
-			t = text(t_value);
-		},
-		m: function mount(target, anchor) {
-			insert_dev(target, t, anchor);
-		},
-		p: function update(ctx, dirty) {
-			if (dirty[0] & /*remainingTime*/ 8 && t_value !== (t_value = /*remainingTime*/ ctx[3].toFixed(2) + "")) set_data_dev(t, t_value);
-		},
-		d: function destroy(detaching) {
-			if (detaching) {
-				detach_dev(t);
-			}
-		}
-	};
-
-	dispatch_dev("SvelteRegisterBlock", {
-		block,
 		id: create_if_block_1.name,
 		type: "if",
-		source: "(205:6) {#if gameRunning}",
+		source: "(186:6) {#if !gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (226:8) {#if resultText}
+// (205:4) {#if gameRunning}
 function create_if_block(ctx) {
-	let div1;
-	let div0;
-	let t;
-	let div0_class_value;
+	let progresstimer;
+	let current;
+
+	progresstimer = new ProgressTimer({
+			props: {
+				max: /*maxTime*/ ctx[9],
+				width: /*boardSize*/ ctx[4]
+			},
+			$$inline: true
+		});
+
+	progresstimer.$on("complete", /*endGame*/ ctx[16]);
 
 	const block = {
 		c: function create() {
-			div1 = element("div");
-			div0 = element("div");
-			t = text(/*resultText*/ ctx[6]);
-			attr_dev(div0, "class", div0_class_value = "" + (/*resultClass*/ ctx[7] + " is-size-3"));
-			add_location(div0, file_1, 227, 12, 5547);
-			attr_dev(div1, "class", "block");
-			add_location(div1, file_1, 226, 10, 5515);
+			create_component(progresstimer.$$.fragment);
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, div1, anchor);
-			append_dev(div1, div0);
-			append_dev(div0, t);
+			mount_component(progresstimer, target, anchor);
+			current = true;
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*resultText*/ 64) set_data_dev(t, /*resultText*/ ctx[6]);
-
-			if (dirty[0] & /*resultClass*/ 128 && div0_class_value !== (div0_class_value = "" + (/*resultClass*/ ctx[7] + " is-size-3"))) {
-				attr_dev(div0, "class", div0_class_value);
-			}
+			const progresstimer_changes = {};
+			if (dirty[0] & /*maxTime*/ 512) progresstimer_changes.max = /*maxTime*/ ctx[9];
+			if (dirty[0] & /*boardSize*/ 16) progresstimer_changes.width = /*boardSize*/ ctx[4];
+			progresstimer.$set(progresstimer_changes);
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(progresstimer.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(progresstimer.$$.fragment, local);
+			current = false;
 		},
 		d: function destroy(detaching) {
-			if (detaching) {
-				detach_dev(div1);
-			}
+			destroy_component(progresstimer, detaching);
 		}
 	};
 
@@ -6391,14 +6838,14 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(226:8) {#if resultText}",
+		source: "(205:4) {#if gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (240:14) {#each files as file}
+// (213:14) {#each files as file}
 function create_each_block_1(ctx) {
 	let div;
 	let button;
@@ -6407,7 +6854,7 @@ function create_each_block_1(ctx) {
 	let dispose;
 
 	function click_handler_2() {
-		return /*click_handler_2*/ ctx[22](/*file*/ ctx[37]);
+		return /*click_handler_2*/ ctx[23](/*file*/ ctx[37]);
 	}
 
 	const block = {
@@ -6416,10 +6863,11 @@ function create_each_block_1(ctx) {
 			button = element("button");
 			button.textContent = `${/*file*/ ctx[37]}`;
 			t1 = space();
-			attr_dev(button, "class", "button is-large");
-			add_location(button, file_1, 241, 18, 5941);
+			attr_dev(button, "class", "button is-large svelte-1wmfybg");
+			toggle_class(button, "selected", /*answerFile*/ ctx[1] === /*file*/ ctx[37]);
+			add_location(button, file_1, 214, 18, 5320);
 			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 240, 16, 5904);
+			add_location(div, file_1, 213, 16, 5283);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -6433,6 +6881,10 @@ function create_each_block_1(ctx) {
 		},
 		p: function update(new_ctx, dirty) {
 			ctx = new_ctx;
+
+			if (dirty[0] & /*answerFile, files*/ 8194) {
+				toggle_class(button, "selected", /*answerFile*/ ctx[1] === /*file*/ ctx[37]);
+			}
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
@@ -6448,14 +6900,14 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(240:14) {#each files as file}",
+		source: "(213:14) {#each files as file}",
 		ctx
 	});
 
 	return block;
 }
 
-// (251:14) {#each ranks as rank}
+// (226:14) {#each ranks as rank}
 function create_each_block(ctx) {
 	let div;
 	let button;
@@ -6464,7 +6916,7 @@ function create_each_block(ctx) {
 	let dispose;
 
 	function click_handler_3() {
-		return /*click_handler_3*/ ctx[23](/*rank*/ ctx[34]);
+		return /*click_handler_3*/ ctx[24](/*rank*/ ctx[34]);
 	}
 
 	const block = {
@@ -6473,10 +6925,11 @@ function create_each_block(ctx) {
 			button = element("button");
 			button.textContent = `${/*rank*/ ctx[34]}`;
 			t1 = space();
-			attr_dev(button, "class", "button is-large");
-			add_location(button, file_1, 252, 18, 6323);
+			attr_dev(button, "class", "button is-large svelte-1wmfybg");
+			toggle_class(button, "selected", /*answerRank*/ ctx[0] === /*rank*/ ctx[34]);
+			add_location(button, file_1, 227, 18, 5772);
 			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 251, 16, 6286);
+			add_location(div, file_1, 226, 16, 5735);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -6490,6 +6943,10 @@ function create_each_block(ctx) {
 		},
 		p: function update(new_ctx, dirty) {
 			ctx = new_ctx;
+
+			if (dirty[0] & /*answerRank, ranks*/ 16385) {
+				toggle_class(button, "selected", /*answerRank*/ ctx[0] === /*rank*/ ctx[34]);
+			}
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
@@ -6505,7 +6962,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(251:14) {#each ranks as rank}",
+		source: "(226:14) {#each ranks as rank}",
 		ctx
 	});
 
@@ -6513,69 +6970,53 @@ function create_each_block(ctx) {
 }
 
 function create_fragment(ctx) {
-	let div14;
 	let div13;
+	let div12;
 	let h1;
 	let t1;
 	let div0;
 	let t2;
 	let t3;
 	let div1;
-	let t4;
 	let p0;
+	let t4;
 	let t5;
 	let t6;
-	let t7;
 	let p1;
+	let t7;
 	let t8;
 	let t9;
-	let t10;
 	let p2;
+	let t10;
 	let t11;
 	let t12;
-	let t13;
 	let div2;
 	let chessboard;
 	let updating_fen;
 	let updating_chessground;
+	let updating_size;
+	let t13;
 	let t14;
-	let div4;
-	let div3;
-	let span;
-
-	let t15_value = (/*answerFile*/ ctx[1] !== ''
-	? /*answerFile*/ ctx[1]
-	: '-') + "";
-
-	let t15;
-
-	let t16_value = (/*answerRank*/ ctx[0] !== ''
-	? /*answerRank*/ ctx[0]
-	: '-') + "";
-
-	let t16;
-	let t17;
-	let t18;
-	let div12;
 	let div11;
-	let div7;
 	let div6;
 	let div5;
-	let t19;
+	let div4;
+	let div3;
+	let t15;
 	let div10;
 	let div9;
 	let div8;
+	let div7;
 	let current;
 
 	function select_block_type(ctx, dirty) {
-		if (/*$orientation*/ ctx[11] === 'white') return create_if_block_3;
+		if (/*$orientation*/ ctx[10] === 'white') return create_if_block_2;
 		return create_else_block;
 	}
 
 	let current_block_type = select_block_type(ctx);
 	let if_block0 = current_block_type(ctx);
-	let if_block1 = !/*gameRunning*/ ctx[2] && create_if_block_2(ctx);
-	let if_block2 = /*gameRunning*/ ctx[2] && create_if_block_1(ctx);
+	let if_block1 = !/*gameRunning*/ ctx[7] && create_if_block_1(ctx);
 
 	function chessboard_fen_binding(value) {
 		/*chessboard_fen_binding*/ ctx[20](value);
@@ -6585,31 +7026,40 @@ function create_fragment(ctx) {
 		/*chessboard_chessground_binding*/ ctx[21](value);
 	}
 
-	let chessboard_props = {
-		chessgroundConfig: /*chessgroundConfig*/ ctx[13],
-		orientation: /*$orientation*/ ctx[11]
-	};
-
-	if (/*fen*/ ctx[9] !== void 0) {
-		chessboard_props.fen = /*fen*/ ctx[9];
+	function chessboard_size_binding(value) {
+		/*chessboard_size_binding*/ ctx[22](value);
 	}
 
-	if (/*chessground*/ ctx[8] !== void 0) {
-		chessboard_props.chessground = /*chessground*/ ctx[8];
+	let chessboard_props = {
+		chessgroundConfig: /*chessgroundConfig*/ ctx[12],
+		orientation: /*$orientation*/ ctx[10]
+	};
+
+	if (/*fen*/ ctx[6] !== void 0) {
+		chessboard_props.fen = /*fen*/ ctx[6];
+	}
+
+	if (/*chessground*/ ctx[5] !== void 0) {
+		chessboard_props.chessground = /*chessground*/ ctx[5];
+	}
+
+	if (/*boardSize*/ ctx[4] !== void 0) {
+		chessboard_props.size = /*boardSize*/ ctx[4];
 	}
 
 	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
 	binding_callbacks.push(() => bind(chessboard, 'fen', chessboard_fen_binding));
 	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
-	let if_block3 = /*resultText*/ ctx[6] && create_if_block(ctx);
-	let each_value_1 = ensure_array_like_dev(/*files*/ ctx[14]);
+	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
+	let if_block2 = /*gameRunning*/ ctx[7] && create_if_block(ctx);
+	let each_value_1 = ensure_array_like_dev(/*files*/ ctx[13]);
 	let each_blocks_1 = [];
 
 	for (let i = 0; i < each_value_1.length; i += 1) {
 		each_blocks_1[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
 	}
 
-	let each_value = ensure_array_like_dev(/*ranks*/ ctx[15]);
+	let each_value = ensure_array_like_dev(/*ranks*/ ctx[14]);
 	let each_blocks = [];
 
 	for (let i = 0; i < each_value.length; i += 1) {
@@ -6618,8 +7068,8 @@ function create_fragment(ctx) {
 
 	const block = {
 		c: function create() {
-			div14 = element("div");
 			div13 = element("div");
+			div12 = element("div");
 			h1 = element("h1");
 			h1.textContent = "Notation Trainer";
 			t1 = space();
@@ -6629,146 +7079,128 @@ function create_fragment(ctx) {
 			if (if_block1) if_block1.c();
 			t3 = space();
 			div1 = element("div");
-			if (if_block2) if_block2.c();
-			t4 = space();
 			p0 = element("p");
-			t5 = text("Correct: ");
-			t6 = text(/*correctCount*/ ctx[4]);
-			t7 = space();
+			t4 = text("Correct: ");
+			t5 = text(/*correctCount*/ ctx[2]);
+			t6 = space();
 			p1 = element("p");
-			t8 = text("Incorrect: ");
-			t9 = text(/*incorrectCount*/ ctx[5]);
-			t10 = space();
+			t7 = text("Incorrect: ");
+			t8 = text(/*incorrectCount*/ ctx[3]);
+			t9 = space();
 			p2 = element("p");
-			t11 = text("High Score: ");
-			t12 = text(/*highScore*/ ctx[10]);
-			t13 = space();
+			t10 = text("High Score: ");
+			t11 = text(/*highScore*/ ctx[8]);
+			t12 = space();
 			div2 = element("div");
 			create_component(chessboard.$$.fragment);
+			t13 = space();
+			if (if_block2) if_block2.c();
 			t14 = space();
-			div4 = element("div");
-			div3 = element("div");
-			span = element("span");
-			t15 = text(t15_value);
-			t16 = text(t16_value);
-			t17 = space();
-			if (if_block3) if_block3.c();
-			t18 = space();
-			div12 = element("div");
 			div11 = element("div");
-			div7 = element("div");
 			div6 = element("div");
 			div5 = element("div");
+			div4 = element("div");
+			div3 = element("div");
 
 			for (let i = 0; i < each_blocks_1.length; i += 1) {
 				each_blocks_1[i].c();
 			}
 
-			t19 = space();
+			t15 = space();
 			div10 = element("div");
 			div9 = element("div");
 			div8 = element("div");
+			div7 = element("div");
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				each_blocks[i].c();
 			}
 
-			add_location(h1, file_1, 188, 4, 4365);
+			add_location(h1, file_1, 174, 4, 4083);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file_1, 189, 4, 4395);
-			add_location(p0, file_1, 207, 6, 4964);
-			add_location(p1, file_1, 208, 6, 5001);
-			add_location(p2, file_1, 209, 6, 5042);
+			add_location(div0, file_1, 175, 4, 4113);
+			add_location(p0, file_1, 190, 6, 4611);
+			add_location(p1, file_1, 191, 6, 4648);
+			add_location(p2, file_1, 192, 6, 4689);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file_1, 203, 4, 4867);
+			add_location(div1, file_1, 189, 4, 4585);
 			attr_dev(div2, "class", "block");
-			add_location(div2, file_1, 212, 4, 5089);
-			attr_dev(span, "class", "is-size-1");
-			add_location(span, file_1, 222, 8, 5352);
-			attr_dev(div3, "class", "container has-text-centered");
-			add_location(div3, file_1, 221, 6, 5302);
-			attr_dev(div4, "class", "block");
-			add_location(div4, file_1, 220, 4, 5276);
-			attr_dev(div5, "class", "grid");
-			add_location(div5, file_1, 238, 12, 5833);
-			attr_dev(div6, "class", "fixed-grid has-4-cols");
-			add_location(div6, file_1, 237, 10, 5785);
-			attr_dev(div7, "class", "column is-half");
-			add_location(div7, file_1, 236, 8, 5746);
-			attr_dev(div8, "class", "grid");
-			add_location(div8, file_1, 249, 12, 6215);
-			attr_dev(div9, "class", "fixed-grid has-4-cols");
-			add_location(div9, file_1, 248, 10, 6167);
-			attr_dev(div10, "class", "column is-half");
-			add_location(div10, file_1, 247, 8, 6128);
-			attr_dev(div11, "class", "columns");
-			add_location(div11, file_1, 235, 6, 5716);
-			attr_dev(div12, "class", "block");
-			add_location(div12, file_1, 234, 4, 5690);
-			attr_dev(div13, "class", "column is-6-desktop is-centered");
-			add_location(div13, file_1, 187, 2, 4315);
-			attr_dev(div14, "class", "columns is-centered");
-			add_location(div14, file_1, 186, 0, 4279);
+			add_location(div2, file_1, 195, 4, 4736);
+			attr_dev(div3, "class", "grid");
+			add_location(div3, file_1, 211, 12, 5212);
+			attr_dev(div4, "class", "fixed-grid has-8-cols");
+			add_location(div4, file_1, 210, 10, 5164);
+			attr_dev(div5, "class", "column");
+			add_location(div5, file_1, 209, 8, 5133);
+			attr_dev(div6, "class", "columns");
+			add_location(div6, file_1, 208, 6, 5103);
+			attr_dev(div7, "class", "grid");
+			add_location(div7, file_1, 224, 12, 5664);
+			attr_dev(div8, "class", "fixed-grid has-8-cols");
+			add_location(div8, file_1, 223, 10, 5616);
+			attr_dev(div9, "class", "column");
+			add_location(div9, file_1, 222, 8, 5585);
+			attr_dev(div10, "class", "columns");
+			add_location(div10, file_1, 221, 6, 5555);
+			attr_dev(div11, "class", "block");
+			add_location(div11, file_1, 207, 4, 5077);
+			attr_dev(div12, "class", "column is-6-desktop");
+			add_location(div12, file_1, 173, 2, 4045);
+			attr_dev(div13, "class", "columns is-centered");
+			add_location(div13, file_1, 172, 0, 4009);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, div14, anchor);
-			append_dev(div14, div13);
-			append_dev(div13, h1);
-			append_dev(div13, t1);
-			append_dev(div13, div0);
+			insert_dev(target, div13, anchor);
+			append_dev(div13, div12);
+			append_dev(div12, h1);
+			append_dev(div12, t1);
+			append_dev(div12, div0);
 			if_block0.m(div0, null);
 			append_dev(div0, t2);
 			if (if_block1) if_block1.m(div0, null);
-			append_dev(div13, t3);
-			append_dev(div13, div1);
-			if (if_block2) if_block2.m(div1, null);
-			append_dev(div1, t4);
+			append_dev(div12, t3);
+			append_dev(div12, div1);
 			append_dev(div1, p0);
+			append_dev(p0, t4);
 			append_dev(p0, t5);
-			append_dev(p0, t6);
-			append_dev(div1, t7);
+			append_dev(div1, t6);
 			append_dev(div1, p1);
+			append_dev(p1, t7);
 			append_dev(p1, t8);
-			append_dev(p1, t9);
-			append_dev(div1, t10);
+			append_dev(div1, t9);
 			append_dev(div1, p2);
+			append_dev(p2, t10);
 			append_dev(p2, t11);
-			append_dev(p2, t12);
-			append_dev(div13, t13);
-			append_dev(div13, div2);
+			append_dev(div12, t12);
+			append_dev(div12, div2);
 			mount_component(chessboard, div2, null);
-			append_dev(div13, t14);
-			append_dev(div13, div4);
-			append_dev(div4, div3);
-			append_dev(div3, span);
-			append_dev(span, t15);
-			append_dev(span, t16);
-			append_dev(div3, t17);
-			if (if_block3) if_block3.m(div3, null);
-			append_dev(div13, t18);
-			append_dev(div13, div12);
+			append_dev(div12, t13);
+			if (if_block2) if_block2.m(div12, null);
+			append_dev(div12, t14);
 			append_dev(div12, div11);
-			append_dev(div11, div7);
-			append_dev(div7, div6);
+			append_dev(div11, div6);
 			append_dev(div6, div5);
+			append_dev(div5, div4);
+			append_dev(div4, div3);
 
 			for (let i = 0; i < each_blocks_1.length; i += 1) {
 				if (each_blocks_1[i]) {
-					each_blocks_1[i].m(div5, null);
+					each_blocks_1[i].m(div3, null);
 				}
 			}
 
-			append_dev(div11, t19);
+			append_dev(div11, t15);
 			append_dev(div11, div10);
 			append_dev(div10, div9);
 			append_dev(div9, div8);
+			append_dev(div8, div7);
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				if (each_blocks[i]) {
-					each_blocks[i].m(div8, null);
+					each_blocks[i].m(div7, null);
 				}
 			}
 
@@ -6787,11 +7219,11 @@ function create_fragment(ctx) {
 				}
 			}
 
-			if (!/*gameRunning*/ ctx[2]) {
+			if (!/*gameRunning*/ ctx[7]) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 				} else {
-					if_block1 = create_if_block_2(ctx);
+					if_block1 = create_if_block_1(ctx);
 					if_block1.c();
 					if_block1.m(div0, null);
 				}
@@ -6800,62 +7232,57 @@ function create_fragment(ctx) {
 				if_block1 = null;
 			}
 
-			if (/*gameRunning*/ ctx[2]) {
-				if (if_block2) {
-					if_block2.p(ctx, dirty);
-				} else {
-					if_block2 = create_if_block_1(ctx);
-					if_block2.c();
-					if_block2.m(div1, t4);
-				}
-			} else if (if_block2) {
-				if_block2.d(1);
-				if_block2 = null;
-			}
-
-			if (!current || dirty[0] & /*correctCount*/ 16) set_data_dev(t6, /*correctCount*/ ctx[4]);
-			if (!current || dirty[0] & /*incorrectCount*/ 32) set_data_dev(t9, /*incorrectCount*/ ctx[5]);
-			if (!current || dirty[0] & /*highScore*/ 1024) set_data_dev(t12, /*highScore*/ ctx[10]);
+			if (!current || dirty[0] & /*correctCount*/ 4) set_data_dev(t5, /*correctCount*/ ctx[2]);
+			if (!current || dirty[0] & /*incorrectCount*/ 8) set_data_dev(t8, /*incorrectCount*/ ctx[3]);
+			if (!current || dirty[0] & /*highScore*/ 256) set_data_dev(t11, /*highScore*/ ctx[8]);
 			const chessboard_changes = {};
-			if (dirty[0] & /*$orientation*/ 2048) chessboard_changes.orientation = /*$orientation*/ ctx[11];
+			if (dirty[0] & /*$orientation*/ 1024) chessboard_changes.orientation = /*$orientation*/ ctx[10];
 
-			if (!updating_fen && dirty[0] & /*fen*/ 512) {
+			if (!updating_fen && dirty[0] & /*fen*/ 64) {
 				updating_fen = true;
-				chessboard_changes.fen = /*fen*/ ctx[9];
+				chessboard_changes.fen = /*fen*/ ctx[6];
 				add_flush_callback(() => updating_fen = false);
 			}
 
-			if (!updating_chessground && dirty[0] & /*chessground*/ 256) {
+			if (!updating_chessground && dirty[0] & /*chessground*/ 32) {
 				updating_chessground = true;
-				chessboard_changes.chessground = /*chessground*/ ctx[8];
+				chessboard_changes.chessground = /*chessground*/ ctx[5];
 				add_flush_callback(() => updating_chessground = false);
+			}
+
+			if (!updating_size && dirty[0] & /*boardSize*/ 16) {
+				updating_size = true;
+				chessboard_changes.size = /*boardSize*/ ctx[4];
+				add_flush_callback(() => updating_size = false);
 			}
 
 			chessboard.$set(chessboard_changes);
 
-			if ((!current || dirty[0] & /*answerFile*/ 2) && t15_value !== (t15_value = (/*answerFile*/ ctx[1] !== ''
-			? /*answerFile*/ ctx[1]
-			: '-') + "")) set_data_dev(t15, t15_value);
+			if (/*gameRunning*/ ctx[7]) {
+				if (if_block2) {
+					if_block2.p(ctx, dirty);
 
-			if ((!current || dirty[0] & /*answerRank*/ 1) && t16_value !== (t16_value = (/*answerRank*/ ctx[0] !== ''
-			? /*answerRank*/ ctx[0]
-			: '-') + "")) set_data_dev(t16, t16_value);
-
-			if (/*resultText*/ ctx[6]) {
-				if (if_block3) {
-					if_block3.p(ctx, dirty);
+					if (dirty[0] & /*gameRunning*/ 128) {
+						transition_in(if_block2, 1);
+					}
 				} else {
-					if_block3 = create_if_block(ctx);
-					if_block3.c();
-					if_block3.m(div3, null);
+					if_block2 = create_if_block(ctx);
+					if_block2.c();
+					transition_in(if_block2, 1);
+					if_block2.m(div12, t14);
 				}
-			} else if (if_block3) {
-				if_block3.d(1);
-				if_block3 = null;
+			} else if (if_block2) {
+				group_outros();
+
+				transition_out(if_block2, 1, 1, () => {
+					if_block2 = null;
+				});
+
+				check_outros();
 			}
 
-			if (dirty[0] & /*answerFile, files*/ 16386) {
-				each_value_1 = ensure_array_like_dev(/*files*/ ctx[14]);
+			if (dirty[0] & /*answerFile, files*/ 8194) {
+				each_value_1 = ensure_array_like_dev(/*files*/ ctx[13]);
 				let i;
 
 				for (i = 0; i < each_value_1.length; i += 1) {
@@ -6866,7 +7293,7 @@ function create_fragment(ctx) {
 					} else {
 						each_blocks_1[i] = create_each_block_1(child_ctx);
 						each_blocks_1[i].c();
-						each_blocks_1[i].m(div5, null);
+						each_blocks_1[i].m(div3, null);
 					}
 				}
 
@@ -6877,8 +7304,8 @@ function create_fragment(ctx) {
 				each_blocks_1.length = each_value_1.length;
 			}
 
-			if (dirty[0] & /*answerRank, ranks*/ 32769) {
-				each_value = ensure_array_like_dev(/*ranks*/ ctx[15]);
+			if (dirty[0] & /*answerRank, ranks*/ 16385) {
+				each_value = ensure_array_like_dev(/*ranks*/ ctx[14]);
 				let i;
 
 				for (i = 0; i < each_value.length; i += 1) {
@@ -6889,7 +7316,7 @@ function create_fragment(ctx) {
 					} else {
 						each_blocks[i] = create_each_block(child_ctx);
 						each_blocks[i].c();
-						each_blocks[i].m(div8, null);
+						each_blocks[i].m(div7, null);
 					}
 				}
 
@@ -6903,22 +7330,23 @@ function create_fragment(ctx) {
 		i: function intro(local) {
 			if (current) return;
 			transition_in(chessboard.$$.fragment, local);
+			transition_in(if_block2);
 			current = true;
 		},
 		o: function outro(local) {
 			transition_out(chessboard.$$.fragment, local);
+			transition_out(if_block2);
 			current = false;
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(div14);
+				detach_dev(div13);
 			}
 
 			if_block0.d();
 			if (if_block1) if_block1.d();
-			if (if_block2) if_block2.d();
 			destroy_component(chessboard);
-			if (if_block3) if_block3.d();
+			if (if_block2) if_block2.d();
 			destroy_each(each_blocks_1, detaching);
 			destroy_each(each_blocks, detaching);
 		}
@@ -6941,7 +7369,7 @@ function instance($$self, $$props, $$invalidate) {
 	validate_slots('NotationTrainer', slots, []);
 	const orientation = persisted('notation.orientation', 'white');
 	validate_store(orientation, 'orientation');
-	component_subscribe($$self, orientation, value => $$invalidate(11, $orientation = value));
+	component_subscribe($$self, orientation, value => $$invalidate(10, $orientation = value));
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let correctAnswer;
@@ -6962,6 +7390,7 @@ function instance($$self, $$props, $$invalidate) {
 		orientation: $orientation
 	};
 
+	let boardSize;
 	let chessground;
 	let fen;
 
@@ -6969,11 +7398,9 @@ function instance($$self, $$props, $$invalidate) {
 	let gameRunning = false;
 
 	let highScore = 0;
-	let startingTime = 60;
-	let remainingTime = 0;
+	let maxTime = 0;
 	let correctBonus = 2;
 	let incorrectPenalty = 10;
-	let gameInterval;
 
 	function newPosition() {
 		answerAllowed = false;
@@ -7001,7 +7428,7 @@ function instance($$self, $$props, $$invalidate) {
 			nextNode = allNodes[i + 1];
 		}
 
-		$$invalidate(9, fen = makeFen(position.toSetup()));
+		$$invalidate(6, fen = makeFen(position.toSetup()));
 		const nextMove = parseSan(position, nextNode.data.san);
 		const from = makeSquare(nextMove.from);
 		const to = makeSquare(nextMove.to);
@@ -7017,7 +7444,7 @@ function instance($$self, $$props, $$invalidate) {
 				$$invalidate(17, answerValue = '');
 				answerAllowed = true;
 			},
-			400
+			200
 		);
 	}
 
@@ -7031,15 +7458,15 @@ function instance($$self, $$props, $$invalidate) {
 		}
 
 		if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
-			$$invalidate(6, resultText = `${answerValue} was correct!`);
-			$$invalidate(7, resultClass = 'correct');
-			$$invalidate(3, remainingTime += correctBonus);
-			$$invalidate(4, correctCount++, correctCount);
+			resultText = `${answerValue} was correct!`;
+			resultClass = 'correct';
+			$$invalidate(9, maxTime += correctBonus);
+			$$invalidate(2, correctCount++, correctCount);
 		} else {
-			$$invalidate(6, resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`);
-			$$invalidate(7, resultClass = 'incorrect');
-			$$invalidate(3, remainingTime -= incorrectPenalty);
-			$$invalidate(5, incorrectCount++, incorrectCount);
+			resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`;
+			resultClass = 'incorrect';
+			$$invalidate(9, maxTime -= incorrectPenalty);
+			$$invalidate(3, incorrectCount++, incorrectCount);
 		}
 
 		$$invalidate(0, answerRank = '');
@@ -7067,31 +7494,18 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	function startGame() {
-		$$invalidate(2, gameRunning = true);
-		$$invalidate(3, remainingTime = startingTime);
-		$$invalidate(4, correctCount = 0);
-		$$invalidate(5, incorrectCount = 0);
-
-		gameInterval = setInterval(
-			() => {
-				$$invalidate(3, remainingTime -= 0.05);
-
-				if (remainingTime <= 0) {
-					clearInterval(gameInterval);
-				}
-			},
-			50
-		);
-
+		$$invalidate(7, gameRunning = true);
+		$$invalidate(9, maxTime = 30);
+		$$invalidate(2, correctCount = 0);
+		$$invalidate(3, incorrectCount = 0);
 		newPosition();
 	}
 
-	function stopGame() {
-		clearInterval(gameInterval);
-		$$invalidate(2, gameRunning = false);
+	function endGame() {
+		$$invalidate(7, gameRunning = false);
 
 		if (correctCount > highScore) {
-			$$invalidate(10, highScore = correctCount);
+			$$invalidate(8, highScore = correctCount);
 		}
 	}
 
@@ -7116,12 +7530,17 @@ function instance($$self, $$props, $$invalidate) {
 
 	function chessboard_fen_binding(value) {
 		fen = value;
-		$$invalidate(9, fen);
+		$$invalidate(6, fen);
 	}
 
 	function chessboard_chessground_binding(value) {
 		chessground = value;
-		$$invalidate(8, chessground);
+		$$invalidate(5, chessground);
+	}
+
+	function chessboard_size_binding(value) {
+		boardSize = value;
+		$$invalidate(4, boardSize);
 	}
 
 	const click_handler_2 = file => $$invalidate(1, answerFile = file);
@@ -7138,6 +7557,7 @@ function instance($$self, $$props, $$invalidate) {
 		makeFen,
 		makeSquare,
 		persisted,
+		ProgressTimer,
 		orientation,
 		correctCount,
 		incorrectCount,
@@ -7149,45 +7569,43 @@ function instance($$self, $$props, $$invalidate) {
 		answerRank,
 		answerFile,
 		chessgroundConfig,
+		boardSize,
 		chessground,
 		fen,
 		gameRunning,
 		highScore,
-		startingTime,
-		remainingTime,
+		maxTime,
 		correctBonus,
 		incorrectPenalty,
-		gameInterval,
 		newPosition,
 		handleAnswer,
 		files,
 		ranks,
 		handleKeydown,
 		startGame,
-		stopGame,
+		endGame,
 		$orientation
 	});
 
 	$$self.$inject_state = $$props => {
-		if ('correctCount' in $$props) $$invalidate(4, correctCount = $$props.correctCount);
-		if ('incorrectCount' in $$props) $$invalidate(5, incorrectCount = $$props.incorrectCount);
+		if ('correctCount' in $$props) $$invalidate(2, correctCount = $$props.correctCount);
+		if ('incorrectCount' in $$props) $$invalidate(3, incorrectCount = $$props.incorrectCount);
 		if ('correctAnswer' in $$props) correctAnswer = $$props.correctAnswer;
 		if ('answerAllowed' in $$props) answerAllowed = $$props.answerAllowed;
 		if ('answerValue' in $$props) $$invalidate(17, answerValue = $$props.answerValue);
-		if ('resultText' in $$props) $$invalidate(6, resultText = $$props.resultText);
-		if ('resultClass' in $$props) $$invalidate(7, resultClass = $$props.resultClass);
+		if ('resultText' in $$props) resultText = $$props.resultText;
+		if ('resultClass' in $$props) resultClass = $$props.resultClass;
 		if ('answerRank' in $$props) $$invalidate(0, answerRank = $$props.answerRank);
 		if ('answerFile' in $$props) $$invalidate(1, answerFile = $$props.answerFile);
-		if ('chessgroundConfig' in $$props) $$invalidate(13, chessgroundConfig = $$props.chessgroundConfig);
-		if ('chessground' in $$props) $$invalidate(8, chessground = $$props.chessground);
-		if ('fen' in $$props) $$invalidate(9, fen = $$props.fen);
-		if ('gameRunning' in $$props) $$invalidate(2, gameRunning = $$props.gameRunning);
-		if ('highScore' in $$props) $$invalidate(10, highScore = $$props.highScore);
-		if ('startingTime' in $$props) startingTime = $$props.startingTime;
-		if ('remainingTime' in $$props) $$invalidate(3, remainingTime = $$props.remainingTime);
+		if ('chessgroundConfig' in $$props) $$invalidate(12, chessgroundConfig = $$props.chessgroundConfig);
+		if ('boardSize' in $$props) $$invalidate(4, boardSize = $$props.boardSize);
+		if ('chessground' in $$props) $$invalidate(5, chessground = $$props.chessground);
+		if ('fen' in $$props) $$invalidate(6, fen = $$props.fen);
+		if ('gameRunning' in $$props) $$invalidate(7, gameRunning = $$props.gameRunning);
+		if ('highScore' in $$props) $$invalidate(8, highScore = $$props.highScore);
+		if ('maxTime' in $$props) $$invalidate(9, maxTime = $$props.maxTime);
 		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
 		if ('incorrectPenalty' in $$props) incorrectPenalty = $$props.incorrectPenalty;
-		if ('gameInterval' in $$props) gameInterval = $$props.gameInterval;
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -7195,14 +7613,6 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	$$self.$$.update = () => {
-		if ($$self.$$.dirty[0] & /*gameRunning, remainingTime*/ 12) {
-			{
-				if (gameRunning && remainingTime <= 0) {
-					stopGame();
-				}
-			}
-		}
-
 		if ($$self.$$.dirty[0] & /*answerFile, answerRank*/ 3) {
 			{
 				$$invalidate(17, answerValue = `${answerFile}${answerRank}`);
@@ -7221,26 +7631,27 @@ function instance($$self, $$props, $$invalidate) {
 	return [
 		answerRank,
 		answerFile,
-		gameRunning,
-		remainingTime,
 		correctCount,
 		incorrectCount,
-		resultText,
-		resultClass,
+		boardSize,
 		chessground,
 		fen,
+		gameRunning,
 		highScore,
+		maxTime,
 		$orientation,
 		orientation,
 		chessgroundConfig,
 		files,
 		ranks,
 		startGame,
+		endGame,
 		answerValue,
 		click_handler,
 		click_handler_1,
 		chessboard_fen_binding,
 		chessboard_chessground_binding,
+		chessboard_size_binding,
 		click_handler_2,
 		click_handler_3
 	];
@@ -7249,7 +7660,7 @@ function instance($$self, $$props, $$invalidate) {
 class NotationTrainer extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance, create_fragment, safe_not_equal, {}, null, [-1, -1]);
+		init(this, options, instance, create_fragment, safe_not_equal, {}, add_css, [-1, -1]);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,

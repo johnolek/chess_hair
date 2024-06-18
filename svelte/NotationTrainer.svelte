@@ -9,6 +9,7 @@
   import { makeFen } from "chessops/fen";
   import { makeSquare } from "chessops/util";
   import { persisted } from "svelte-persisted-store";
+  import ProgressTimer from "./components/ProgressTimer.svelte";
 
   const orientation = persisted('notation.orientation', 'white');
 
@@ -40,24 +41,16 @@
     },
     orientation: $orientation,
   };
-
+  let boardSize;
   let chessground;
   let fen;
 
   // Game stuff
   let gameRunning = false;
   let highScore = 0;
-  let startingTime = 60;
-  let remainingTime = 0;
+  let maxTime = 0;
   let correctBonus = 2;
   let incorrectPenalty = 10;
-  let gameInterval;
-
-  $: {
-    if (gameRunning && remainingTime <= 0) {
-      stopGame();
-    }
-  }
 
   $: {
     answerValue = `${answerFile}${answerRank}`;
@@ -112,7 +105,7 @@
       chessground.move(from, to);
       answerValue = '';
       answerAllowed = true;
-    }, 400)
+    }, 200)
   }
 
   function handleAnswer() {
@@ -125,12 +118,12 @@
     if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
       resultText = `${answerValue} was correct!`;
       resultClass = 'correct';
-      remainingTime += correctBonus;
+      maxTime += correctBonus;
       correctCount++;
     } else {
       resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`
       resultClass = 'incorrect';
-      remainingTime -= incorrectPenalty;
+      maxTime -= incorrectPenalty;
       incorrectCount++;
     }
     answerRank = '';
@@ -158,20 +151,13 @@
 
   function startGame() {
     gameRunning = true;
-    remainingTime = startingTime;
+    maxTime = 30;
     correctCount = 0;
     incorrectCount = 0;
-    gameInterval = setInterval(() => {
-      remainingTime -= 0.05;
-      if (remainingTime <= 0) {
-        clearInterval(gameInterval);
-      }
-    }, 50);
     newPosition();
   }
 
-  function stopGame() {
-    clearInterval(gameInterval);
+  function endGame() {
     gameRunning = false;
     if (correctCount > highScore) {
       highScore = correctCount;
@@ -185,7 +171,7 @@
 </script>
 
 <div class="columns is-centered">
-  <div class="column is-6-desktop is-centered">
+  <div class="column is-6-desktop">
     <h1>Notation Trainer</h1>
     <div class="block">
       {#if $orientation === 'white'}
@@ -202,9 +188,6 @@
       {/if}
     </div>
     <div class="block">
-      {#if gameRunning}
-        {remainingTime.toFixed(2)}
-      {/if}
       <p>Correct: {correctCount}</p>
       <p>Incorrect: {incorrectCount}</p>
       <p>High Score: {highScore}</p>
@@ -216,41 +199,33 @@
         bind:fen={fen}
         bind:chessground={chessground}
         orientation={$orientation}
+        bind:size={boardSize}
       />
     </div>
-    <div class="block">
-      <div class="container has-text-centered">
-        <span class="is-size-1">
-          {answerFile !== '' ? answerFile : '-'}{answerRank !== '' ? answerRank : '-'}
-        </span>
-        {#if resultText}
-          <div class="block">
-            <div class="{resultClass} is-size-3">
-              {resultText}
-            </div>
-          </div>
-        {/if}
-      </div>
-    </div>
+    {#if gameRunning}
+      <ProgressTimer max={maxTime} width={boardSize} on:complete={endGame}></ProgressTimer>
+    {/if}
     <div class="block">
       <div class="columns">
-        <div class="column is-half">
-          <div class="fixed-grid has-4-cols">
+        <div class="column">
+          <div class="fixed-grid has-8-cols">
             <div class="grid">
               {#each files as file}
                 <div class="cell">
-                  <button class="button is-large" on:click={() => answerFile = file}>{file}</button>
+                  <button class:selected={answerFile === file} class="button is-large" on:click={() => answerFile = file}>{file}</button>
                 </div>
               {/each}
             </div>
           </div>
         </div>
-        <div class="column is-half">
-          <div class="fixed-grid has-4-cols">
+      </div>
+      <div class="columns">
+        <div class="column">
+          <div class="fixed-grid has-8-cols">
             <div class="grid">
               {#each ranks as rank}
                 <div class="cell">
-                  <button class="button is-large" on:click={() => answerRank = rank}>{rank}</button>
+                  <button class:selected={answerRank === rank} class="button is-large" on:click={() => answerRank = rank}>{rank}</button>
                 </div>
               {/each}
             </div>
@@ -260,3 +235,9 @@
     </div>
   </div>
 </div>
+
+<style>
+  button.selected {
+    background: var(--bulma-success);
+  }
+</style>
