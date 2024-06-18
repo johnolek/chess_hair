@@ -7,7 +7,8 @@
   export let chessgroundConfig = {};
   export let orientation = 'white';
 
-  export let fen;
+  export let fen = null;
+
   $: {
     if (chessground && fen) {
       chessground.set({
