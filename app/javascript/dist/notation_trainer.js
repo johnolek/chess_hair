@@ -5694,9 +5694,9 @@ function create_if_block(ctx) {
 			div0 = element("div");
 			t = text(/*resultText*/ ctx[4]);
 			attr_dev(div0, "class", div0_class_value = "" + (/*resultClass*/ ctx[5] + " is-size-3"));
-			add_location(div0, file, 183, 12, 4592);
+			add_location(div0, file, 183, 12, 4591);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file, 182, 10, 4560);
+			add_location(div1, file, 182, 10, 4559);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div1, anchor);
@@ -5797,29 +5797,29 @@ function create_fragment(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[9] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 164, 0, 3808);
-			add_location(h1, file, 167, 4, 3961);
-			add_location(p0, file, 169, 6, 4017);
-			add_location(p1, file, 170, 6, 4054);
+			add_location(link, file, 164, 0, 3807);
+			add_location(h1, file, 167, 4, 3960);
+			add_location(p0, file, 169, 6, 4016);
+			add_location(p1, file, 170, 6, 4053);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 168, 4, 3991);
+			add_location(div0, file, 168, 4, 3990);
 			attr_dev(div1, "class", "is2d");
 			set_style(div1, "position", "relative");
 			set_style(div1, "width", /*boardWidth*/ ctx[6] + "px");
 			set_style(div1, "height", /*boardWidth*/ ctx[6] + "px");
-			add_location(div1, file, 173, 6, 4169);
+			add_location(div1, file, 173, 6, 4168);
 			attr_dev(div2, "class", "board-wrapper block");
-			add_location(div2, file, 172, 4, 4104);
+			add_location(div2, file, 172, 4, 4103);
 			attr_dev(span, "class", "is-size-1");
-			add_location(span, file, 178, 8, 4397);
+			add_location(span, file, 178, 8, 4396);
 			attr_dev(div3, "class", "container has-text-centered");
-			add_location(div3, file, 177, 6, 4347);
+			add_location(div3, file, 177, 6, 4346);
 			attr_dev(div4, "class", "block");
-			add_location(div4, file, 176, 4, 4321);
+			add_location(div4, file, 176, 4, 4320);
 			attr_dev(div5, "class", "column is-6-widescreen");
-			add_location(div5, file, 166, 2, 3920);
+			add_location(div5, file, 166, 2, 3919);
 			attr_dev(div6, "class", "columns is-centered");
-			add_location(div6, file, 165, 0, 3884);
+			add_location(div6, file, 165, 0, 3883);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -5988,7 +5988,7 @@ function instance($$self, $$props, $$invalidate) {
 				$$invalidate(10, answerValue = '');
 				answerAllowed = true;
 			},
-			1000
+			400
 		);
 	}
 

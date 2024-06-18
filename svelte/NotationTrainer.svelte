@@ -103,7 +103,7 @@
       chessground.move(from, to);
       answerValue = '';
       answerAllowed = true;
-    }, 1000);
+    }, 400);
   }
 
   function handleAnswer() {
