@@ -1,17 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { tweened } from 'svelte/motion';
-  import { linear } from 'svelte/easing';
+
   import Chessboard from './components/Chessboard.svelte';
+  import ProgressTimer from "./components/ProgressTimer.svelte";
+
   import { knightMovesData } from 'src/knight_moves_data';
   import Config from "src/local_config";
   import { ConfigForm } from "src/local_config";
   import { Util } from 'src/util';
-
-  const secondProgress = tweened(0, {
-    duration: 1000,
-    easing: linear,
-  });
 
   let chessground;
   let jsonData = knightMovesData;
@@ -23,7 +19,6 @@
   let timeRemaining = null;
   let timeElapsed = null;
 
-  let progressClass = 'is-success';
   let animating = false;
   let answerShown;
   let groupedPaths = [];
@@ -72,21 +67,6 @@
     brand8: {key: 'brand8', color: Util.getRootCssVarValue('--brand-color-8'), opacity: 1, lineWidth: 15},
     brand9: {key: 'brand9', color: Util.getRootCssVarValue('--brand-color-9'), opacity: 1, lineWidth: 15},
   };
-
-  $: {
-    if (gameRunning) {
-      const percentDone = timeElapsed / 60;
-      if (percentDone < 0.7) {
-        progressClass = 'is-success';
-      } else if (percentDone < 0.9) {
-        progressClass = 'is-warning';
-      } else {
-        progressClass = 'is-danger';
-      }
-    } else {
-      progressClass = 'is-success';
-    }
-  }
 
   initConfig();
 
@@ -145,19 +125,10 @@
     gameRunning = true;
     timeRemaining = 60;
     timeElapsed = 0;
-    secondProgress.set(0);
     newPosition();
     setTimeout(() => {
       endGame();
     }, 60000); // 1 minute
-    const timerInterval = setInterval(() => {
-      if (timeRemaining === 0) {
-        clearInterval(timerInterval);
-      }
-      timeRemaining -= 1;
-      timeElapsed += 1;
-      secondProgress.set(timeElapsed);
-    }, 1000);
   }
 
   function endGame() {
@@ -415,8 +386,7 @@
     </div>
 
     {#if gameRunning}
-      <progress class="progress {progressClass}" value="{$secondProgress}" max="60"
-                style="width: {boardWidth}px;"></progress>
+      <ProgressTimer max=20 width={boardWidth} on:complete={endGame}/>
     {/if}
 
     <div class="fixed-grid has-3-cols" style="width: {boardWidth}px">
@@ -456,9 +426,11 @@
       <div class="container has-text-centered">
         <h2 class="is-size-5">High Score</h2>
         <div class="score is-size-2">{highScore}</div>
-        <button id="startTimedGame" disabled={startTimedGameButtonDisabled} on:click={startTimedGame}
-                class="button is-primary">Start Timed Game
-        </button>
+        {#if !gameRunning}
+          <button id="startTimedGame" on:click={startTimedGame}
+                  class="button is-primary">Start Timed Game
+          </button>
+        {/if}
         {#if timeRemaining > 0}
           <div id="timer">{timeRemaining}</div>
         {/if}
@@ -514,18 +486,6 @@
   .cell button {
     width: 100%;
     display: inline-block;
-  }
-
-  .board-wrapper {
-    width: 100%;
-  }
-
-  .correct {
-    color: green;
-  }
-
-  .incorrect {
-    color: red;
   }
 
   @keyframes incorrectAnswer {
