@@ -79,6 +79,45 @@ function append(target, node) {
 
 /**
  * @param {Node} target
+ * @param {string} style_sheet_id
+ * @param {string} styles
+ * @returns {void}
+ */
+function append_styles(target, style_sheet_id, styles) {
+	const append_styles_to = get_root_for_style(target);
+	if (!append_styles_to.getElementById(style_sheet_id)) {
+		const style = element('style');
+		style.id = style_sheet_id;
+		style.textContent = styles;
+		append_stylesheet(append_styles_to, style);
+	}
+}
+
+/**
+ * @param {Node} node
+ * @returns {ShadowRoot | Document}
+ */
+function get_root_for_style(node) {
+	if (!node) return document;
+	const root = node.getRootNode ? node.getRootNode() : node.ownerDocument;
+	if (root && /** @type {ShadowRoot} */ (root).host) {
+		return /** @type {ShadowRoot} */ (root);
+	}
+	return node.ownerDocument;
+}
+
+/**
+ * @param {ShadowRoot | Document} node
+ * @param {HTMLStyleElement} style
+ * @returns {CSSStyleSheet}
+ */
+function append_stylesheet(node, style) {
+	append(/** @type {Document} */ (node).head || node, style);
+	return style.sheet;
+}
+
+/**
+ * @param {Node} target
  * @param {Node} node
  * @param {Node} [anchor]
  * @returns {void}
@@ -168,6 +207,81 @@ function set_style(node, key, value, important) {
 		node.style.setProperty(key, value, '');
 	}
 }
+// unfortunately this can't be a constant as that wouldn't be tree-shakeable
+// so we cache the result instead
+
+/**
+ * @type {boolean} */
+let crossorigin;
+
+/**
+ * @returns {boolean} */
+function is_crossorigin() {
+	if (crossorigin === undefined) {
+		crossorigin = false;
+		try {
+			if (typeof window !== 'undefined' && window.parent) {
+				void window.parent.document;
+			}
+		} catch (error) {
+			crossorigin = true;
+		}
+	}
+	return crossorigin;
+}
+
+/**
+ * @param {HTMLElement} node
+ * @param {() => void} fn
+ * @returns {() => void}
+ */
+function add_iframe_resize_listener(node, fn) {
+	const computed_style = getComputedStyle(node);
+	if (computed_style.position === 'static') {
+		node.style.position = 'relative';
+	}
+	const iframe = element('iframe');
+	iframe.setAttribute(
+		'style',
+		'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; ' +
+			'overflow: hidden; border: 0; opacity: 0; pointer-events: none; z-index: -1;'
+	);
+	iframe.setAttribute('aria-hidden', 'true');
+	iframe.tabIndex = -1;
+	const crossorigin = is_crossorigin();
+
+	/**
+	 * @type {() => void}
+	 */
+	let unsubscribe;
+	if (crossorigin) {
+		iframe.src = "data:text/html,<script>onresize=function(){parent.postMessage(0,'*')}</script>";
+		unsubscribe = listen(
+			window,
+			'message',
+			/** @param {MessageEvent} event */ (event) => {
+				if (event.source === iframe.contentWindow) fn();
+			}
+		);
+	} else {
+		iframe.src = 'about:blank';
+		iframe.onload = () => {
+			unsubscribe = listen(iframe.contentWindow, 'resize', fn);
+			// make sure an initial resize event is fired _after_ the iframe is loaded (which is asynchronous)
+			// see https://github.com/sveltejs/svelte/issues/4233
+			fn();
+		};
+	}
+	append(node, iframe);
+	return () => {
+		if (crossorigin) {
+			unsubscribe();
+		} else if (unsubscribe && iframe.contentWindow) {
+			unsubscribe();
+		}
+		detach(iframe);
+	};
+}
 
 /**
  * @template T
@@ -254,6 +368,11 @@ function schedule_update() {
 /** @returns {void} */
 function add_render_callback(fn) {
 	render_callbacks.push(fn);
+}
+
+/** @returns {void} */
+function add_flush_callback(fn) {
+	flush_callbacks.push(fn);
 }
 
 // flush() calls callbacks in this order:
@@ -356,6 +475,11 @@ function flush_render_callbacks(fns) {
 const outroing = new Set();
 
 /**
+ * @type {Outro}
+ */
+let outros;
+
+/**
  * @param {import('./private.js').Fragment} block
  * @param {0 | 1} [local]
  * @returns {void}
@@ -364,6 +488,24 @@ function transition_in(block, local) {
 	if (block && block.i) {
 		outroing.delete(block);
 		block.i(local);
+	}
+}
+
+/**
+ * @param {import('./private.js').Fragment} block
+ * @param {0 | 1} local
+ * @param {0 | 1} [detach]
+ * @param {() => void} [callback]
+ * @returns {void}
+ */
+function transition_out(block, local, detach, callback) {
+	if (block && block.o) {
+		if (outroing.has(block)) return;
+		outroing.add(block);
+		outros.c.push(() => {
+			outroing.delete(block);
+		});
+		block.o(local);
 	}
 }
 
@@ -403,6 +545,20 @@ function ensure_array_like(array_like_or_iterator) {
 	return array_like_or_iterator?.length !== undefined
 		? array_like_or_iterator
 		: Array.from(array_like_or_iterator);
+}
+
+/** @returns {void} */
+function bind(component, name, callback) {
+	const index = component.$$.props[name];
+	if (index !== undefined) {
+		component.$$.bound[index] = callback;
+		callback(component.$$.ctx[index]);
+	}
+}
+
+/** @returns {void} */
+function create_component(block) {
+	block && block.c();
 }
 
 /** @returns {void} */
@@ -2859,6 +3015,433 @@ function debounceRedraw(redrawNow) {
             redrawing = false;
         });
     };
+}
+
+const subscriber_queue = [];
+
+/**
+ * Create a `Writable` store that allows both updating and reading by subscription.
+ *
+ * https://svelte.dev/docs/svelte-store#writable
+ * @template T
+ * @param {T} [value] initial value
+ * @param {import('./public.js').StartStopNotifier<T>} [start]
+ * @returns {import('./public.js').Writable<T>}
+ */
+function writable(value, start = noop) {
+	/** @type {import('./public.js').Unsubscriber} */
+	let stop;
+	/** @type {Set<import('./private.js').SubscribeInvalidateTuple<T>>} */
+	const subscribers = new Set();
+	/** @param {T} new_value
+	 * @returns {void}
+	 */
+	function set(new_value) {
+		if (safe_not_equal(value, new_value)) {
+			value = new_value;
+			if (stop) {
+				// store is ready
+				const run_queue = !subscriber_queue.length;
+				for (const subscriber of subscribers) {
+					subscriber[1]();
+					subscriber_queue.push(subscriber, value);
+				}
+				if (run_queue) {
+					for (let i = 0; i < subscriber_queue.length; i += 2) {
+						subscriber_queue[i][0](subscriber_queue[i + 1]);
+					}
+					subscriber_queue.length = 0;
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {import('./public.js').Updater<T>} fn
+	 * @returns {void}
+	 */
+	function update(fn) {
+		set(fn(value));
+	}
+
+	/**
+	 * @param {import('./public.js').Subscriber<T>} run
+	 * @param {import('./private.js').Invalidator<T>} [invalidate]
+	 * @returns {import('./public.js').Unsubscriber}
+	 */
+	function subscribe(run, invalidate = noop) {
+		/** @type {import('./private.js').SubscribeInvalidateTuple<T>} */
+		const subscriber = [run, invalidate];
+		subscribers.add(subscriber);
+		if (subscribers.size === 1) {
+			stop = start(set, update) || noop;
+		}
+		run(value);
+		return () => {
+			subscribers.delete(subscriber);
+			if (subscribers.size === 0 && stop) {
+				stop();
+				stop = null;
+			}
+		};
+	}
+	return { set, update, subscribe };
+}
+
+// index.ts
+var stores = {
+  local: {},
+  session: {}
+};
+function getStorage(type) {
+  return type === "local" ? localStorage : sessionStorage;
+}
+function persisted(key, initialValue, options) {
+  var _a, _b, _c, _d, _e, _f, _g, _h;
+  if (options == null ? void 0 : options.onError)
+    console.warn("onError has been deprecated. Please use onWriteError instead");
+  const serializer = (_a = options == null ? void 0 : options.serializer) != null ? _a : JSON;
+  const storageType = (_b = options == null ? void 0 : options.storage) != null ? _b : "local";
+  const syncTabs = (_c = options == null ? void 0 : options.syncTabs) != null ? _c : true;
+  const onWriteError = (_e = (_d = options == null ? void 0 : options.onWriteError) != null ? _d : options == null ? void 0 : options.onError) != null ? _e : (e) => console.error(`Error when writing value from persisted store "${key}" to ${storageType}`, e);
+  const onParseError = (_f = options == null ? void 0 : options.onParseError) != null ? _f : (newVal, e) => console.error(`Error when parsing ${newVal ? '"' + newVal + '"' : "value"} from persisted store "${key}"`, e);
+  const beforeRead = (_g = options == null ? void 0 : options.beforeRead) != null ? _g : (val) => val;
+  const beforeWrite = (_h = options == null ? void 0 : options.beforeWrite) != null ? _h : (val) => val;
+  const browser = typeof window !== "undefined" && typeof document !== "undefined";
+  const storage = browser ? getStorage(storageType) : null;
+  function updateStorage(key2, value) {
+    const newVal = beforeWrite(value);
+    try {
+      storage == null ? void 0 : storage.setItem(key2, serializer.stringify(newVal));
+    } catch (e) {
+      onWriteError(e);
+    }
+  }
+  function maybeLoadInitial() {
+    function serialize(json2) {
+      try {
+        return serializer.parse(json2);
+      } catch (e) {
+        onParseError(json2, e);
+      }
+    }
+    const json = storage == null ? void 0 : storage.getItem(key);
+    if (json == null)
+      return initialValue;
+    const serialized = serialize(json);
+    if (serialized == null)
+      return initialValue;
+    const newVal = beforeRead(serialized);
+    return newVal;
+  }
+  if (!stores[storageType][key]) {
+    const initial = maybeLoadInitial();
+    const store = writable(initial, (set2) => {
+      if (browser && storageType == "local" && syncTabs) {
+        const handleStorage = (event) => {
+          if (event.key === key && event.newValue) {
+            let newVal;
+            try {
+              newVal = serializer.parse(event.newValue);
+            } catch (e) {
+              onParseError(event.newValue, e);
+              return;
+            }
+            const processedVal = beforeRead(newVal);
+            set2(processedVal);
+          }
+        };
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+      }
+    });
+    const { subscribe, set } = store;
+    stores[storageType][key] = {
+      set(value) {
+        set(value);
+        updateStorage(key, value);
+      },
+      update(callback) {
+        return store.update((last) => {
+          const value = callback(last);
+          updateStorage(key, value);
+          return value;
+        });
+      },
+      reset() {
+        this.set(initialValue);
+      },
+      subscribe
+    };
+  }
+  return stores[storageType][key];
+}
+
+const pieceSet = persisted('global.pieceSet', 'merida');
+persisted('global.boardStyle', 'brown');
+
+/* svelte/components/ChessBoard.svelte generated by Svelte v4.2.18 */
+const file = "svelte/components/ChessBoard.svelte";
+
+function add_css(target) {
+	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3NCb2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzQm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tICdzdmVsdGUnO1xuICBpbXBvcnQgeyBDaGVzc2dyb3VuZCB9IGZyb20gXCJjaGVzc2dyb3VuZFwiO1xuICBpbXBvcnQgeyBwaWVjZVNldCB9IGZyb20gJy4uL3N0b3Jlcyc7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb247XG5cbiAgZXhwb3J0IGxldCBmZW47XG4gICQ6IHtcbiAgICBpZiAoY2hlc3Nncm91bmQgJiYgZmVuKSB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgICBmZW46IGZlbixcbiAgICAgICAgaGlnaGxpZ2h0OiB7XG4gICAgICAgICAgbGFzdE1vdmU6IGZhbHNlLFxuICAgICAgICAgIGNoZWNrOiBmYWxzZSxcbiAgICAgICAgfVxuICAgICAgfSlcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuXG4gIGxldCBzaXplO1xuICBsZXQgbWF4V2lkdGggPSAnNzB2aCc7XG5cbiAgJDoge1xuICAgIGlmIChvcmllbnRhdGlvbiAmJiBjaGVzc2dyb3VuZCkge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtvcmllbnRhdGlvbjogb3JpZW50YXRpb259KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiPlxuXG48ZGl2IGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCIgYmluZDpjbGllbnRXaWR0aD17c2l6ZX0+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmRcIlxuICAgIGJpbmQ6dGhpcz17Ym9hcmRDb250YWluZXJ9XG4gICAgc3R5bGU9XCJwb3NpdGlvbjogcmVsYXRpdmU7d2lkdGg6IHtzaXplfXB4OyBoZWlnaHQ6IHtzaXplfXB4XCI+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLmJvYXJkLXdyYXBwZXIge1xuICAgIHBvc2l0aW9uOiByZWxhdGl2ZTtcbiAgICB3aWR0aDogMTAwJTtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFpREUsNkJBQWUsQ0FDYixRQUFRLENBQUUsUUFBUSxDQUNsQixLQUFLLENBQUUsSUFDVCJ9 */");
+}
+
+function create_fragment$1(ctx) {
+	let link;
+	let link_href_value;
+	let t;
+	let div1;
+	let div0;
+	let div1_resize_listener;
+
+	const block = {
+		c: function create() {
+			link = element("link");
+			t = space();
+			div1 = element("div");
+			div0 = element("div");
+			attr_dev(link, "id", "piece-sprite");
+			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[2] + ".css");
+			attr_dev(link, "rel", "stylesheet");
+			add_location(link, file, 38, 0, 689);
+			attr_dev(div0, "class", "is2d");
+			set_style(div0, "position", "relative");
+			set_style(div0, "width", /*size*/ ctx[1] + "px");
+			set_style(div0, "height", /*size*/ ctx[1] + "px");
+			add_location(div0, file, 41, 2, 850);
+			attr_dev(div1, "class", "board-wrapper svelte-16y75xy");
+			set_style(div1, "max-width", /*maxWidth*/ ctx[3]);
+			add_render_callback(() => /*div1_elementresize_handler*/ ctx[9].call(div1));
+			add_location(div1, file, 40, 0, 766);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, link, anchor);
+			insert_dev(target, t, anchor);
+			insert_dev(target, div1, anchor);
+			append_dev(div1, div0);
+			/*div0_binding*/ ctx[8](div0);
+			div1_resize_listener = add_iframe_resize_listener(div1, /*div1_elementresize_handler*/ ctx[9].bind(div1));
+		},
+		p: function update(ctx, [dirty]) {
+			if (dirty & /*$pieceSet*/ 4 && link_href_value !== (link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[2] + ".css")) {
+				attr_dev(link, "href", link_href_value);
+			}
+
+			if (dirty & /*size*/ 2) {
+				set_style(div0, "width", /*size*/ ctx[1] + "px");
+			}
+
+			if (dirty & /*size*/ 2) {
+				set_style(div0, "height", /*size*/ ctx[1] + "px");
+			}
+		},
+		i: noop,
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(link);
+				detach_dev(t);
+				detach_dev(div1);
+			}
+
+			/*div0_binding*/ ctx[8](null);
+			div1_resize_listener();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$1.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$1($$self, $$props, $$invalidate) {
+	let $pieceSet;
+	validate_store(pieceSet, 'pieceSet');
+	component_subscribe($$self, pieceSet, $$value => $$invalidate(2, $pieceSet = $$value));
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('ChessBoard', slots, []);
+	let boardContainer;
+	let { chessgroundConfig = {} } = $$props;
+	let { orientation } = $$props;
+	let { fen } = $$props;
+	let { chessground } = $$props;
+	let size;
+	let maxWidth = '70vh';
+
+	onMount(() => {
+		$$invalidate(4, chessground = Chessground(boardContainer, chessgroundConfig));
+	});
+
+	$$self.$$.on_mount.push(function () {
+		if (orientation === undefined && !('orientation' in $$props || $$self.$$.bound[$$self.$$.props['orientation']])) {
+			console.warn("<ChessBoard> was created without expected prop 'orientation'");
+		}
+
+		if (fen === undefined && !('fen' in $$props || $$self.$$.bound[$$self.$$.props['fen']])) {
+			console.warn("<ChessBoard> was created without expected prop 'fen'");
+		}
+
+		if (chessground === undefined && !('chessground' in $$props || $$self.$$.bound[$$self.$$.props['chessground']])) {
+			console.warn("<ChessBoard> was created without expected prop 'chessground'");
+		}
+	});
+
+	const writable_props = ['chessgroundConfig', 'orientation', 'fen', 'chessground'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ChessBoard> was created with unknown prop '${key}'`);
+	});
+
+	function div0_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			boardContainer = $$value;
+			$$invalidate(0, boardContainer);
+		});
+	}
+
+	function div1_elementresize_handler() {
+		size = this.clientWidth;
+		$$invalidate(1, size);
+	}
+
+	$$self.$$set = $$props => {
+		if ('chessgroundConfig' in $$props) $$invalidate(5, chessgroundConfig = $$props.chessgroundConfig);
+		if ('orientation' in $$props) $$invalidate(6, orientation = $$props.orientation);
+		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
+		if ('chessground' in $$props) $$invalidate(4, chessground = $$props.chessground);
+	};
+
+	$$self.$capture_state = () => ({
+		onMount,
+		Chessground,
+		pieceSet,
+		boardContainer,
+		chessgroundConfig,
+		orientation,
+		fen,
+		chessground,
+		size,
+		maxWidth,
+		$pieceSet
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('boardContainer' in $$props) $$invalidate(0, boardContainer = $$props.boardContainer);
+		if ('chessgroundConfig' in $$props) $$invalidate(5, chessgroundConfig = $$props.chessgroundConfig);
+		if ('orientation' in $$props) $$invalidate(6, orientation = $$props.orientation);
+		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
+		if ('chessground' in $$props) $$invalidate(4, chessground = $$props.chessground);
+		if ('size' in $$props) $$invalidate(1, size = $$props.size);
+		if ('maxWidth' in $$props) $$invalidate(3, maxWidth = $$props.maxWidth);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*chessground, fen*/ 144) {
+			{
+				if (chessground && fen) {
+					chessground.set({
+						fen,
+						highlight: { lastMove: false, check: false }
+					});
+				}
+			}
+		}
+
+		if ($$self.$$.dirty & /*orientation, chessground*/ 80) {
+			{
+				if (orientation && chessground) {
+					chessground.set({ orientation });
+				}
+			}
+		}
+	};
+
+	return [
+		boardContainer,
+		size,
+		$pieceSet,
+		maxWidth,
+		chessground,
+		chessgroundConfig,
+		orientation,
+		fen,
+		div0_binding,
+		div1_elementresize_handler
+	];
+}
+
+class ChessBoard extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+
+		init(
+			this,
+			options,
+			instance$1,
+			create_fragment$1,
+			safe_not_equal,
+			{
+				chessgroundConfig: 5,
+				orientation: 6,
+				fen: 7,
+				chessground: 4
+			},
+			add_css
+		);
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "ChessBoard",
+			options,
+			id: create_fragment$1.name
+		});
+	}
+
+	get chessgroundConfig() {
+		throw new Error("<ChessBoard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set chessgroundConfig(value) {
+		throw new Error("<ChessBoard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get orientation() {
+		throw new Error("<ChessBoard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set orientation(value) {
+		throw new Error("<ChessBoard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get fen() {
+		throw new Error("<ChessBoard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set fen(value) {
+		throw new Error("<ChessBoard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get chessground() {
+		throw new Error("<ChessBoard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set chessground(value) {
+		throw new Error("<ChessBoard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
 }
 
 class r{unwrap(r,t){const e=this._chain(t=>n.ok(r?r(t):t),r=>t?n.ok(t(r)):n.err(r));if(e.isErr)throw e.error;return e.value}map(r,t){return this._chain(t=>n.ok(r(t)),r=>n.err(t?t(r):r))}chain(r,t){return this._chain(r,t||(r=>n.err(r)))}}class t extends r{constructor(r){super(),this.value=void 0,this.isOk=!0,this.isErr=!1,this.value=r;}_chain(r,t){return r(this.value)}}class e extends r{constructor(r){super(),this.error=void 0,this.isOk=!1,this.isErr=!0,this.error=r;}_chain(r,t){return t(this.error)}}var n;!function(r){r.ok=function(r){return new t(r)},r.err=function(r){return new e(r||new Error)},r.all=function(t){if(Array.isArray(t)){const e=[];for(let r=0;r<t.length;r++){const n=t[r];if(n.isErr)return n;e.push(n.value);}return r.ok(e)}const e={},n=Object.keys(t);for(let r=0;r<n.length;r++){const s=t[n[r]];if(s.isErr)return s;e[n[r]]=s.value;}return r.ok(e)};}(n||(n={}));
@@ -5585,185 +6168,22 @@ const parseSan = (pos, san) => {
     };
 };
 
-const subscriber_queue = [];
-
-/**
- * Create a `Writable` store that allows both updating and reading by subscription.
- *
- * https://svelte.dev/docs/svelte-store#writable
- * @template T
- * @param {T} [value] initial value
- * @param {import('./public.js').StartStopNotifier<T>} [start]
- * @returns {import('./public.js').Writable<T>}
- */
-function writable(value, start = noop) {
-	/** @type {import('./public.js').Unsubscriber} */
-	let stop;
-	/** @type {Set<import('./private.js').SubscribeInvalidateTuple<T>>} */
-	const subscribers = new Set();
-	/** @param {T} new_value
-	 * @returns {void}
-	 */
-	function set(new_value) {
-		if (safe_not_equal(value, new_value)) {
-			value = new_value;
-			if (stop) {
-				// store is ready
-				const run_queue = !subscriber_queue.length;
-				for (const subscriber of subscribers) {
-					subscriber[1]();
-					subscriber_queue.push(subscriber, value);
-				}
-				if (run_queue) {
-					for (let i = 0; i < subscriber_queue.length; i += 2) {
-						subscriber_queue[i][0](subscriber_queue[i + 1]);
-					}
-					subscriber_queue.length = 0;
-				}
-			}
-		}
-	}
-
-	/**
-	 * @param {import('./public.js').Updater<T>} fn
-	 * @returns {void}
-	 */
-	function update(fn) {
-		set(fn(value));
-	}
-
-	/**
-	 * @param {import('./public.js').Subscriber<T>} run
-	 * @param {import('./private.js').Invalidator<T>} [invalidate]
-	 * @returns {import('./public.js').Unsubscriber}
-	 */
-	function subscribe(run, invalidate = noop) {
-		/** @type {import('./private.js').SubscribeInvalidateTuple<T>} */
-		const subscriber = [run, invalidate];
-		subscribers.add(subscriber);
-		if (subscribers.size === 1) {
-			stop = start(set, update) || noop;
-		}
-		run(value);
-		return () => {
-			subscribers.delete(subscriber);
-			if (subscribers.size === 0 && stop) {
-				stop();
-				stop = null;
-			}
-		};
-	}
-	return { set, update, subscribe };
-}
-
-// index.ts
-var stores = {
-  local: {},
-  session: {}
-};
-function getStorage(type) {
-  return type === "local" ? localStorage : sessionStorage;
-}
-function persisted(key, initialValue, options) {
-  var _a, _b, _c, _d, _e, _f, _g, _h;
-  if (options == null ? void 0 : options.onError)
-    console.warn("onError has been deprecated. Please use onWriteError instead");
-  const serializer = (_a = options == null ? void 0 : options.serializer) != null ? _a : JSON;
-  const storageType = (_b = options == null ? void 0 : options.storage) != null ? _b : "local";
-  const syncTabs = (_c = options == null ? void 0 : options.syncTabs) != null ? _c : true;
-  const onWriteError = (_e = (_d = options == null ? void 0 : options.onWriteError) != null ? _d : options == null ? void 0 : options.onError) != null ? _e : (e) => console.error(`Error when writing value from persisted store "${key}" to ${storageType}`, e);
-  const onParseError = (_f = options == null ? void 0 : options.onParseError) != null ? _f : (newVal, e) => console.error(`Error when parsing ${newVal ? '"' + newVal + '"' : "value"} from persisted store "${key}"`, e);
-  const beforeRead = (_g = options == null ? void 0 : options.beforeRead) != null ? _g : (val) => val;
-  const beforeWrite = (_h = options == null ? void 0 : options.beforeWrite) != null ? _h : (val) => val;
-  const browser = typeof window !== "undefined" && typeof document !== "undefined";
-  const storage = browser ? getStorage(storageType) : null;
-  function updateStorage(key2, value) {
-    const newVal = beforeWrite(value);
-    try {
-      storage == null ? void 0 : storage.setItem(key2, serializer.stringify(newVal));
-    } catch (e) {
-      onWriteError(e);
-    }
-  }
-  function maybeLoadInitial() {
-    function serialize(json2) {
-      try {
-        return serializer.parse(json2);
-      } catch (e) {
-        onParseError(json2, e);
-      }
-    }
-    const json = storage == null ? void 0 : storage.getItem(key);
-    if (json == null)
-      return initialValue;
-    const serialized = serialize(json);
-    if (serialized == null)
-      return initialValue;
-    const newVal = beforeRead(serialized);
-    return newVal;
-  }
-  if (!stores[storageType][key]) {
-    const initial = maybeLoadInitial();
-    const store = writable(initial, (set2) => {
-      if (browser && storageType == "local" && syncTabs) {
-        const handleStorage = (event) => {
-          if (event.key === key && event.newValue) {
-            let newVal;
-            try {
-              newVal = serializer.parse(event.newValue);
-            } catch (e) {
-              onParseError(event.newValue, e);
-              return;
-            }
-            const processedVal = beforeRead(newVal);
-            set2(processedVal);
-          }
-        };
-        window.addEventListener("storage", handleStorage);
-        return () => window.removeEventListener("storage", handleStorage);
-      }
-    });
-    const { subscribe, set } = store;
-    stores[storageType][key] = {
-      set(value) {
-        set(value);
-        updateStorage(key, value);
-      },
-      update(callback) {
-        return store.update((last) => {
-          const value = callback(last);
-          updateStorage(key, value);
-          return value;
-        });
-      },
-      reset() {
-        this.set(initialValue);
-      },
-      subscribe
-    };
-  }
-  return stores[storageType][key];
-}
-
-const pieceSet = persisted('global.pieceSet', 'merida');
-persisted('global.boardStyle', 'brown');
-
 /* svelte/NotationTrainer.svelte generated by Svelte v4.2.18 */
 const file_1 = "svelte/NotationTrainer.svelte";
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[38] = list[i];
+	child_ctx[34] = list[i];
 	return child_ctx;
 }
 
 function get_each_context_1(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[41] = list[i];
+	child_ctx[37] = list[i];
 	return child_ctx;
 }
 
-// (228:6) {:else}
+// (195:6) {:else}
 function create_else_block(ctx) {
 	let button;
 	let mounted;
@@ -5774,13 +6194,13 @@ function create_else_block(ctx) {
 			button = element("button");
 			button.textContent = "View as white";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 228, 8, 5406);
+			add_location(button, file_1, 195, 8, 4602);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler_1*/ ctx[22], false);
+				dispose = listen_dev(button, "click", /*click_handler_1*/ ctx[19], false);
 				mounted = true;
 			}
 		},
@@ -5799,14 +6219,14 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(228:6) {:else}",
+		source: "(195:6) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (224:6) {#if $orientation === 'white'}
+// (191:6) {#if $orientation === 'white'}
 function create_if_block_3(ctx) {
 	let button;
 	let mounted;
@@ -5817,13 +6237,13 @@ function create_if_block_3(ctx) {
 			button = element("button");
 			button.textContent = "View as black";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 224, 8, 5264);
+			add_location(button, file_1, 191, 8, 4460);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler*/ ctx[21], false);
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[18], false);
 				mounted = true;
 			}
 		},
@@ -5842,14 +6262,14 @@ function create_if_block_3(ctx) {
 		block,
 		id: create_if_block_3.name,
 		type: "if",
-		source: "(224:6) {#if $orientation === 'white'}",
+		source: "(191:6) {#if $orientation === 'white'}",
 		ctx
 	});
 
 	return block;
 }
 
-// (233:6) {#if !gameRunning}
+// (200:6) {#if !gameRunning}
 function create_if_block_2(ctx) {
 	let button;
 	let mounted;
@@ -5860,13 +6280,13 @@ function create_if_block_2(ctx) {
 			button = element("button");
 			button.textContent = "Start Game";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 233, 8, 5571);
+			add_location(button, file_1, 200, 8, 4767);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*startGame*/ ctx[17], false);
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[16], false);
 				mounted = true;
 			}
 		},
@@ -5885,14 +6305,14 @@ function create_if_block_2(ctx) {
 		block,
 		id: create_if_block_2.name,
 		type: "if",
-		source: "(233:6) {#if !gameRunning}",
+		source: "(200:6) {#if !gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (238:6) {#if gameRunning}
+// (205:6) {#if gameRunning}
 function create_if_block_1(ctx) {
 	let t_value = /*remainingTime*/ ctx[3].toFixed(2) + "";
 	let t;
@@ -5918,14 +6338,14 @@ function create_if_block_1(ctx) {
 		block,
 		id: create_if_block_1.name,
 		type: "if",
-		source: "(238:6) {#if gameRunning}",
+		source: "(205:6) {#if gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (254:8) {#if resultText}
+// (226:8) {#if resultText}
 function create_if_block(ctx) {
 	let div1;
 	let div0;
@@ -5938,9 +6358,9 @@ function create_if_block(ctx) {
 			div0 = element("div");
 			t = text(/*resultText*/ ctx[6]);
 			attr_dev(div0, "class", div0_class_value = "" + (/*resultClass*/ ctx[7] + " is-size-3"));
-			add_location(div0, file_1, 255, 12, 6380);
+			add_location(div0, file_1, 227, 12, 5547);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file_1, 254, 10, 6348);
+			add_location(div1, file_1, 226, 10, 5515);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div1, anchor);
@@ -5965,14 +6385,14 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(254:8) {#if resultText}",
+		source: "(226:8) {#if resultText}",
 		ctx
 	});
 
 	return block;
 }
 
-// (268:14) {#each files as file}
+// (240:14) {#each files as file}
 function create_each_block_1(ctx) {
 	let div;
 	let button;
@@ -5981,19 +6401,19 @@ function create_each_block_1(ctx) {
 	let dispose;
 
 	function click_handler_2() {
-		return /*click_handler_2*/ ctx[25](/*file*/ ctx[41]);
+		return /*click_handler_2*/ ctx[22](/*file*/ ctx[37]);
 	}
 
 	const block = {
 		c: function create() {
 			div = element("div");
 			button = element("button");
-			button.textContent = `${/*file*/ ctx[41]}`;
+			button.textContent = `${/*file*/ ctx[37]}`;
 			t1 = space();
 			attr_dev(button, "class", "button is-large");
-			add_location(button, file_1, 269, 18, 6774);
+			add_location(button, file_1, 241, 18, 5941);
 			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 268, 16, 6737);
+			add_location(div, file_1, 240, 16, 5904);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -6022,14 +6442,14 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(268:14) {#each files as file}",
+		source: "(240:14) {#each files as file}",
 		ctx
 	});
 
 	return block;
 }
 
-// (279:14) {#each ranks as rank}
+// (251:14) {#each ranks as rank}
 function create_each_block(ctx) {
 	let div;
 	let button;
@@ -6038,19 +6458,19 @@ function create_each_block(ctx) {
 	let dispose;
 
 	function click_handler_3() {
-		return /*click_handler_3*/ ctx[26](/*rank*/ ctx[38]);
+		return /*click_handler_3*/ ctx[23](/*rank*/ ctx[34]);
 	}
 
 	const block = {
 		c: function create() {
 			div = element("div");
 			button = element("button");
-			button.textContent = `${/*rank*/ ctx[38]}`;
+			button.textContent = `${/*rank*/ ctx[34]}`;
 			t1 = space();
 			attr_dev(button, "class", "button is-large");
-			add_location(button, file_1, 280, 18, 7156);
+			add_location(button, file_1, 252, 18, 6323);
 			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 279, 16, 7119);
+			add_location(div, file_1, 251, 16, 6286);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -6079,7 +6499,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(279:14) {#each ranks as rank}",
+		source: "(251:14) {#each ranks as rank}",
 		ctx
 	});
 
@@ -6087,62 +6507,62 @@ function create_each_block(ctx) {
 }
 
 function create_fragment(ctx) {
-	let link;
-	let link_href_value;
-	let t0;
-	let div15;
 	let div14;
+	let div13;
 	let h1;
-	let t2;
+	let t1;
 	let div0;
+	let t2;
 	let t3;
-	let t4;
 	let div1;
-	let t5;
+	let t4;
 	let p0;
+	let t5;
 	let t6;
 	let t7;
-	let t8;
 	let p1;
+	let t8;
 	let t9;
 	let t10;
-	let t11;
 	let p2;
+	let t11;
 	let t12;
 	let t13;
-	let t14;
-	let div3;
 	let div2;
-	let t15;
-	let div5;
+	let chessboard;
+	let updating_fen;
+	let updating_chessground;
+	let t14;
 	let div4;
+	let div3;
 	let span;
 
-	let t16_value = (/*answerFile*/ ctx[1] !== ''
+	let t15_value = (/*answerFile*/ ctx[1] !== ''
 	? /*answerFile*/ ctx[1]
 	: '-') + "";
 
-	let t16;
+	let t15;
 
-	let t17_value = (/*answerRank*/ ctx[0] !== ''
+	let t16_value = (/*answerRank*/ ctx[0] !== ''
 	? /*answerRank*/ ctx[0]
 	: '-') + "";
 
+	let t16;
 	let t17;
 	let t18;
-	let t19;
-	let div13;
 	let div12;
-	let div8;
+	let div11;
 	let div7;
 	let div6;
-	let t20;
-	let div11;
+	let div5;
+	let t19;
 	let div10;
 	let div9;
+	let div8;
+	let current;
 
 	function select_block_type(ctx, dirty) {
-		if (/*$orientation*/ ctx[12] === 'white') return create_if_block_3;
+		if (/*$orientation*/ ctx[11] === 'white') return create_if_block_3;
 		return create_else_block;
 	}
 
@@ -6150,15 +6570,40 @@ function create_fragment(ctx) {
 	let if_block0 = current_block_type(ctx);
 	let if_block1 = !/*gameRunning*/ ctx[2] && create_if_block_2(ctx);
 	let if_block2 = /*gameRunning*/ ctx[2] && create_if_block_1(ctx);
+
+	function chessboard_fen_binding(value) {
+		/*chessboard_fen_binding*/ ctx[20](value);
+	}
+
+	function chessboard_chessground_binding(value) {
+		/*chessboard_chessground_binding*/ ctx[21](value);
+	}
+
+	let chessboard_props = {
+		chessgroundConfig: /*chessgroundConfig*/ ctx[13],
+		orientation: /*$orientation*/ ctx[11]
+	};
+
+	if (/*fen*/ ctx[9] !== void 0) {
+		chessboard_props.fen = /*fen*/ ctx[9];
+	}
+
+	if (/*chessground*/ ctx[8] !== void 0) {
+		chessboard_props.chessground = /*chessground*/ ctx[8];
+	}
+
+	chessboard = new ChessBoard({ props: chessboard_props, $$inline: true });
+	binding_callbacks.push(() => bind(chessboard, 'fen', chessboard_fen_binding));
+	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
 	let if_block3 = /*resultText*/ ctx[6] && create_if_block(ctx);
-	let each_value_1 = ensure_array_like_dev(/*files*/ ctx[15]);
+	let each_value_1 = ensure_array_like_dev(/*files*/ ctx[14]);
 	let each_blocks_1 = [];
 
 	for (let i = 0; i < each_value_1.length; i += 1) {
 		each_blocks_1[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
 	}
 
-	let each_value = ensure_array_like_dev(/*ranks*/ ctx[16]);
+	let each_value = ensure_array_like_dev(/*ranks*/ ctx[15]);
 	let each_blocks = [];
 
 	for (let i = 0; i < each_value.length; i += 1) {
@@ -6167,180 +6612,163 @@ function create_fragment(ctx) {
 
 	const block = {
 		c: function create() {
-			link = element("link");
-			t0 = space();
-			div15 = element("div");
 			div14 = element("div");
+			div13 = element("div");
 			h1 = element("h1");
 			h1.textContent = "Notation Trainer";
-			t2 = space();
+			t1 = space();
 			div0 = element("div");
 			if_block0.c();
-			t3 = space();
+			t2 = space();
 			if (if_block1) if_block1.c();
-			t4 = space();
+			t3 = space();
 			div1 = element("div");
 			if (if_block2) if_block2.c();
-			t5 = space();
+			t4 = space();
 			p0 = element("p");
-			t6 = text("Correct: ");
-			t7 = text(/*correctCount*/ ctx[4]);
-			t8 = space();
+			t5 = text("Correct: ");
+			t6 = text(/*correctCount*/ ctx[4]);
+			t7 = space();
 			p1 = element("p");
-			t9 = text("Incorrect: ");
-			t10 = text(/*incorrectCount*/ ctx[5]);
-			t11 = space();
+			t8 = text("Incorrect: ");
+			t9 = text(/*incorrectCount*/ ctx[5]);
+			t10 = space();
 			p2 = element("p");
-			t12 = text("High Score: ");
-			t13 = text(/*highScore*/ ctx[11]);
-			t14 = space();
-			div3 = element("div");
+			t11 = text("High Score: ");
+			t12 = text(/*highScore*/ ctx[10]);
+			t13 = space();
 			div2 = element("div");
-			t15 = space();
-			div5 = element("div");
+			create_component(chessboard.$$.fragment);
+			t14 = space();
 			div4 = element("div");
+			div3 = element("div");
 			span = element("span");
+			t15 = text(t15_value);
 			t16 = text(t16_value);
-			t17 = text(t17_value);
-			t18 = space();
+			t17 = space();
 			if (if_block3) if_block3.c();
-			t19 = space();
-			div13 = element("div");
+			t18 = space();
 			div12 = element("div");
-			div8 = element("div");
+			div11 = element("div");
 			div7 = element("div");
 			div6 = element("div");
+			div5 = element("div");
 
 			for (let i = 0; i < each_blocks_1.length; i += 1) {
 				each_blocks_1[i].c();
 			}
 
-			t20 = space();
-			div11 = element("div");
+			t19 = space();
 			div10 = element("div");
 			div9 = element("div");
+			div8 = element("div");
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				each_blocks[i].c();
 			}
 
-			attr_dev(link, "id", "piece-sprite");
-			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[13] + ".css");
-			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file_1, 218, 0, 5016);
-			add_location(h1, file_1, 221, 4, 5169);
+			add_location(h1, file_1, 188, 4, 4365);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file_1, 222, 4, 5199);
-			add_location(p0, file_1, 240, 6, 5768);
-			add_location(p1, file_1, 241, 6, 5805);
-			add_location(p2, file_1, 242, 6, 5846);
+			add_location(div0, file_1, 189, 4, 4395);
+			add_location(p0, file_1, 207, 6, 4964);
+			add_location(p1, file_1, 208, 6, 5001);
+			add_location(p2, file_1, 209, 6, 5042);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file_1, 236, 4, 5671);
-			attr_dev(div2, "class", "is2d");
-			set_style(div2, "position", "relative");
-			set_style(div2, "width", /*boardWidth*/ ctx[8] + "px");
-			set_style(div2, "height", /*boardWidth*/ ctx[8] + "px");
-			add_location(div2, file_1, 245, 6, 5957);
-			attr_dev(div3, "class", "board-wrapper block");
-			add_location(div3, file_1, 244, 4, 5892);
+			add_location(div1, file_1, 203, 4, 4867);
+			attr_dev(div2, "class", "block");
+			add_location(div2, file_1, 212, 4, 5089);
 			attr_dev(span, "class", "is-size-1");
-			add_location(span, file_1, 250, 8, 6185);
-			attr_dev(div4, "class", "container has-text-centered");
-			add_location(div4, file_1, 249, 6, 6135);
-			attr_dev(div5, "class", "block");
-			add_location(div5, file_1, 248, 4, 6109);
-			attr_dev(div6, "class", "grid");
-			add_location(div6, file_1, 266, 12, 6666);
-			attr_dev(div7, "class", "fixed-grid has-4-cols");
-			add_location(div7, file_1, 265, 10, 6618);
-			attr_dev(div8, "class", "column is-half");
-			add_location(div8, file_1, 264, 8, 6579);
-			attr_dev(div9, "class", "grid");
-			add_location(div9, file_1, 277, 12, 7048);
-			attr_dev(div10, "class", "fixed-grid has-4-cols");
-			add_location(div10, file_1, 276, 10, 7000);
-			attr_dev(div11, "class", "column is-half");
-			add_location(div11, file_1, 275, 8, 6961);
-			attr_dev(div12, "class", "columns");
-			add_location(div12, file_1, 263, 6, 6549);
-			attr_dev(div13, "class", "block");
-			add_location(div13, file_1, 262, 4, 6523);
-			attr_dev(div14, "class", "column is-6-widescreen");
-			add_location(div14, file_1, 220, 2, 5128);
-			attr_dev(div15, "class", "columns is-centered");
-			add_location(div15, file_1, 219, 0, 5092);
+			add_location(span, file_1, 222, 8, 5352);
+			attr_dev(div3, "class", "container has-text-centered");
+			add_location(div3, file_1, 221, 6, 5302);
+			attr_dev(div4, "class", "block");
+			add_location(div4, file_1, 220, 4, 5276);
+			attr_dev(div5, "class", "grid");
+			add_location(div5, file_1, 238, 12, 5833);
+			attr_dev(div6, "class", "fixed-grid has-4-cols");
+			add_location(div6, file_1, 237, 10, 5785);
+			attr_dev(div7, "class", "column is-half");
+			add_location(div7, file_1, 236, 8, 5746);
+			attr_dev(div8, "class", "grid");
+			add_location(div8, file_1, 249, 12, 6215);
+			attr_dev(div9, "class", "fixed-grid has-4-cols");
+			add_location(div9, file_1, 248, 10, 6167);
+			attr_dev(div10, "class", "column is-half");
+			add_location(div10, file_1, 247, 8, 6128);
+			attr_dev(div11, "class", "columns");
+			add_location(div11, file_1, 235, 6, 5716);
+			attr_dev(div12, "class", "block");
+			add_location(div12, file_1, 234, 4, 5690);
+			attr_dev(div13, "class", "column is-6-desktop is-centered");
+			add_location(div13, file_1, 187, 2, 4315);
+			attr_dev(div14, "class", "columns is-centered");
+			add_location(div14, file_1, 186, 0, 4279);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, link, anchor);
-			insert_dev(target, t0, anchor);
-			insert_dev(target, div15, anchor);
-			append_dev(div15, div14);
-			append_dev(div14, h1);
-			append_dev(div14, t2);
-			append_dev(div14, div0);
-			if_block0.m(div0, null);
-			append_dev(div0, t3);
-			if (if_block1) if_block1.m(div0, null);
-			append_dev(div14, t4);
-			append_dev(div14, div1);
-			if (if_block2) if_block2.m(div1, null);
-			append_dev(div1, t5);
-			append_dev(div1, p0);
-			append_dev(p0, t6);
-			append_dev(p0, t7);
-			append_dev(div1, t8);
-			append_dev(div1, p1);
-			append_dev(p1, t9);
-			append_dev(p1, t10);
-			append_dev(div1, t11);
-			append_dev(div1, p2);
-			append_dev(p2, t12);
-			append_dev(p2, t13);
-			append_dev(div14, t14);
-			append_dev(div14, div3);
-			append_dev(div3, div2);
-			/*div2_binding*/ ctx[23](div2);
-			/*div3_binding*/ ctx[24](div3);
-			append_dev(div14, t15);
-			append_dev(div14, div5);
-			append_dev(div5, div4);
-			append_dev(div4, span);
-			append_dev(span, t16);
-			append_dev(span, t17);
-			append_dev(div4, t18);
-			if (if_block3) if_block3.m(div4, null);
-			append_dev(div14, t19);
+			insert_dev(target, div14, anchor);
 			append_dev(div14, div13);
+			append_dev(div13, h1);
+			append_dev(div13, t1);
+			append_dev(div13, div0);
+			if_block0.m(div0, null);
+			append_dev(div0, t2);
+			if (if_block1) if_block1.m(div0, null);
+			append_dev(div13, t3);
+			append_dev(div13, div1);
+			if (if_block2) if_block2.m(div1, null);
+			append_dev(div1, t4);
+			append_dev(div1, p0);
+			append_dev(p0, t5);
+			append_dev(p0, t6);
+			append_dev(div1, t7);
+			append_dev(div1, p1);
+			append_dev(p1, t8);
+			append_dev(p1, t9);
+			append_dev(div1, t10);
+			append_dev(div1, p2);
+			append_dev(p2, t11);
+			append_dev(p2, t12);
+			append_dev(div13, t13);
+			append_dev(div13, div2);
+			mount_component(chessboard, div2, null);
+			append_dev(div13, t14);
+			append_dev(div13, div4);
+			append_dev(div4, div3);
+			append_dev(div3, span);
+			append_dev(span, t15);
+			append_dev(span, t16);
+			append_dev(div3, t17);
+			if (if_block3) if_block3.m(div3, null);
+			append_dev(div13, t18);
 			append_dev(div13, div12);
-			append_dev(div12, div8);
-			append_dev(div8, div7);
+			append_dev(div12, div11);
+			append_dev(div11, div7);
 			append_dev(div7, div6);
+			append_dev(div6, div5);
 
 			for (let i = 0; i < each_blocks_1.length; i += 1) {
 				if (each_blocks_1[i]) {
-					each_blocks_1[i].m(div6, null);
+					each_blocks_1[i].m(div5, null);
 				}
 			}
 
-			append_dev(div12, t20);
-			append_dev(div12, div11);
+			append_dev(div11, t19);
 			append_dev(div11, div10);
 			append_dev(div10, div9);
+			append_dev(div9, div8);
 
 			for (let i = 0; i < each_blocks.length; i += 1) {
 				if (each_blocks[i]) {
-					each_blocks[i].m(div9, null);
+					each_blocks[i].m(div8, null);
 				}
 			}
+
+			current = true;
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*$pieceSet*/ 8192 && link_href_value !== (link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[13] + ".css")) {
-				attr_dev(link, "href", link_href_value);
-			}
-
 			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block0) {
 				if_block0.p(ctx, dirty);
 			} else {
@@ -6349,7 +6777,7 @@ function create_fragment(ctx) {
 
 				if (if_block0) {
 					if_block0.c();
-					if_block0.m(div0, t3);
+					if_block0.m(div0, t2);
 				}
 			}
 
@@ -6372,32 +6800,40 @@ function create_fragment(ctx) {
 				} else {
 					if_block2 = create_if_block_1(ctx);
 					if_block2.c();
-					if_block2.m(div1, t5);
+					if_block2.m(div1, t4);
 				}
 			} else if (if_block2) {
 				if_block2.d(1);
 				if_block2 = null;
 			}
 
-			if (dirty[0] & /*correctCount*/ 16) set_data_dev(t7, /*correctCount*/ ctx[4]);
-			if (dirty[0] & /*incorrectCount*/ 32) set_data_dev(t10, /*incorrectCount*/ ctx[5]);
-			if (dirty[0] & /*highScore*/ 2048) set_data_dev(t13, /*highScore*/ ctx[11]);
+			if (!current || dirty[0] & /*correctCount*/ 16) set_data_dev(t6, /*correctCount*/ ctx[4]);
+			if (!current || dirty[0] & /*incorrectCount*/ 32) set_data_dev(t9, /*incorrectCount*/ ctx[5]);
+			if (!current || dirty[0] & /*highScore*/ 1024) set_data_dev(t12, /*highScore*/ ctx[10]);
+			const chessboard_changes = {};
+			if (dirty[0] & /*$orientation*/ 2048) chessboard_changes.orientation = /*$orientation*/ ctx[11];
 
-			if (dirty[0] & /*boardWidth*/ 256) {
-				set_style(div2, "width", /*boardWidth*/ ctx[8] + "px");
+			if (!updating_fen && dirty[0] & /*fen*/ 512) {
+				updating_fen = true;
+				chessboard_changes.fen = /*fen*/ ctx[9];
+				add_flush_callback(() => updating_fen = false);
 			}
 
-			if (dirty[0] & /*boardWidth*/ 256) {
-				set_style(div2, "height", /*boardWidth*/ ctx[8] + "px");
+			if (!updating_chessground && dirty[0] & /*chessground*/ 256) {
+				updating_chessground = true;
+				chessboard_changes.chessground = /*chessground*/ ctx[8];
+				add_flush_callback(() => updating_chessground = false);
 			}
 
-			if (dirty[0] & /*answerFile*/ 2 && t16_value !== (t16_value = (/*answerFile*/ ctx[1] !== ''
+			chessboard.$set(chessboard_changes);
+
+			if ((!current || dirty[0] & /*answerFile*/ 2) && t15_value !== (t15_value = (/*answerFile*/ ctx[1] !== ''
 			? /*answerFile*/ ctx[1]
-			: '-') + "")) set_data_dev(t16, t16_value);
+			: '-') + "")) set_data_dev(t15, t15_value);
 
-			if (dirty[0] & /*answerRank*/ 1 && t17_value !== (t17_value = (/*answerRank*/ ctx[0] !== ''
+			if ((!current || dirty[0] & /*answerRank*/ 1) && t16_value !== (t16_value = (/*answerRank*/ ctx[0] !== ''
 			? /*answerRank*/ ctx[0]
-			: '-') + "")) set_data_dev(t17, t17_value);
+			: '-') + "")) set_data_dev(t16, t16_value);
 
 			if (/*resultText*/ ctx[6]) {
 				if (if_block3) {
@@ -6405,15 +6841,15 @@ function create_fragment(ctx) {
 				} else {
 					if_block3 = create_if_block(ctx);
 					if_block3.c();
-					if_block3.m(div4, null);
+					if_block3.m(div3, null);
 				}
 			} else if (if_block3) {
 				if_block3.d(1);
 				if_block3 = null;
 			}
 
-			if (dirty[0] & /*answerFile, files*/ 32770) {
-				each_value_1 = ensure_array_like_dev(/*files*/ ctx[15]);
+			if (dirty[0] & /*answerFile, files*/ 16386) {
+				each_value_1 = ensure_array_like_dev(/*files*/ ctx[14]);
 				let i;
 
 				for (i = 0; i < each_value_1.length; i += 1) {
@@ -6424,7 +6860,7 @@ function create_fragment(ctx) {
 					} else {
 						each_blocks_1[i] = create_each_block_1(child_ctx);
 						each_blocks_1[i].c();
-						each_blocks_1[i].m(div6, null);
+						each_blocks_1[i].m(div5, null);
 					}
 				}
 
@@ -6435,8 +6871,8 @@ function create_fragment(ctx) {
 				each_blocks_1.length = each_value_1.length;
 			}
 
-			if (dirty[0] & /*answerRank, ranks*/ 65537) {
-				each_value = ensure_array_like_dev(/*ranks*/ ctx[16]);
+			if (dirty[0] & /*answerRank, ranks*/ 32769) {
+				each_value = ensure_array_like_dev(/*ranks*/ ctx[15]);
 				let i;
 
 				for (i = 0; i < each_value.length; i += 1) {
@@ -6447,7 +6883,7 @@ function create_fragment(ctx) {
 					} else {
 						each_blocks[i] = create_each_block(child_ctx);
 						each_blocks[i].c();
-						each_blocks[i].m(div9, null);
+						each_blocks[i].m(div8, null);
 					}
 				}
 
@@ -6458,20 +6894,24 @@ function create_fragment(ctx) {
 				each_blocks.length = each_value.length;
 			}
 		},
-		i: noop,
-		o: noop,
+		i: function intro(local) {
+			if (current) return;
+			transition_in(chessboard.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(chessboard.$$.fragment, local);
+			current = false;
+		},
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(link);
-				detach_dev(t0);
-				detach_dev(div15);
+				detach_dev(div14);
 			}
 
 			if_block0.d();
 			if (if_block1) if_block1.d();
 			if (if_block2) if_block2.d();
-			/*div2_binding*/ ctx[23](null);
-			/*div3_binding*/ ctx[24](null);
+			destroy_component(chessboard);
 			if (if_block3) if_block3.d();
 			destroy_each(each_blocks_1, detaching);
 			destroy_each(each_blocks, detaching);
@@ -6491,14 +6931,11 @@ function create_fragment(ctx) {
 
 function instance($$self, $$props, $$invalidate) {
 	let $orientation;
-	let $pieceSet;
-	validate_store(pieceSet, 'pieceSet');
-	component_subscribe($$self, pieceSet, $$value => $$invalidate(13, $pieceSet = $$value));
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('NotationTrainer', slots, []);
 	const orientation = persisted('notation.orientation', 'white');
 	validate_store(orientation, 'orientation');
-	component_subscribe($$self, orientation, value => $$invalidate(12, $orientation = value));
+	component_subscribe($$self, orientation, value => $$invalidate(11, $orientation = value));
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let correctAnswer;
@@ -6508,9 +6945,17 @@ function instance($$self, $$props, $$invalidate) {
 	let resultClass;
 	let answerRank = '';
 	let answerFile = '';
-	let boardWidth = 600;
-	let boardWrapper;
-	let boardContainer;
+
+	let chessgroundConfig = {
+		fen: '8/8/8/8/8/8/8/8',
+		coordinates: false,
+		animation: { enabled: true },
+		highlight: { lastMove: true },
+		draggable: { enabled: false },
+		selectable: { enabled: false },
+		orientation: $orientation
+	};
+
 	let chessground;
 	let fen;
 
@@ -6523,21 +6968,6 @@ function instance($$self, $$props, $$invalidate) {
 	let correctBonus = 2;
 	let incorrectPenalty = 10;
 	let gameInterval;
-
-	orientation.subscribe(() => {
-		if (chessground) {
-			chessground.toggleOrientation();
-		}
-	});
-
-	function resize() {
-		if (boardWrapper) {
-			const width = boardWrapper.offsetWidth;
-			const totalHeight = window.innerHeight;
-			const newDimension = Math.min(0.7 * totalHeight, width);
-			$$invalidate(8, boardWidth = newDimension);
-		}
-	}
 
 	function newPosition() {
 		answerAllowed = false;
@@ -6565,7 +6995,7 @@ function instance($$self, $$props, $$invalidate) {
 			nextNode = allNodes[i + 1];
 		}
 
-		$$invalidate(20, fen = makeFen(position.toSetup()));
+		$$invalidate(9, fen = makeFen(position.toSetup()));
 		const nextMove = parseSan(position, nextNode.data.san);
 		const from = makeSquare(nextMove.from);
 		const to = makeSquare(nextMove.to);
@@ -6578,7 +7008,7 @@ function instance($$self, $$props, $$invalidate) {
 				});
 
 				chessground.move(from, to);
-				$$invalidate(18, answerValue = '');
+				$$invalidate(17, answerValue = '');
 				answerAllowed = true;
 			},
 			400
@@ -6655,26 +7085,13 @@ function instance($$self, $$props, $$invalidate) {
 		$$invalidate(2, gameRunning = false);
 
 		if (correctCount > highScore) {
-			$$invalidate(11, highScore = correctCount);
+			$$invalidate(10, highScore = correctCount);
 		}
 	}
 
 	onMount(() => {
-		window.addEventListener('resize', resize);
 		window.addEventListener('keydown', handleKeydown);
-
-		$$invalidate(19, chessground = Chessground(boardContainer, {
-			fen: '8/8/8/8/8/8/8/8',
-			coordinates: false,
-			animation: { enabled: true },
-			highlight: { lastMove: true },
-			draggable: { enabled: false },
-			selectable: { enabled: false },
-			orientation: $orientation
-		}));
-
 		newPosition();
-		resize();
 	});
 
 	const writable_props = [];
@@ -6691,18 +7108,14 @@ function instance($$self, $$props, $$invalidate) {
 		orientation.set('white');
 	};
 
-	function div2_binding($$value) {
-		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
-			boardContainer = $$value;
-			$$invalidate(10, boardContainer);
-		});
+	function chessboard_fen_binding(value) {
+		fen = value;
+		$$invalidate(9, fen);
 	}
 
-	function div3_binding($$value) {
-		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
-			boardWrapper = $$value;
-			$$invalidate(9, boardWrapper);
-		});
+	function chessboard_chessground_binding(value) {
+		chessground = value;
+		$$invalidate(8, chessground);
 	}
 
 	const click_handler_2 = file => $$invalidate(1, answerFile = file);
@@ -6710,7 +7123,7 @@ function instance($$self, $$props, $$invalidate) {
 
 	$$self.$capture_state = () => ({
 		onMount,
-		Chessground,
+		ChessBoard,
 		parsePgn,
 		startingPosition,
 		Util,
@@ -6718,7 +7131,6 @@ function instance($$self, $$props, $$invalidate) {
 		parseSan,
 		makeFen,
 		makeSquare,
-		pieceSet,
 		persisted,
 		orientation,
 		correctCount,
@@ -6730,9 +7142,7 @@ function instance($$self, $$props, $$invalidate) {
 		resultClass,
 		answerRank,
 		answerFile,
-		boardWidth,
-		boardWrapper,
-		boardContainer,
+		chessgroundConfig,
 		chessground,
 		fen,
 		gameRunning,
@@ -6742,7 +7152,6 @@ function instance($$self, $$props, $$invalidate) {
 		correctBonus,
 		incorrectPenalty,
 		gameInterval,
-		resize,
 		newPosition,
 		handleAnswer,
 		files,
@@ -6750,8 +7159,7 @@ function instance($$self, $$props, $$invalidate) {
 		handleKeydown,
 		startGame,
 		stopGame,
-		$orientation,
-		$pieceSet
+		$orientation
 	});
 
 	$$self.$inject_state = $$props => {
@@ -6759,18 +7167,16 @@ function instance($$self, $$props, $$invalidate) {
 		if ('incorrectCount' in $$props) $$invalidate(5, incorrectCount = $$props.incorrectCount);
 		if ('correctAnswer' in $$props) correctAnswer = $$props.correctAnswer;
 		if ('answerAllowed' in $$props) answerAllowed = $$props.answerAllowed;
-		if ('answerValue' in $$props) $$invalidate(18, answerValue = $$props.answerValue);
+		if ('answerValue' in $$props) $$invalidate(17, answerValue = $$props.answerValue);
 		if ('resultText' in $$props) $$invalidate(6, resultText = $$props.resultText);
 		if ('resultClass' in $$props) $$invalidate(7, resultClass = $$props.resultClass);
 		if ('answerRank' in $$props) $$invalidate(0, answerRank = $$props.answerRank);
 		if ('answerFile' in $$props) $$invalidate(1, answerFile = $$props.answerFile);
-		if ('boardWidth' in $$props) $$invalidate(8, boardWidth = $$props.boardWidth);
-		if ('boardWrapper' in $$props) $$invalidate(9, boardWrapper = $$props.boardWrapper);
-		if ('boardContainer' in $$props) $$invalidate(10, boardContainer = $$props.boardContainer);
-		if ('chessground' in $$props) $$invalidate(19, chessground = $$props.chessground);
-		if ('fen' in $$props) $$invalidate(20, fen = $$props.fen);
+		if ('chessgroundConfig' in $$props) $$invalidate(13, chessgroundConfig = $$props.chessgroundConfig);
+		if ('chessground' in $$props) $$invalidate(8, chessground = $$props.chessground);
+		if ('fen' in $$props) $$invalidate(9, fen = $$props.fen);
 		if ('gameRunning' in $$props) $$invalidate(2, gameRunning = $$props.gameRunning);
-		if ('highScore' in $$props) $$invalidate(11, highScore = $$props.highScore);
+		if ('highScore' in $$props) $$invalidate(10, highScore = $$props.highScore);
 		if ('startingTime' in $$props) startingTime = $$props.startingTime;
 		if ('remainingTime' in $$props) $$invalidate(3, remainingTime = $$props.remainingTime);
 		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
@@ -6793,25 +7199,14 @@ function instance($$self, $$props, $$invalidate) {
 
 		if ($$self.$$.dirty[0] & /*answerFile, answerRank*/ 3) {
 			{
-				$$invalidate(18, answerValue = `${answerFile}${answerRank}`);
+				$$invalidate(17, answerValue = `${answerFile}${answerRank}`);
 			}
 		}
 
-		if ($$self.$$.dirty[0] & /*answerValue*/ 262144) {
+		if ($$self.$$.dirty[0] & /*answerValue*/ 131072) {
 			{
 				if (answerValue.length === 2) {
 					handleAnswer();
-				}
-			}
-		}
-
-		if ($$self.$$.dirty[0] & /*chessground, fen*/ 1572864) {
-			{
-				if (chessground && fen) {
-					chessground.set({
-						fen,
-						highlight: { lastMove: false, check: false }
-					});
 				}
 			}
 		}
@@ -6826,23 +7221,20 @@ function instance($$self, $$props, $$invalidate) {
 		incorrectCount,
 		resultText,
 		resultClass,
-		boardWidth,
-		boardWrapper,
-		boardContainer,
+		chessground,
+		fen,
 		highScore,
 		$orientation,
-		$pieceSet,
 		orientation,
+		chessgroundConfig,
 		files,
 		ranks,
 		startGame,
 		answerValue,
-		chessground,
-		fen,
 		click_handler,
 		click_handler_1,
-		div2_binding,
-		div3_binding,
+		chessboard_fen_binding,
+		chessboard_chessground_binding,
 		click_handler_2,
 		click_handler_3
 	];

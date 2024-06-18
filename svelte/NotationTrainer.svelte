@@ -1,13 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { Chessground } from "chessground";
+  import ChessBoard from './components/ChessBoard.svelte';
+
   import { parsePgn, startingPosition } from 'chessops/pgn';
   import { Util } from 'src/util';
   import { getRandomGame } from "src/random_games";
   import { parseSan } from "chessops/san";
   import { makeFen } from "chessops/fen";
   import { makeSquare } from "chessops/util";
-  import { pieceSet } from './stores';
   import { persisted } from "svelte-persisted-store";
 
   const orientation = persisted('notation.orientation', 'white');
@@ -23,9 +23,24 @@
   let answerRank = '';
   let answerFile = '';
 
-  let boardWidth = 600;
-  let boardWrapper;
-  let boardContainer;
+  let chessgroundConfig = {
+    fen: '8/8/8/8/8/8/8/8',
+    coordinates: false,
+    animation: {
+      enabled: true,
+    },
+    highlight: {
+      lastMove: true,
+    },
+    draggable: {
+      enabled: false,
+    },
+    selectable: {
+      enabled: false,
+    },
+    orientation: $orientation,
+  };
+
   let chessground;
   let fen;
 
@@ -44,12 +59,6 @@
     }
   }
 
-  orientation.subscribe(() => {
-    if (chessground) {
-      chessground.toggleOrientation();
-    }
-  });
-
   $: {
     answerValue = `${answerFile}${answerRank}`;
   }
@@ -57,27 +66,6 @@
   $: {
     if (answerValue.length === 2) {
       handleAnswer();
-    }
-  }
-
-  $: {
-    if (chessground && fen) {
-      chessground.set({
-        fen: fen,
-        highlight: {
-          lastMove: false,
-          check: false,
-        }
-      })
-    }
-  }
-
-  function resize() {
-    if (boardWrapper) {
-      const width = boardWrapper.offsetWidth;
-      const totalHeight = window.innerHeight;
-      const newDimension = Math.min(0.7 * totalHeight, width);
-      boardWidth = newDimension;
     }
   }
 
@@ -153,7 +141,6 @@
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
   const ranks = ['1', '2', '3', '4', '5' ,'6', '7', '8'];
 
-
   function handleKeydown(event) {
     const key = event.key.toLowerCase();
     if (key === 'backspace') {
@@ -192,33 +179,13 @@
   }
 
   onMount(() => {
-    window.addEventListener('resize', resize);
     window.addEventListener('keydown', handleKeydown);
-    chessground = Chessground(boardContainer, {
-      fen: '8/8/8/8/8/8/8/8',
-      coordinates: false,
-      animation: {
-        enabled: true,
-      },
-      highlight: {
-        lastMove: true,
-      },
-      draggable: {
-        enabled: false,
-      },
-      selectable: {
-        enabled: false,
-      },
-      orientation: $orientation,
-    });
     newPosition();
-    resize();
   });
 </script>
 
-<link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet">
 <div class="columns is-centered">
-  <div class="column is-6-widescreen">
+  <div class="column is-6-desktop is-centered">
     <h1>Notation Trainer</h1>
     <div class="block">
       {#if $orientation === 'white'}
@@ -242,9 +209,14 @@
       <p>Incorrect: {incorrectCount}</p>
       <p>High Score: {highScore}</p>
     </div>
-    <div class="board-wrapper block" bind:this={boardWrapper}>
-      <div class="is2d" bind:this={boardContainer}
-           style="position: relative;width: {boardWidth}px; height: {boardWidth}px;"></div>
+
+    <div class="block">
+      <ChessBoard
+        {chessgroundConfig}
+        bind:fen={fen}
+        bind:chessground={chessground}
+        orientation={$orientation}
+      />
     </div>
     <div class="block">
       <div class="container has-text-centered">
