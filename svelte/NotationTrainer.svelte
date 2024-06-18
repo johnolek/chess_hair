@@ -29,6 +29,21 @@
   let chessground;
   let fen;
 
+  // Game stuff
+  let gameRunning = false;
+  let highScore = 0;
+  let startingTime = 60;
+  let remainingTime = 0;
+  let correctBonus = 2;
+  let incorrectPenalty = 10;
+  let gameInterval;
+
+  $: {
+    if (gameRunning && remainingTime <= 0) {
+      stopGame();
+    }
+  }
+
   orientation.subscribe(() => {
     if (chessground) {
       chessground.toggleOrientation();
@@ -109,7 +124,7 @@
       chessground.move(from, to);
       answerValue = '';
       answerAllowed = true;
-    }, 400);
+    }, 400)
   }
 
   function handleAnswer() {
@@ -122,10 +137,12 @@
     if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
       resultText = `${answerValue} was correct!`;
       resultClass = 'correct';
+      remainingTime += correctBonus;
       correctCount++;
     } else {
       resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`
       resultClass = 'incorrect';
+      remainingTime -= incorrectPenalty;
       incorrectCount++;
     }
     answerRank = '';
@@ -149,6 +166,28 @@
       answerFile = key;
     } else if (ranks.includes(key)) {
       answerRank = key;
+    }
+  }
+
+  function startGame() {
+    gameRunning = true;
+    remainingTime = startingTime;
+    correctCount = 0;
+    incorrectCount = 0;
+    gameInterval = setInterval(() => {
+      remainingTime -= 0.05;
+      if (remainingTime <= 0) {
+        clearInterval(gameInterval);
+      }
+    }, 50);
+    newPosition();
+  }
+
+  function stopGame() {
+    clearInterval(gameInterval);
+    gameRunning = false;
+    if (correctCount > highScore) {
+      highScore = correctCount;
     }
   }
 
@@ -191,10 +230,17 @@
           orientation.set('white');
         }}>View as white</button>
       {/if}
+      {#if !gameRunning}
+        <button class="button is-small" on:click={startGame}>Start Game</button>
+      {/if}
     </div>
     <div class="block">
+      {#if gameRunning}
+        {remainingTime.toFixed(2)}
+      {/if}
       <p>Correct: {correctCount}</p>
       <p>Incorrect: {incorrectCount}</p>
+      <p>High Score: {highScore}</p>
     </div>
     <div class="board-wrapper block" bind:this={boardWrapper}>
       <div class="is2d" bind:this={boardContainer}

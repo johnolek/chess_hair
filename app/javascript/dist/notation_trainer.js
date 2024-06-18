@@ -5753,17 +5753,17 @@ const file_1 = "svelte/NotationTrainer.svelte";
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[29] = list[i];
+	child_ctx[38] = list[i];
 	return child_ctx;
 }
 
 function get_each_context_1(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[32] = list[i];
+	child_ctx[41] = list[i];
 	return child_ctx;
 }
 
-// (189:6) {:else}
+// (228:6) {:else}
 function create_else_block(ctx) {
 	let button;
 	let mounted;
@@ -5774,13 +5774,13 @@ function create_else_block(ctx) {
 			button = element("button");
 			button.textContent = "View as white";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 189, 8, 4589);
+			add_location(button, file_1, 228, 8, 5406);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler_1*/ ctx[18], false);
+				dispose = listen_dev(button, "click", /*click_handler_1*/ ctx[22], false);
 				mounted = true;
 			}
 		},
@@ -5799,15 +5799,15 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(189:6) {:else}",
+		source: "(228:6) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (185:6) {#if $orientation === 'white'}
-function create_if_block_1(ctx) {
+// (224:6) {#if $orientation === 'white'}
+function create_if_block_3(ctx) {
 	let button;
 	let mounted;
 	let dispose;
@@ -5817,13 +5817,13 @@ function create_if_block_1(ctx) {
 			button = element("button");
 			button.textContent = "View as black";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 185, 8, 4447);
+			add_location(button, file_1, 224, 8, 5264);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler*/ ctx[17], false);
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[21], false);
 				mounted = true;
 			}
 		},
@@ -5840,16 +5840,92 @@ function create_if_block_1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_1.name,
+		id: create_if_block_3.name,
 		type: "if",
-		source: "(185:6) {#if $orientation === 'white'}",
+		source: "(224:6) {#if $orientation === 'white'}",
 		ctx
 	});
 
 	return block;
 }
 
-// (208:8) {#if resultText}
+// (233:6) {#if !gameRunning}
+function create_if_block_2(ctx) {
+	let button;
+	let mounted;
+	let dispose;
+
+	const block = {
+		c: function create() {
+			button = element("button");
+			button.textContent = "Start Game";
+			attr_dev(button, "class", "button is-small");
+			add_location(button, file_1, 233, 8, 5571);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, button, anchor);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[17], false);
+				mounted = true;
+			}
+		},
+		p: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(button);
+			}
+
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_2.name,
+		type: "if",
+		source: "(233:6) {#if !gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+// (238:6) {#if gameRunning}
+function create_if_block_1(ctx) {
+	let t_value = /*remainingTime*/ ctx[3].toFixed(2) + "";
+	let t;
+
+	const block = {
+		c: function create() {
+			t = text(t_value);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, t, anchor);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*remainingTime*/ 8 && t_value !== (t_value = /*remainingTime*/ ctx[3].toFixed(2) + "")) set_data_dev(t, t_value);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(t);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_1.name,
+		type: "if",
+		source: "(238:6) {#if gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+// (254:8) {#if resultText}
 function create_if_block(ctx) {
 	let div1;
 	let div0;
@@ -5860,11 +5936,11 @@ function create_if_block(ctx) {
 		c: function create() {
 			div1 = element("div");
 			div0 = element("div");
-			t = text(/*resultText*/ ctx[4]);
-			attr_dev(div0, "class", div0_class_value = "" + (/*resultClass*/ ctx[5] + " is-size-3"));
-			add_location(div0, file_1, 209, 12, 5337);
+			t = text(/*resultText*/ ctx[6]);
+			attr_dev(div0, "class", div0_class_value = "" + (/*resultClass*/ ctx[7] + " is-size-3"));
+			add_location(div0, file_1, 255, 12, 6380);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file_1, 208, 10, 5305);
+			add_location(div1, file_1, 254, 10, 6348);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div1, anchor);
@@ -5872,9 +5948,9 @@ function create_if_block(ctx) {
 			append_dev(div0, t);
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*resultText*/ 16) set_data_dev(t, /*resultText*/ ctx[4]);
+			if (dirty[0] & /*resultText*/ 64) set_data_dev(t, /*resultText*/ ctx[6]);
 
-			if (dirty[0] & /*resultClass*/ 32 && div0_class_value !== (div0_class_value = "" + (/*resultClass*/ ctx[5] + " is-size-3"))) {
+			if (dirty[0] & /*resultClass*/ 128 && div0_class_value !== (div0_class_value = "" + (/*resultClass*/ ctx[7] + " is-size-3"))) {
 				attr_dev(div0, "class", div0_class_value);
 			}
 		},
@@ -5889,14 +5965,14 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(208:8) {#if resultText}",
+		source: "(254:8) {#if resultText}",
 		ctx
 	});
 
 	return block;
 }
 
-// (222:14) {#each files as file}
+// (268:14) {#each files as file}
 function create_each_block_1(ctx) {
 	let div;
 	let button;
@@ -5905,19 +5981,19 @@ function create_each_block_1(ctx) {
 	let dispose;
 
 	function click_handler_2() {
-		return /*click_handler_2*/ ctx[21](/*file*/ ctx[32]);
+		return /*click_handler_2*/ ctx[25](/*file*/ ctx[41]);
 	}
 
 	const block = {
 		c: function create() {
 			div = element("div");
 			button = element("button");
-			button.textContent = `${/*file*/ ctx[32]}`;
+			button.textContent = `${/*file*/ ctx[41]}`;
 			t1 = space();
 			attr_dev(button, "class", "button is-large");
-			add_location(button, file_1, 223, 18, 5731);
+			add_location(button, file_1, 269, 18, 6774);
 			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 222, 16, 5694);
+			add_location(div, file_1, 268, 16, 6737);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -5946,14 +6022,14 @@ function create_each_block_1(ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(222:14) {#each files as file}",
+		source: "(268:14) {#each files as file}",
 		ctx
 	});
 
 	return block;
 }
 
-// (233:14) {#each ranks as rank}
+// (279:14) {#each ranks as rank}
 function create_each_block(ctx) {
 	let div;
 	let button;
@@ -5962,19 +6038,19 @@ function create_each_block(ctx) {
 	let dispose;
 
 	function click_handler_3() {
-		return /*click_handler_3*/ ctx[22](/*rank*/ ctx[29]);
+		return /*click_handler_3*/ ctx[26](/*rank*/ ctx[38]);
 	}
 
 	const block = {
 		c: function create() {
 			div = element("div");
 			button = element("button");
-			button.textContent = `${/*rank*/ ctx[29]}`;
+			button.textContent = `${/*rank*/ ctx[38]}`;
 			t1 = space();
 			attr_dev(button, "class", "button is-large");
-			add_location(button, file_1, 234, 18, 6113);
+			add_location(button, file_1, 280, 18, 7156);
 			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 233, 16, 6076);
+			add_location(div, file_1, 279, 16, 7119);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -6003,7 +6079,7 @@ function create_each_block(ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(233:14) {#each ranks as rank}",
+		source: "(279:14) {#each ranks as rank}",
 		ctx
 	});
 
@@ -6020,61 +6096,69 @@ function create_fragment(ctx) {
 	let t2;
 	let div0;
 	let t3;
-	let div1;
-	let p0;
 	let t4;
+	let div1;
 	let t5;
+	let p0;
 	let t6;
-	let p1;
 	let t7;
 	let t8;
+	let p1;
 	let t9;
+	let t10;
+	let t11;
+	let p2;
+	let t12;
+	let t13;
+	let t14;
 	let div3;
 	let div2;
-	let t10;
+	let t15;
 	let div5;
 	let div4;
 	let span;
 
-	let t11_value = (/*answerFile*/ ctx[1] !== ''
+	let t16_value = (/*answerFile*/ ctx[1] !== ''
 	? /*answerFile*/ ctx[1]
 	: '-') + "";
 
-	let t11;
+	let t16;
 
-	let t12_value = (/*answerRank*/ ctx[0] !== ''
+	let t17_value = (/*answerRank*/ ctx[0] !== ''
 	? /*answerRank*/ ctx[0]
 	: '-') + "";
 
-	let t12;
-	let t13;
-	let t14;
+	let t17;
+	let t18;
+	let t19;
 	let div13;
 	let div12;
 	let div8;
 	let div7;
 	let div6;
-	let t15;
+	let t20;
 	let div11;
 	let div10;
 	let div9;
 
 	function select_block_type(ctx, dirty) {
-		if (/*$orientation*/ ctx[9] === 'white') return create_if_block_1;
+		if (/*$orientation*/ ctx[12] === 'white') return create_if_block_3;
 		return create_else_block;
 	}
 
 	let current_block_type = select_block_type(ctx);
 	let if_block0 = current_block_type(ctx);
-	let if_block1 = /*resultText*/ ctx[4] && create_if_block(ctx);
-	let each_value_1 = ensure_array_like_dev(/*files*/ ctx[12]);
+	let if_block1 = !/*gameRunning*/ ctx[2] && create_if_block_2(ctx);
+	let if_block2 = /*gameRunning*/ ctx[2] && create_if_block_1(ctx);
+	let if_block3 = /*resultText*/ ctx[6] && create_if_block(ctx);
+	let each_value_1 = ensure_array_like_dev(/*files*/ ctx[15]);
 	let each_blocks_1 = [];
 
 	for (let i = 0; i < each_value_1.length; i += 1) {
 		each_blocks_1[i] = create_each_block_1(get_each_context_1(ctx, each_value_1, i));
 	}
 
-	let each_value = ensure_array_like_dev(/*ranks*/ ctx[13]);
+	let each_value = ensure_array_like_dev(/*ranks*/ ctx[16]);
 	let each_blocks = [];
 
 	for (let i = 0; i < each_value.length; i += 1) {
@@ -6093,26 +6177,34 @@ function create_fragment(ctx) {
 			div0 = element("div");
 			if_block0.c();
 			t3 = space();
+			if (if_block1) if_block1.c();
+			t4 = space();
 			div1 = element("div");
+			if (if_block2) if_block2.c();
+			t5 = space();
 			p0 = element("p");
-			t4 = text("Correct: ");
-			t5 = text(/*correctCount*/ ctx[2]);
-			t6 = space();
+			t6 = text("Correct: ");
+			t7 = text(/*correctCount*/ ctx[4]);
+			t8 = space();
 			p1 = element("p");
-			t7 = text("Incorrect: ");
-			t8 = text(/*incorrectCount*/ ctx[3]);
-			t9 = space();
+			t9 = text("Incorrect: ");
+			t10 = text(/*incorrectCount*/ ctx[5]);
+			t11 = space();
+			p2 = element("p");
+			t12 = text("High Score: ");
+			t13 = text(/*highScore*/ ctx[11]);
+			t14 = space();
 			div3 = element("div");
 			div2 = element("div");
-			t10 = space();
+			t15 = space();
 			div5 = element("div");
 			div4 = element("div");
 			span = element("span");
-			t11 = text(t11_value);
-			t12 = text(t12_value);
-			t13 = space();
-			if (if_block1) if_block1.c();
-			t14 = space();
+			t16 = text(t16_value);
+			t17 = text(t17_value);
+			t18 = space();
+			if (if_block3) if_block3.c();
+			t19 = space();
 			div13 = element("div");
 			div12 = element("div");
 			div8 = element("div");
@@ -6123,7 +6215,7 @@ function create_fragment(ctx) {
 				each_blocks_1[i].c();
 			}
 
-			t15 = space();
+			t20 = space();
 			div11 = element("div");
 			div10 = element("div");
 			div9 = element("div");
@@ -6133,49 +6225,50 @@ function create_fragment(ctx) {
 			}
 
 			attr_dev(link, "id", "piece-sprite");
-			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[10] + ".css");
+			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[13] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file_1, 179, 0, 4199);
-			add_location(h1, file_1, 182, 4, 4352);
+			add_location(link, file_1, 218, 0, 5016);
+			add_location(h1, file_1, 221, 4, 5169);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file_1, 183, 4, 4382);
-			add_location(p0, file_1, 195, 6, 4762);
-			add_location(p1, file_1, 196, 6, 4799);
+			add_location(div0, file_1, 222, 4, 5199);
+			add_location(p0, file_1, 240, 6, 5768);
+			add_location(p1, file_1, 241, 6, 5805);
+			add_location(p2, file_1, 242, 6, 5846);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file_1, 194, 4, 4736);
+			add_location(div1, file_1, 236, 4, 5671);
 			attr_dev(div2, "class", "is2d");
 			set_style(div2, "position", "relative");
-			set_style(div2, "width", /*boardWidth*/ ctx[6] + "px");
-			set_style(div2, "height", /*boardWidth*/ ctx[6] + "px");
-			add_location(div2, file_1, 199, 6, 4914);
+			set_style(div2, "width", /*boardWidth*/ ctx[8] + "px");
+			set_style(div2, "height", /*boardWidth*/ ctx[8] + "px");
+			add_location(div2, file_1, 245, 6, 5957);
 			attr_dev(div3, "class", "board-wrapper block");
-			add_location(div3, file_1, 198, 4, 4849);
+			add_location(div3, file_1, 244, 4, 5892);
 			attr_dev(span, "class", "is-size-1");
-			add_location(span, file_1, 204, 8, 5142);
+			add_location(span, file_1, 250, 8, 6185);
 			attr_dev(div4, "class", "container has-text-centered");
-			add_location(div4, file_1, 203, 6, 5092);
+			add_location(div4, file_1, 249, 6, 6135);
 			attr_dev(div5, "class", "block");
-			add_location(div5, file_1, 202, 4, 5066);
+			add_location(div5, file_1, 248, 4, 6109);
 			attr_dev(div6, "class", "grid");
-			add_location(div6, file_1, 220, 12, 5623);
+			add_location(div6, file_1, 266, 12, 6666);
 			attr_dev(div7, "class", "fixed-grid has-4-cols");
-			add_location(div7, file_1, 219, 10, 5575);
+			add_location(div7, file_1, 265, 10, 6618);
 			attr_dev(div8, "class", "column is-half");
-			add_location(div8, file_1, 218, 8, 5536);
+			add_location(div8, file_1, 264, 8, 6579);
 			attr_dev(div9, "class", "grid");
-			add_location(div9, file_1, 231, 12, 6005);
+			add_location(div9, file_1, 277, 12, 7048);
 			attr_dev(div10, "class", "fixed-grid has-4-cols");
-			add_location(div10, file_1, 230, 10, 5957);
+			add_location(div10, file_1, 276, 10, 7000);
 			attr_dev(div11, "class", "column is-half");
-			add_location(div11, file_1, 229, 8, 5918);
+			add_location(div11, file_1, 275, 8, 6961);
 			attr_dev(div12, "class", "columns");
-			add_location(div12, file_1, 217, 6, 5506);
+			add_location(div12, file_1, 263, 6, 6549);
 			attr_dev(div13, "class", "block");
-			add_location(div13, file_1, 216, 4, 5480);
+			add_location(div13, file_1, 262, 4, 6523);
 			attr_dev(div14, "class", "column is-6-widescreen");
-			add_location(div14, file_1, 181, 2, 4311);
+			add_location(div14, file_1, 220, 2, 5128);
 			attr_dev(div15, "class", "columns is-centered");
-			add_location(div15, file_1, 180, 0, 4275);
+			add_location(div15, file_1, 219, 0, 5092);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -6189,29 +6282,37 @@ function create_fragment(ctx) {
 			append_dev(div14, t2);
 			append_dev(div14, div0);
 			if_block0.m(div0, null);
-			append_dev(div14, t3);
+			append_dev(div0, t3);
+			if (if_block1) if_block1.m(div0, null);
+			append_dev(div14, t4);
 			append_dev(div14, div1);
+			if (if_block2) if_block2.m(div1, null);
+			append_dev(div1, t5);
 			append_dev(div1, p0);
-			append_dev(p0, t4);
-			append_dev(p0, t5);
-			append_dev(div1, t6);
+			append_dev(p0, t6);
+			append_dev(p0, t7);
+			append_dev(div1, t8);
 			append_dev(div1, p1);
-			append_dev(p1, t7);
-			append_dev(p1, t8);
-			append_dev(div14, t9);
+			append_dev(p1, t9);
+			append_dev(p1, t10);
+			append_dev(div1, t11);
+			append_dev(div1, p2);
+			append_dev(p2, t12);
+			append_dev(p2, t13);
+			append_dev(div14, t14);
 			append_dev(div14, div3);
 			append_dev(div3, div2);
-			/*div2_binding*/ ctx[19](div2);
-			/*div3_binding*/ ctx[20](div3);
-			append_dev(div14, t10);
+			/*div2_binding*/ ctx[23](div2);
+			/*div3_binding*/ ctx[24](div3);
+			append_dev(div14, t15);
 			append_dev(div14, div5);
 			append_dev(div5, div4);
 			append_dev(div4, span);
-			append_dev(span, t11);
-			append_dev(span, t12);
-			append_dev(div4, t13);
-			if (if_block1) if_block1.m(div4, null);
-			append_dev(div14, t14);
+			append_dev(span, t16);
+			append_dev(span, t17);
+			append_dev(div4, t18);
+			if (if_block3) if_block3.m(div4, null);
+			append_dev(div14, t19);
 			append_dev(div14, div13);
 			append_dev(div13, div12);
 			append_dev(div12, div8);
@@ -6224,7 +6325,7 @@ function create_fragment(ctx) {
 				}
 			}
 
-			append_dev(div12, t15);
+			append_dev(div12, t20);
 			append_dev(div12, div11);
 			append_dev(div11, div10);
 			append_dev(div10, div9);
@@ -6236,7 +6337,7 @@ function create_fragment(ctx) {
 			}
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*$pieceSet*/ 1024 && link_href_value !== (link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[10] + ".css")) {
+			if (dirty[0] & /*$pieceSet*/ 8192 && link_href_value !== (link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[13] + ".css")) {
 				attr_dev(link, "href", link_href_value);
 			}
 
@@ -6248,44 +6349,71 @@ function create_fragment(ctx) {
 
 				if (if_block0) {
 					if_block0.c();
-					if_block0.m(div0, null);
+					if_block0.m(div0, t3);
 				}
 			}
 
-			if (dirty[0] & /*correctCount*/ 4) set_data_dev(t5, /*correctCount*/ ctx[2]);
-			if (dirty[0] & /*incorrectCount*/ 8) set_data_dev(t8, /*incorrectCount*/ ctx[3]);
-
-			if (dirty[0] & /*boardWidth*/ 64) {
-				set_style(div2, "width", /*boardWidth*/ ctx[6] + "px");
-			}
-
-			if (dirty[0] & /*boardWidth*/ 64) {
-				set_style(div2, "height", /*boardWidth*/ ctx[6] + "px");
-			}
-
-			if (dirty[0] & /*answerFile*/ 2 && t11_value !== (t11_value = (/*answerFile*/ ctx[1] !== ''
-			? /*answerFile*/ ctx[1]
-			: '-') + "")) set_data_dev(t11, t11_value);
-
-			if (dirty[0] & /*answerRank*/ 1 && t12_value !== (t12_value = (/*answerRank*/ ctx[0] !== ''
-			? /*answerRank*/ ctx[0]
-			: '-') + "")) set_data_dev(t12, t12_value);
-
-			if (/*resultText*/ ctx[4]) {
+			if (!/*gameRunning*/ ctx[2]) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 				} else {
-					if_block1 = create_if_block(ctx);
+					if_block1 = create_if_block_2(ctx);
 					if_block1.c();
-					if_block1.m(div4, null);
+					if_block1.m(div0, null);
 				}
 			} else if (if_block1) {
 				if_block1.d(1);
 				if_block1 = null;
 			}
 
-			if (dirty[0] & /*answerFile, files*/ 4098) {
-				each_value_1 = ensure_array_like_dev(/*files*/ ctx[12]);
+			if (/*gameRunning*/ ctx[2]) {
+				if (if_block2) {
+					if_block2.p(ctx, dirty);
+				} else {
+					if_block2 = create_if_block_1(ctx);
+					if_block2.c();
+					if_block2.m(div1, t5);
+				}
+			} else if (if_block2) {
+				if_block2.d(1);
+				if_block2 = null;
+			}
+
+			if (dirty[0] & /*correctCount*/ 16) set_data_dev(t7, /*correctCount*/ ctx[4]);
+			if (dirty[0] & /*incorrectCount*/ 32) set_data_dev(t10, /*incorrectCount*/ ctx[5]);
+			if (dirty[0] & /*highScore*/ 2048) set_data_dev(t13, /*highScore*/ ctx[11]);
+
+			if (dirty[0] & /*boardWidth*/ 256) {
+				set_style(div2, "width", /*boardWidth*/ ctx[8] + "px");
+			}
+
+			if (dirty[0] & /*boardWidth*/ 256) {
+				set_style(div2, "height", /*boardWidth*/ ctx[8] + "px");
+			}
+
+			if (dirty[0] & /*answerFile*/ 2 && t16_value !== (t16_value = (/*answerFile*/ ctx[1] !== ''
+			? /*answerFile*/ ctx[1]
+			: '-') + "")) set_data_dev(t16, t16_value);
+
+			if (dirty[0] & /*answerRank*/ 1 && t17_value !== (t17_value = (/*answerRank*/ ctx[0] !== ''
+			? /*answerRank*/ ctx[0]
+			: '-') + "")) set_data_dev(t17, t17_value);
+
+			if (/*resultText*/ ctx[6]) {
+				if (if_block3) {
+					if_block3.p(ctx, dirty);
+				} else {
+					if_block3 = create_if_block(ctx);
+					if_block3.c();
+					if_block3.m(div4, null);
+				}
+			} else if (if_block3) {
+				if_block3.d(1);
+				if_block3 = null;
+			}
+
+			if (dirty[0] & /*answerFile, files*/ 32770) {
+				each_value_1 = ensure_array_like_dev(/*files*/ ctx[15]);
 				let i;
 
 				for (i = 0; i < each_value_1.length; i += 1) {
@@ -6307,8 +6435,8 @@ function create_fragment(ctx) {
 				each_blocks_1.length = each_value_1.length;
 			}
 
-			if (dirty[0] & /*answerRank, ranks*/ 8193) {
-				each_value = ensure_array_like_dev(/*ranks*/ ctx[13]);
+			if (dirty[0] & /*answerRank, ranks*/ 65537) {
+				each_value = ensure_array_like_dev(/*ranks*/ ctx[16]);
 				let i;
 
 				for (i = 0; i < each_value.length; i += 1) {
@@ -6340,9 +6468,11 @@ function create_fragment(ctx) {
 			}
 
 			if_block0.d();
-			/*div2_binding*/ ctx[19](null);
-			/*div3_binding*/ ctx[20](null);
 			if (if_block1) if_block1.d();
+			if (if_block2) if_block2.d();
+			/*div2_binding*/ ctx[23](null);
+			/*div3_binding*/ ctx[24](null);
+			if (if_block3) if_block3.d();
 			destroy_each(each_blocks_1, detaching);
 			destroy_each(each_blocks, detaching);
 		}
@@ -6363,12 +6493,12 @@ function instance($$self, $$props, $$invalidate) {
 	let $orientation;
 	let $pieceSet;
 	validate_store(pieceSet, 'pieceSet');
-	component_subscribe($$self, pieceSet, $$value => $$invalidate(10, $pieceSet = $$value));
+	component_subscribe($$self, pieceSet, $$value => $$invalidate(13, $pieceSet = $$value));
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('NotationTrainer', slots, []);
 	const orientation = persisted('notation.orientation', 'white');
 	validate_store(orientation, 'orientation');
-	component_subscribe($$self, orientation, value => $$invalidate(9, $orientation = value));
+	component_subscribe($$self, orientation, value => $$invalidate(12, $orientation = value));
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let correctAnswer;
@@ -6384,6 +6514,16 @@ function instance($$self, $$props, $$invalidate) {
 	let chessground;
 	let fen;
 
+	// Game stuff
+	let gameRunning = false;
+
+	let highScore = 0;
+	let startingTime = 60;
+	let remainingTime = 0;
+	let correctBonus = 2;
+	let incorrectPenalty = 10;
+	let gameInterval;
+
 	orientation.subscribe(() => {
 		if (chessground) {
 			chessground.toggleOrientation();
@@ -6395,7 +6535,7 @@ function instance($$self, $$props, $$invalidate) {
 			const width = boardWrapper.offsetWidth;
 			const totalHeight = window.innerHeight;
 			const newDimension = Math.min(0.7 * totalHeight, width);
-			$$invalidate(6, boardWidth = newDimension);
+			$$invalidate(8, boardWidth = newDimension);
 		}
 	}
 
@@ -6425,7 +6565,7 @@ function instance($$self, $$props, $$invalidate) {
 			nextNode = allNodes[i + 1];
 		}
 
-		$$invalidate(16, fen = makeFen(position.toSetup()));
+		$$invalidate(20, fen = makeFen(position.toSetup()));
 		const nextMove = parseSan(position, nextNode.data.san);
 		const from = makeSquare(nextMove.from);
 		const to = makeSquare(nextMove.to);
@@ -6438,7 +6578,7 @@ function instance($$self, $$props, $$invalidate) {
 				});
 
 				chessground.move(from, to);
-				$$invalidate(14, answerValue = '');
+				$$invalidate(18, answerValue = '');
 				answerAllowed = true;
 			},
 			400
@@ -6455,13 +6595,15 @@ function instance($$self, $$props, $$invalidate) {
 		}
 
 		if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
-			$$invalidate(4, resultText = `${answerValue} was correct!`);
-			$$invalidate(5, resultClass = 'correct');
-			$$invalidate(2, correctCount++, correctCount);
+			$$invalidate(6, resultText = `${answerValue} was correct!`);
+			$$invalidate(7, resultClass = 'correct');
+			$$invalidate(3, remainingTime += correctBonus);
+			$$invalidate(4, correctCount++, correctCount);
 		} else {
-			$$invalidate(4, resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`);
-			$$invalidate(5, resultClass = 'incorrect');
-			$$invalidate(3, incorrectCount++, incorrectCount);
+			$$invalidate(6, resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`);
+			$$invalidate(7, resultClass = 'incorrect');
+			$$invalidate(3, remainingTime -= incorrectPenalty);
+			$$invalidate(5, incorrectCount++, incorrectCount);
 		}
 
 		$$invalidate(0, answerRank = '');
@@ -6488,11 +6630,40 @@ function instance($$self, $$props, $$invalidate) {
 		}
 	}
 
+	function startGame() {
+		$$invalidate(2, gameRunning = true);
+		$$invalidate(3, remainingTime = startingTime);
+		$$invalidate(4, correctCount = 0);
+		$$invalidate(5, incorrectCount = 0);
+
+		gameInterval = setInterval(
+			() => {
+				$$invalidate(3, remainingTime -= 0.05);
+
+				if (remainingTime <= 0) {
+					clearInterval(gameInterval);
+				}
+			},
+			50
+		);
+
+		newPosition();
+	}
+
+	function stopGame() {
+		clearInterval(gameInterval);
+		$$invalidate(2, gameRunning = false);
+
+		if (correctCount > highScore) {
+			$$invalidate(11, highScore = correctCount);
+		}
+	}
+
 	onMount(() => {
 		window.addEventListener('resize', resize);
 		window.addEventListener('keydown', handleKeydown);
 
-		$$invalidate(15, chessground = Chessground(boardContainer, {
+		$$invalidate(19, chessground = Chessground(boardContainer, {
 			fen: '8/8/8/8/8/8/8/8',
 			coordinates: false,
 			animation: { enabled: true },
@@ -6523,14 +6694,14 @@ function instance($$self, $$props, $$invalidate) {
 	function div2_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			boardContainer = $$value;
-			$$invalidate(8, boardContainer);
+			$$invalidate(10, boardContainer);
 		});
 	}
 
 	function div3_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			boardWrapper = $$value;
-			$$invalidate(7, boardWrapper);
+			$$invalidate(9, boardWrapper);
 		});
 	}
 
@@ -6564,31 +6735,47 @@ function instance($$self, $$props, $$invalidate) {
 		boardContainer,
 		chessground,
 		fen,
+		gameRunning,
+		highScore,
+		startingTime,
+		remainingTime,
+		correctBonus,
+		incorrectPenalty,
+		gameInterval,
 		resize,
 		newPosition,
 		handleAnswer,
 		files,
 		ranks,
 		handleKeydown,
+		startGame,
+		stopGame,
 		$orientation,
 		$pieceSet
 	});
 
 	$$self.$inject_state = $$props => {
-		if ('correctCount' in $$props) $$invalidate(2, correctCount = $$props.correctCount);
-		if ('incorrectCount' in $$props) $$invalidate(3, incorrectCount = $$props.incorrectCount);
+		if ('correctCount' in $$props) $$invalidate(4, correctCount = $$props.correctCount);
+		if ('incorrectCount' in $$props) $$invalidate(5, incorrectCount = $$props.incorrectCount);
 		if ('correctAnswer' in $$props) correctAnswer = $$props.correctAnswer;
 		if ('answerAllowed' in $$props) answerAllowed = $$props.answerAllowed;
-		if ('answerValue' in $$props) $$invalidate(14, answerValue = $$props.answerValue);
-		if ('resultText' in $$props) $$invalidate(4, resultText = $$props.resultText);
-		if ('resultClass' in $$props) $$invalidate(5, resultClass = $$props.resultClass);
+		if ('answerValue' in $$props) $$invalidate(18, answerValue = $$props.answerValue);
+		if ('resultText' in $$props) $$invalidate(6, resultText = $$props.resultText);
+		if ('resultClass' in $$props) $$invalidate(7, resultClass = $$props.resultClass);
 		if ('answerRank' in $$props) $$invalidate(0, answerRank = $$props.answerRank);
 		if ('answerFile' in $$props) $$invalidate(1, answerFile = $$props.answerFile);
-		if ('boardWidth' in $$props) $$invalidate(6, boardWidth = $$props.boardWidth);
-		if ('boardWrapper' in $$props) $$invalidate(7, boardWrapper = $$props.boardWrapper);
-		if ('boardContainer' in $$props) $$invalidate(8, boardContainer = $$props.boardContainer);
-		if ('chessground' in $$props) $$invalidate(15, chessground = $$props.chessground);
-		if ('fen' in $$props) $$invalidate(16, fen = $$props.fen);
+		if ('boardWidth' in $$props) $$invalidate(8, boardWidth = $$props.boardWidth);
+		if ('boardWrapper' in $$props) $$invalidate(9, boardWrapper = $$props.boardWrapper);
+		if ('boardContainer' in $$props) $$invalidate(10, boardContainer = $$props.boardContainer);
+		if ('chessground' in $$props) $$invalidate(19, chessground = $$props.chessground);
+		if ('fen' in $$props) $$invalidate(20, fen = $$props.fen);
+		if ('gameRunning' in $$props) $$invalidate(2, gameRunning = $$props.gameRunning);
+		if ('highScore' in $$props) $$invalidate(11, highScore = $$props.highScore);
+		if ('startingTime' in $$props) startingTime = $$props.startingTime;
+		if ('remainingTime' in $$props) $$invalidate(3, remainingTime = $$props.remainingTime);
+		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
+		if ('incorrectPenalty' in $$props) incorrectPenalty = $$props.incorrectPenalty;
+		if ('gameInterval' in $$props) gameInterval = $$props.gameInterval;
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -6596,13 +6783,21 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	$$self.$$.update = () => {
-		if ($$self.$$.dirty[0] & /*answerFile, answerRank*/ 3) {
+		if ($$self.$$.dirty[0] & /*gameRunning, remainingTime*/ 12) {
 			{
-				$$invalidate(14, answerValue = `${answerFile}${answerRank}`);
+				if (gameRunning && remainingTime <= 0) {
+					stopGame();
+				}
 			}
 		}
 
-		if ($$self.$$.dirty[0] & /*answerValue*/ 16384) {
+		if ($$self.$$.dirty[0] & /*answerFile, answerRank*/ 3) {
+			{
+				$$invalidate(18, answerValue = `${answerFile}${answerRank}`);
+			}
+		}
+
+		if ($$self.$$.dirty[0] & /*answerValue*/ 262144) {
 			{
 				if (answerValue.length === 2) {
 					handleAnswer();
@@ -6610,7 +6805,7 @@ function instance($$self, $$props, $$invalidate) {
 			}
 		}
 
-		if ($$self.$$.dirty[0] & /*chessground, fen*/ 98304) {
+		if ($$self.$$.dirty[0] & /*chessground, fen*/ 1572864) {
 			{
 				if (chessground && fen) {
 					chessground.set({
@@ -6625,6 +6820,8 @@ function instance($$self, $$props, $$invalidate) {
 	return [
 		answerRank,
 		answerFile,
+		gameRunning,
+		remainingTime,
 		correctCount,
 		incorrectCount,
 		resultText,
@@ -6632,11 +6829,13 @@ function instance($$self, $$props, $$invalidate) {
 		boardWidth,
 		boardWrapper,
 		boardContainer,
+		highScore,
 		$orientation,
 		$pieceSet,
 		orientation,
 		files,
 		ranks,
+		startGame,
 		answerValue,
 		chessground,
 		fen,
