@@ -18,11 +18,11 @@
   let correctAnswer;
   let answerAllowed;
   let answerValue = '';
-  let resultText;
-  let resultClass;
 
   let answerRank = '';
   let answerFile = '';
+
+  let answers = [];
 
   let chessgroundConfig = {
     fen: '8/8/8/8/8/8/8/8',
@@ -44,6 +44,7 @@
   let boardSize;
   let chessground;
   let fen;
+  let displayGoodMessage;
 
   // Game stuff
   let gameRunning = false;
@@ -116,13 +117,9 @@
       return;
     }
     if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
-      resultText = `${answerValue} was correct!`;
-      resultClass = 'correct';
       maxTime += correctBonus;
       correctCount++;
     } else {
-      resultText = `${answerValue} was incorrect. Correct answer was ${correctAnswer}.`
-      resultClass = 'incorrect';
       maxTime -= incorrectPenalty;
       incorrectCount++;
     }
@@ -132,7 +129,7 @@
   }
 
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-  const ranks = ['1', '2', '3', '4', '5' ,'6', '7', '8'];
+  const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
 
   function handleKeydown(event) {
     const key = event.key.toLowerCase();
@@ -172,27 +169,6 @@
 
 <div class="columns is-centered">
   <div class="column is-6-desktop">
-    <h1>Notation Trainer</h1>
-    <div class="block">
-      {#if $orientation === 'white'}
-        <button class="button is-small" on:click={() => {
-          orientation.set('black');
-        }}>View as black</button>
-      {:else}
-        <button class="button is-small" on:click={() => {
-          orientation.set('white');
-        }}>View as white</button>
-      {/if}
-      {#if !gameRunning}
-        <button class="button is-small" on:click={startGame}>Start Game</button>
-      {/if}
-    </div>
-    <div class="block">
-      <p>Correct: {correctCount}</p>
-      <p>Incorrect: {incorrectCount}</p>
-      <p>High Score: {highScore}</p>
-    </div>
-
     <div class="block">
       <Chessboard
         {chessgroundConfig}
@@ -212,7 +188,8 @@
             <div class="grid">
               {#each files as file (file)}
                 <div class="cell">
-                  <button class:selected={answerFile === file} class="button" on:click={() => answerFile = file}>{file}</button>
+                  <button class:selected={answerFile === file} class="button"
+                          on:click={() => answerFile = file}>{file}</button>
                 </div>
               {/each}
             </div>
@@ -225,7 +202,8 @@
             <div class="grid">
               {#each ranks as rank (rank)}
                 <div class="cell">
-                  <button class:selected={answerRank === rank} class="button" on:click={() => answerRank = rank}>{rank}</button>
+                  <button class:selected={answerRank === rank} class="button"
+                          on:click={() => answerRank = rank}>{rank}</button>
                 </div>
               {/each}
             </div>
@@ -234,15 +212,42 @@
       </div>
     </div>
   </div>
+  <div class="column is-2-desktop">
+    <div class="block">
+      {#if $orientation === 'white'}
+        <button class="button is-small" on:click={() => {
+          orientation.set('black');
+        }}>View as black
+        </button>
+      {:else}
+        <button class="button is-small" on:click={() => {
+          orientation.set('white');
+        }}>View as white
+        </button>
+      {/if}
+    </div>
+    {#if !gameRunning}
+      <div class="block">
+        <button class="button is-small" on:click={startGame}>Start Game</button>
+      </div>
+    {/if}
+    <div class="block">
+      <p>Correct: {correctCount}</p>
+      <p>Incorrect: {incorrectCount}</p>
+      <p>High Score: {highScore}</p>
+    </div>
+  </div>
 </div>
 
 <style>
   .selected {
     background: var(--bulma-success);
   }
+
   .selected:hover {
     background: var(--bulma-success-80)
   }
+
   .grid button {
     width: 95%;
   }
