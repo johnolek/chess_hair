@@ -210,7 +210,7 @@
         <div class="column">
           <div class="fixed-grid has-8-cols">
             <div class="grid">
-              {#each files as file}
+              {#each files as file (file)}
                 <div class="cell">
                   <button class:selected={answerFile === file} class="button is-large" on:click={() => answerFile = file}>{file}</button>
                 </div>
@@ -223,7 +223,7 @@
         <div class="column">
           <div class="fixed-grid has-8-cols">
             <div class="grid">
-              {#each ranks as rank}
+              {#each ranks as rank (rank)}
                 <div class="cell">
                   <button class:selected={answerRank === rank} class="button is-large" on:click={() => answerRank = rank}>{rank}</button>
                 </div>
@@ -237,7 +237,10 @@
 </div>
 
 <style>
-  button.selected {
+  .selected {
     background: var(--bulma-success);
+  }
+  .selected:hover {
+    background: var(--bulma-success-80)
   }
 </style>
