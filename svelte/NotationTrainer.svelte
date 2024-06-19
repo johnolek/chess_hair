@@ -205,14 +205,14 @@
     {#if gameRunning}
       <ProgressTimer max={maxTime} width={boardSize} on:complete={endGame}></ProgressTimer>
     {/if}
-    <div class="block">
+    <div class="block" style="width: {boardSize}px;">
       <div class="columns">
         <div class="column">
           <div class="fixed-grid has-8-cols">
             <div class="grid">
               {#each files as file (file)}
                 <div class="cell">
-                  <button class:selected={answerFile === file} class="button is-large" on:click={() => answerFile = file}>{file}</button>
+                  <button class:selected={answerFile === file} class="button" on:click={() => answerFile = file}>{file}</button>
                 </div>
               {/each}
             </div>
@@ -225,7 +225,7 @@
             <div class="grid">
               {#each ranks as rank (rank)}
                 <div class="cell">
-                  <button class:selected={answerRank === rank} class="button is-large" on:click={() => answerRank = rank}>{rank}</button>
+                  <button class:selected={answerRank === rank} class="button" on:click={() => answerRank = rank}>{rank}</button>
                 </div>
               {/each}
             </div>
@@ -242,5 +242,8 @@
   }
   .selected:hover {
     background: var(--bulma-success-80)
+  }
+  .grid button {
+    width: 95%;
   }
 </style>
