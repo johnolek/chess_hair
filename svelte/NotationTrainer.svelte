@@ -26,10 +26,11 @@
   let positionShownAt;
 
   class Answer {
-    constructor(givenAnswer, correctAnswer, timeToAnswer) {
+    constructor(givenAnswer, correctAnswer, timeToAnswer, orientation) {
       this.givenAnswer = givenAnswer;
       this.correctAnswer = correctAnswer;
       this.timeToAnswer = timeToAnswer;
+      this.orientation = orientation;
     }
 
     isCorrect() {
@@ -60,7 +61,6 @@
   let boardSize;
   let chessground;
   let fen;
-  let displayGoodMessage;
 
   // Game stuff
   let gameRunning = false;
@@ -136,7 +136,7 @@
     let correctAnswerDowncased = correctAnswer.toLowerCase();
     let givenAnswer = answerValue.toLowerCase().trim();
     let timeToAnswer = (new Date().getTime()) - positionShownAt;
-    answers = [...answers, new Answer(givenAnswer, correctAnswerDowncased, timeToAnswer)];
+    answers = [...answers, new Answer(givenAnswer, correctAnswerDowncased, timeToAnswer, $orientation)];
     if (givenAnswer === correctAnswerDowncased) {
       maxTime += correctBonus;
       correctCount++;
