@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+  import { flip } from 'svelte/animate';
+  import { fly } from 'svelte/transition';
   import Chessboard from './components/Chessboard.svelte';
 
   import { parsePgn, startingPosition } from 'chessops/pgn';
@@ -18,10 +20,24 @@
   let correctAnswer;
   let answerAllowed;
   let answerValue = '';
-
   let answerRank = '';
   let answerFile = '';
 
+  let positionShownAt;
+
+  class Answer {
+    constructor(givenAnswer, correctAnswer, timeToAnswer) {
+      this.givenAnswer = givenAnswer;
+      this.correctAnswer = correctAnswer;
+      this.timeToAnswer = timeToAnswer;
+    }
+
+    isCorrect() {
+      return this.givenAnswer === this.correctAnswer;
+    }
+  }
+
+  /** @type {Answer[]} */
   let answers = [];
 
   let chessgroundConfig = {
@@ -106,6 +122,7 @@
       chessground.move(from, to);
       answerValue = '';
       answerAllowed = true;
+      positionShownAt = new Date().getTime();
     }, 200)
   }
 
@@ -116,7 +133,11 @@
     if (answerValue.length !== 2) {
       return;
     }
-    if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
+    let correctAnswerDowncased = correctAnswer.toLowerCase();
+    let givenAnswer = answerValue.toLowerCase().trim();
+    let timeToAnswer = (new Date().getTime()) - positionShownAt;
+    answers = [...answers, new Answer(givenAnswer, correctAnswerDowncased, timeToAnswer)];
+    if (givenAnswer === correctAnswerDowncased) {
       maxTime += correctBonus;
       correctCount++;
     } else {
@@ -147,6 +168,7 @@
   }
 
   function startGame() {
+    answers = [];
     gameRunning = true;
     maxTime = 30;
     correctCount = 0;
@@ -235,6 +257,32 @@
       <p>Correct: {correctCount}</p>
       <p>Incorrect: {incorrectCount}</p>
       <p>High Score: {highScore}</p>
+      {#if answers.length > 0}
+        <div class="block">
+          <h3 class="is-size-3">Answers</h3>
+          <ol class="answers-list">
+            {#each [...answers].reverse().slice(0, 10) as answer(answer)}
+              <li
+                in:fly={{y: -200, duration: 1000}}
+                animate:flip
+              >
+                <span
+                  class="tag is-large"
+                  class:is-success={answer.isCorrect()}
+                  class:is-danger={!answer.isCorrect()}
+                  class:incorrect={!answer.isCorrect()}
+                >
+                  {answer.givenAnswer}
+                </span>
+                {#if !answer.isCorrect()}
+                  <span class="tag is-large">{answer.correctAnswer}</span>
+                {/if}
+                <span class="time">{(answer.timeToAnswer / 1000).toFixed(2)}s</span>
+              </li>
+            {/each}
+          </ol>
+        </div>
+      {/if}
     </div>
   </div>
 </div>
@@ -250,5 +298,21 @@
 
   .grid button {
     width: 95%;
+  }
+
+  .answers-list {
+    list-style-type: none;
+  }
+
+  .correct {
+    color: green;
+  }
+
+  .incorrect {
+    text-decoration: line-through;
+  }
+
+  li {
+    margin-bottom: 1em;
   }
 </style>

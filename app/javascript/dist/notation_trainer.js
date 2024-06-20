@@ -83,6 +83,14 @@ function component_subscribe(component, store, callback) {
 	component.$$.on_destroy.push(subscribe(store, callback));
 }
 
+/** @param {number | string} value
+ * @returns {[number, string]}
+ */
+function split_css_unit(value) {
+	const split = typeof value === 'string' && value.match(/^\s*(-?[\d.]+)([^\s]*)\s*$/);
+	return split ? [parseFloat(split[1]), split[2] || 'px'] : [/** @type {number} */ (value), 'px'];
+}
+
 const is_client = typeof window !== 'undefined';
 
 /** @type {() => number} */
@@ -162,6 +170,22 @@ function get_root_for_style(node) {
 		return /** @type {ShadowRoot} */ (root);
 	}
 	return node.ownerDocument;
+}
+
+/**
+ * @param {Node} node
+ * @returns {CSSStyleSheet}
+ */
+function append_empty_stylesheet(node) {
+	const style_element = element('style');
+	// For transitions to work without 'style-src: unsafe-inline' Content Security Policy,
+	// these empty tags need to be allowed with a hash as a workaround until we move to the Web Animations API.
+	// Using the hash for the empty string (for an empty tag) works in all browsers except Safari.
+	// So as a workaround for the workaround, when we append empty style tags we set their content to /* empty */.
+	// The hash 'sha256-9OlNO0DNEeaVzHL4RZwCLsBHA8WBQ8toBp/4F5XV2nc=' will then work even in Safari.
+	style_element.textContent = '/* empty */';
+	append_stylesheet(get_root_for_style(node), style_element);
+	return style_element.sheet;
 }
 
 /**
@@ -373,6 +397,199 @@ function custom_event(type, detail, { bubbles = false, cancelable = false } = {}
  * }} ChildNodeArray
  */
 
+// we need to store the information for multiple documents because a Svelte application could also contain iframes
+// https://github.com/sveltejs/svelte/issues/3624
+/** @type {Map<Document | ShadowRoot, import('./private.d.ts').StyleInformation>} */
+const managed_styles = new Map();
+
+let active = 0;
+
+// https://github.com/darkskyapp/string-hash/blob/master/index.js
+/**
+ * @param {string} str
+ * @returns {number}
+ */
+function hash$1(str) {
+	let hash = 5381;
+	let i = str.length;
+	while (i--) hash = ((hash << 5) - hash) ^ str.charCodeAt(i);
+	return hash >>> 0;
+}
+
+/**
+ * @param {Document | ShadowRoot} doc
+ * @param {Element & ElementCSSInlineStyle} node
+ * @returns {{ stylesheet: any; rules: {}; }}
+ */
+function create_style_information(doc, node) {
+	const info = { stylesheet: append_empty_stylesheet(node), rules: {} };
+	managed_styles.set(doc, info);
+	return info;
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {number} a
+ * @param {number} b
+ * @param {number} duration
+ * @param {number} delay
+ * @param {(t: number) => number} ease
+ * @param {(t: number, u: number) => string} fn
+ * @param {number} uid
+ * @returns {string}
+ */
+function create_rule(node, a, b, duration, delay, ease, fn, uid = 0) {
+	const step = 16.666 / duration;
+	let keyframes = '{\n';
+	for (let p = 0; p <= 1; p += step) {
+		const t = a + (b - a) * ease(p);
+		keyframes += p * 100 + `%{${fn(t, 1 - t)}}\n`;
+	}
+	const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
+	const name = `__svelte_${hash$1(rule)}_${uid}`;
+	const doc = get_root_for_style(node);
+	const { stylesheet, rules } = managed_styles.get(doc) || create_style_information(doc, node);
+	if (!rules[name]) {
+		rules[name] = true;
+		stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
+	}
+	const animation = node.style.animation || '';
+	node.style.animation = `${
+		animation ? `${animation}, ` : ''
+	}${name} ${duration}ms linear ${delay}ms 1 both`;
+	active += 1;
+	return name;
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {string} [name]
+ * @returns {void}
+ */
+function delete_rule(node, name) {
+	const previous = (node.style.animation || '').split(', ');
+	const next = previous.filter(
+		name
+			? (anim) => anim.indexOf(name) < 0 // remove specific animation
+			: (anim) => anim.indexOf('__svelte') === -1 // remove all Svelte animations
+	);
+	const deleted = previous.length - next.length;
+	if (deleted) {
+		node.style.animation = next.join(', ');
+		active -= deleted;
+		if (!active) clear_rules();
+	}
+}
+
+/** @returns {void} */
+function clear_rules() {
+	raf(() => {
+		if (active) return;
+		managed_styles.forEach((info) => {
+			const { ownerNode } = info.stylesheet;
+			// there is no ownerNode if it runs on jsdom.
+			if (ownerNode) detach(ownerNode);
+		});
+		managed_styles.clear();
+	});
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {import('./private.js').PositionRect} from
+ * @param {import('./private.js').AnimationFn} fn
+ */
+function create_animation(node, from, fn, params) {
+	if (!from) return noop;
+	const to = node.getBoundingClientRect();
+	if (
+		from.left === to.left &&
+		from.right === to.right &&
+		from.top === to.top &&
+		from.bottom === to.bottom
+	)
+		return noop;
+	const {
+		delay = 0,
+		duration = 300,
+		easing = identity,
+		// @ts-ignore todo: should this be separated from destructuring? Or start/end added to public api and documentation?
+		start: start_time = now() + delay,
+		// @ts-ignore todo:
+		end = start_time + duration,
+		tick = noop,
+		css
+	} = fn(node, { from, to }, params);
+	let running = true;
+	let started = false;
+	let name;
+	/** @returns {void} */
+	function start() {
+		if (css) {
+			name = create_rule(node, 0, 1, duration, delay, easing, css);
+		}
+		if (!delay) {
+			started = true;
+		}
+	}
+	/** @returns {void} */
+	function stop() {
+		if (css) delete_rule(node, name);
+		running = false;
+	}
+	loop((now) => {
+		if (!started && now >= start_time) {
+			started = true;
+		}
+		if (started && now >= end) {
+			tick(1, 0);
+			stop();
+		}
+		if (!running) {
+			return false;
+		}
+		if (started) {
+			const p = now - start_time;
+			const t = 0 + 1 * easing(p / duration);
+			tick(t, 1 - t);
+		}
+		return true;
+	});
+	start();
+	tick(0, 1);
+	return stop;
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @returns {void}
+ */
+function fix_position(node) {
+	const style = getComputedStyle(node);
+	if (style.position !== 'absolute' && style.position !== 'fixed') {
+		const { width, height } = style;
+		const a = node.getBoundingClientRect();
+		node.style.position = 'absolute';
+		node.style.width = width;
+		node.style.height = height;
+		add_transform(node, a);
+	}
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {import('./private.js').PositionRect} a
+ * @returns {void}
+ */
+function add_transform(node, a) {
+	const b = node.getBoundingClientRect();
+	if (a.left !== b.left || a.top !== b.top) {
+		const style = getComputedStyle(node);
+		const transform = style.transform === 'none' ? '' : style.transform;
+		node.style.transform = `${transform} translate(${a.left - b.left}px, ${a.top - b.top}px)`;
+	}
+}
+
 let current_component;
 
 /** @returns {void} */
@@ -583,6 +800,34 @@ function flush_render_callbacks(fns) {
 	render_callbacks = filtered;
 }
 
+/**
+ * @type {Promise<void> | null}
+ */
+let promise;
+
+/**
+ * @returns {Promise<void>}
+ */
+function wait() {
+	if (!promise) {
+		promise = Promise.resolve();
+		promise.then(() => {
+			promise = null;
+		});
+	}
+	return promise;
+}
+
+/**
+ * @param {Element} node
+ * @param {INTRO | OUTRO | boolean} direction
+ * @param {'start' | 'end'} kind
+ * @returns {void}
+ */
+function dispatch(node, direction, kind) {
+	node.dispatchEvent(custom_event(`${'intro' }${kind}`));
+}
+
 const outroing = new Set();
 
 /**
@@ -645,6 +890,91 @@ function transition_out(block, local, detach, callback) {
 	}
 }
 
+/**
+ * @type {import('../transition/public.js').TransitionConfig}
+ */
+const null_transition = { duration: 0 };
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {TransitionFn} fn
+ * @param {any} params
+ * @returns {{ start(): void; invalidate(): void; end(): void; }}
+ */
+function create_in_transition(node, fn, params) {
+	/**
+	 * @type {TransitionOptions} */
+	const options = { direction: 'in' };
+	let config = fn(node, params, options);
+	let running = false;
+	let animation_name;
+	let task;
+	let uid = 0;
+
+	/**
+	 * @returns {void} */
+	function cleanup() {
+		if (animation_name) delete_rule(node, animation_name);
+	}
+
+	/**
+	 * @returns {void} */
+	function go() {
+		const {
+			delay = 0,
+			duration = 300,
+			easing = identity,
+			tick = noop,
+			css
+		} = config || null_transition;
+		if (css) animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+		tick(0, 1);
+		const start_time = now() + delay;
+		const end_time = start_time + duration;
+		if (task) task.abort();
+		running = true;
+		add_render_callback(() => dispatch(node, true, 'start'));
+		task = loop((now) => {
+			if (running) {
+				if (now >= end_time) {
+					tick(1, 0);
+					dispatch(node, true, 'end');
+					cleanup();
+					return (running = false);
+				}
+				if (now >= start_time) {
+					const t = easing((now - start_time) / duration);
+					tick(t, 1 - t);
+				}
+			}
+			return running;
+		});
+	}
+	let started = false;
+	return {
+		start() {
+			if (started) return;
+			started = true;
+			delete_rule(node);
+			if (is_function(config)) {
+				config = config(options);
+				wait().then(go);
+			} else {
+				go();
+			}
+		},
+		invalidate() {
+			started = false;
+		},
+		end() {
+			if (running) {
+				cleanup();
+				running = false;
+			}
+		}
+	};
+}
+
 /** @typedef {1} INTRO */
 /** @typedef {0} OUTRO */
 /** @typedef {{ direction: 'in' | 'out' | 'both' }} TransitionOptions */
@@ -689,6 +1019,12 @@ function ensure_array_like(array_like_or_iterator) {
 function destroy_block(block, lookup) {
 	block.d(1);
 	lookup.delete(block.key);
+}
+
+/** @returns {void} */
+function fix_and_destroy_block(block, lookup) {
+	block.f();
+	destroy_block(block, lookup);
 }
 
 /** @returns {any[]} */
@@ -1221,6 +1557,80 @@ class SvelteComponentDev extends SvelteComponent {
 if (typeof window !== 'undefined')
 	// @ts-ignore
 	(window.__svelte || (window.__svelte = { v: new Set() })).v.add(PUBLIC_VERSION);
+
+/*
+Adapted from https://github.com/mattdesl
+Distributed under MIT License https://github.com/mattdesl/eases/blob/master/LICENSE.md
+*/
+
+/**
+ * https://svelte.dev/docs/svelte-easing
+ * @param {number} t
+ * @returns {number}
+ */
+function cubicOut(t) {
+	const f = t - 1.0;
+	return f * f * f + 1.0;
+}
+
+/**
+ * The flip function calculates the start and end position of an element and animates between them, translating the x and y values.
+ * `flip` stands for [First, Last, Invert, Play](https://aerotwist.com/blog/flip-your-animations/).
+ *
+ * https://svelte.dev/docs/svelte-animate#flip
+ * @param {Element} node
+ * @param {{ from: DOMRect; to: DOMRect }} fromTo
+ * @param {import('./public.js').FlipParams} params
+ * @returns {import('./public.js').AnimationConfig}
+ */
+function flip(node, { from, to }, params = {}) {
+	const style = getComputedStyle(node);
+	const transform = style.transform === 'none' ? '' : style.transform;
+	const [ox, oy] = style.transformOrigin.split(' ').map(parseFloat);
+	const dx = from.left + (from.width * ox) / to.width - (to.left + ox);
+	const dy = from.top + (from.height * oy) / to.height - (to.top + oy);
+	const { delay = 0, duration = (d) => Math.sqrt(d) * 120, easing = cubicOut } = params;
+	return {
+		delay,
+		duration: is_function(duration) ? duration(Math.sqrt(dx * dx + dy * dy)) : duration,
+		easing,
+		css: (t, u) => {
+			const x = u * dx;
+			const y = u * dy;
+			const sx = t + (u * from.width) / to.width;
+			const sy = t + (u * from.height) / to.height;
+			return `transform: ${transform} translate(${x}px, ${y}px) scale(${sx}, ${sy});`;
+		}
+	};
+}
+
+/**
+ * Animates the x and y positions and the opacity of an element. `in` transitions animate from the provided values, passed as parameters to the element's default values. `out` transitions animate from the element's default values to the provided values.
+ *
+ * https://svelte.dev/docs/svelte-transition#fly
+ * @param {Element} node
+ * @param {import('./public').FlyParams} [params]
+ * @returns {import('./public').TransitionConfig}
+ */
+function fly(
+	node,
+	{ delay = 0, duration = 400, easing = cubicOut, x = 0, y = 0, opacity = 0 } = {}
+) {
+	const style = getComputedStyle(node);
+	const target_opacity = +style.opacity;
+	const transform = style.transform === 'none' ? '' : style.transform;
+	const od = target_opacity * (1 - opacity);
+	const [xValue, xUnit] = split_css_unit(x);
+	const [yValue, yUnit] = split_css_unit(y);
+	return {
+		delay,
+		duration,
+		easing,
+		css: (t, u) => `
+			transform: ${transform} translate(${(1 - t) * xValue}${xUnit}, ${(1 - t) * yValue}${yUnit});
+			opacity: ${target_opacity - od * u}`
+	};
+}
 
 const colors = ['white', 'black'];
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -6902,35 +7312,41 @@ class ProgressTimer extends SvelteComponentDev {
 const file_1 = "svelte/NotationTrainer.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-ii2nth", ".selected.svelte-ii2nth.svelte-ii2nth{background:var(--bulma-success)}.selected.svelte-ii2nth.svelte-ii2nth:hover{background:var(--bulma-success-80)\n  }.grid.svelte-ii2nth button.svelte-ii2nth{width:95%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSIsInNvdXJjZXMiOlsiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IENoZXNzYm9hcmQgZnJvbSAnLi9jb21wb25lbnRzL0NoZXNzYm9hcmQuc3ZlbHRlJztcblxuICBpbXBvcnQgeyBwYXJzZVBnbiwgc3RhcnRpbmdQb3NpdGlvbiB9IGZyb20gJ2NoZXNzb3BzL3Bnbic7XG4gIGltcG9ydCB7IFV0aWwgfSBmcm9tICdzcmMvdXRpbCc7XG4gIGltcG9ydCB7IGdldFJhbmRvbUdhbWUgfSBmcm9tIFwic3JjL3JhbmRvbV9nYW1lc1wiO1xuICBpbXBvcnQgeyBwYXJzZVNhbiB9IGZyb20gXCJjaGVzc29wcy9zYW5cIjtcbiAgaW1wb3J0IHsgbWFrZUZlbiB9IGZyb20gXCJjaGVzc29wcy9mZW5cIjtcbiAgaW1wb3J0IHsgbWFrZVNxdWFyZSB9IGZyb20gXCJjaGVzc29wcy91dGlsXCI7XG4gIGltcG9ydCB7IHBlcnNpc3RlZCB9IGZyb20gXCJzdmVsdGUtcGVyc2lzdGVkLXN0b3JlXCI7XG4gIGltcG9ydCBQcm9ncmVzc1RpbWVyIGZyb20gXCIuL2NvbXBvbmVudHMvUHJvZ3Jlc3NUaW1lci5zdmVsdGVcIjtcblxuICBjb25zdCBvcmllbnRhdGlvbiA9IHBlcnNpc3RlZCgnbm90YXRpb24ub3JpZW50YXRpb24nLCAnd2hpdGUnKTtcblxuICBsZXQgY29ycmVjdENvdW50ID0gMDtcbiAgbGV0IGluY29ycmVjdENvdW50ID0gMDtcbiAgbGV0IGNvcnJlY3RBbnN3ZXI7XG4gIGxldCBhbnN3ZXJBbGxvd2VkO1xuICBsZXQgYW5zd2VyVmFsdWUgPSAnJztcblxuICBsZXQgYW5zd2VyUmFuayA9ICcnO1xuICBsZXQgYW5zd2VyRmlsZSA9ICcnO1xuXG4gIGxldCBhbnN3ZXJzID0gW107XG5cbiAgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge1xuICAgIGZlbjogJzgvOC84LzgvOC84LzgvOCcsXG4gICAgY29vcmRpbmF0ZXM6IGZhbHNlLFxuICAgIGFuaW1hdGlvbjoge1xuICAgICAgZW5hYmxlZDogdHJ1ZSxcbiAgICB9LFxuICAgIGhpZ2hsaWdodDoge1xuICAgICAgbGFzdE1vdmU6IHRydWUsXG4gICAgfSxcbiAgICBkcmFnZ2FibGU6IHtcbiAgICAgIGVuYWJsZWQ6IGZhbHNlLFxuICAgIH0sXG4gICAgc2VsZWN0YWJsZToge1xuICAgICAgZW5hYmxlZDogZmFsc2UsXG4gICAgfSxcbiAgICBvcmllbnRhdGlvbjogJG9yaWVudGF0aW9uLFxuICB9O1xuICBsZXQgYm9hcmRTaXplO1xuICBsZXQgY2hlc3Nncm91bmQ7XG4gIGxldCBmZW47XG4gIGxldCBkaXNwbGF5R29vZE1lc3NhZ2U7XG5cbiAgLy8gR2FtZSBzdHVmZlxuICBsZXQgZ2FtZVJ1bm5pbmcgPSBmYWxzZTtcbiAgbGV0IGhpZ2hTY29yZSA9IDA7XG4gIGxldCBtYXhUaW1lID0gMDtcbiAgbGV0IGNvcnJlY3RCb251cyA9IDI7XG4gIGxldCBpbmNvcnJlY3RQZW5hbHR5ID0gMTA7XG5cbiAgJDoge1xuICAgIGFuc3dlclZhbHVlID0gYCR7YW5zd2VyRmlsZX0ke2Fuc3dlclJhbmt9YDtcbiAgfVxuXG4gICQ6IHtcbiAgICBpZiAoYW5zd2VyVmFsdWUubGVuZ3RoID09PSAyKSB7XG4gICAgICBoYW5kbGVBbnN3ZXIoKTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBuZXdQb3NpdGlvbigpIHtcbiAgICBhbnN3ZXJBbGxvd2VkID0gZmFsc2U7XG4gICAgY29uc3QgZ2FtZSA9IGdldFJhbmRvbUdhbWUoKTtcbiAgICBjb25zdCBwZ25HYW1lID0gcGFyc2VQZ24oZ2FtZS5wZ24pWzBdO1xuICAgIGNvbnN0IHRvdGFsUGxpZXMgPSBbLi4ucGduR2FtZS5tb3Zlcy5tYWlubGluZSgpXS5sZW5ndGg7XG5cbiAgICBjb25zdCByYW5kb20gPSBVdGlsLmdldFJhbmRvbUludEJldHdlZW4oMSwgdG90YWxQbGllcyAtIDEpO1xuICAgIGNvbnN0IHBvc2l0aW9uUmVzdWx0ID0gc3RhcnRpbmdQb3NpdGlvbihwZ25HYW1lLmhlYWRlcnMpO1xuICAgIGNvbnN0IHBvc2l0aW9uID0gcG9zaXRpb25SZXN1bHQudW53cmFwKCk7XG4gICAgY29uc3QgYWxsTm9kZXMgPSBbLi4ucGduR2FtZS5tb3Zlcy5tYWlubGluZU5vZGVzKCldO1xuXG4gICAgaWYgKFsnTy1PJywgJ08tTy1PJ10uaW5jbHVkZXMoYWxsTm9kZXNbcmFuZG9tXS5kYXRhLnNhbikpIHtcbiAgICAgIC8vIFNraXAgY2FzdGxlc1xuICAgICAgcmV0dXJuIG5ld1Bvc2l0aW9uKCk7XG4gICAgfVxuXG4gICAgbGV0IGk7XG4gICAgbGV0IG1vdmU7XG4gICAgbGV0IG5leHROb2RlO1xuXG4gICAgZm9yIChpID0gMDsgaSA8IHJhbmRvbTsgaSsrKSB7XG4gICAgICBjb25zdCBub2RlID0gYWxsTm9kZXNbaV07XG4gICAgICBtb3ZlID0gcGFyc2VTYW4ocG9zaXRpb24sIG5vZGUuZGF0YS5zYW4pO1xuICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICAgIG5leHROb2RlID0gYWxsTm9kZXNbaSArIDFdO1xuICAgIH1cbiAgICBmZW4gPSBtYWtlRmVuKHBvc2l0aW9uLnRvU2V0dXAoKSk7XG5cbiAgICBjb25zdCBuZXh0TW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBuZXh0Tm9kZS5kYXRhLnNhbik7XG4gICAgY29uc3QgZnJvbSA9IG1ha2VTcXVhcmUobmV4dE1vdmUuZnJvbSk7XG4gICAgY29uc3QgdG8gPSBtYWtlU3F1YXJlKG5leHRNb3ZlLnRvKTtcbiAgICBjb3JyZWN0QW5zd2VyID0gdG87XG5cbiAgICBzZXRUaW1lb3V0KCgpID0+IHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiB0cnVlLFxuICAgICAgICAgIGNoZWNrOiBmYWxzZSxcbiAgICAgICAgfVxuICAgICAgfSk7XG4gICAgICBjaGVzc2dyb3VuZC5tb3ZlKGZyb20sIHRvKTtcbiAgICAgIGFuc3dlclZhbHVlID0gJyc7XG4gICAgICBhbnN3ZXJBbGxvd2VkID0gdHJ1ZTtcbiAgICB9LCAyMDApXG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVBbnN3ZXIoKSB7XG4gICAgaWYgKCFhbnN3ZXJBbGxvd2VkKSB7XG4gICAgICByZXR1cm47XG4gICAgfVxuICAgIGlmIChhbnN3ZXJWYWx1ZS5sZW5ndGggIT09IDIpIHtcbiAgICAgIHJldHVybjtcbiAgICB9XG4gICAgaWYgKGFuc3dlclZhbHVlLnRvTG93ZXJDYXNlKCkudHJpbSgpID09PSBjb3JyZWN0QW5zd2VyLnRvTG93ZXJDYXNlKCkpIHtcbiAgICAgIG1heFRpbWUgKz0gY29ycmVjdEJvbnVzO1xuICAgICAgY29ycmVjdENvdW50Kys7XG4gICAgfSBlbHNlIHtcbiAgICAgIG1heFRpbWUgLT0gaW5jb3JyZWN0UGVuYWx0eTtcbiAgICAgIGluY29ycmVjdENvdW50Kys7XG4gICAgfVxuICAgIGFuc3dlclJhbmsgPSAnJztcbiAgICBhbnN3ZXJGaWxlID0gJyc7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfVxuXG4gIGNvbnN0IGZpbGVzID0gWydhJywgJ2InLCAnYycsICdkJywgJ2UnLCAnZicsICdnJywgJ2gnXTtcbiAgY29uc3QgcmFua3MgPSBbJzEnLCAnMicsICczJywgJzQnLCAnNScsICc2JywgJzcnLCAnOCddO1xuXG4gIGZ1bmN0aW9uIGhhbmRsZUtleWRvd24oZXZlbnQpIHtcbiAgICBjb25zdCBrZXkgPSBldmVudC5rZXkudG9Mb3dlckNhc2UoKTtcbiAgICBpZiAoa2V5ID09PSAnYmFja3NwYWNlJykge1xuICAgICAgYW5zd2VyUmFuayA9ICcnO1xuICAgICAgYW5zd2VyRmlsZSA9ICcnO1xuICAgICAgcmV0dXJuO1xuICAgIH1cblxuICAgIGlmIChmaWxlcy5pbmNsdWRlcyhrZXkpKSB7XG4gICAgICBhbnN3ZXJGaWxlID0ga2V5O1xuICAgIH0gZWxzZSBpZiAocmFua3MuaW5jbHVkZXMoa2V5KSkge1xuICAgICAgYW5zd2VyUmFuayA9IGtleTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBzdGFydEdhbWUoKSB7XG4gICAgZ2FtZVJ1bm5pbmcgPSB0cnVlO1xuICAgIG1heFRpbWUgPSAzMDtcbiAgICBjb3JyZWN0Q291bnQgPSAwO1xuICAgIGluY29ycmVjdENvdW50ID0gMDtcbiAgICBuZXdQb3NpdGlvbigpO1xuICB9XG5cbiAgZnVuY3Rpb24gZW5kR2FtZSgpIHtcbiAgICBnYW1lUnVubmluZyA9IGZhbHNlO1xuICAgIGlmIChjb3JyZWN0Q291bnQgPiBoaWdoU2NvcmUpIHtcbiAgICAgIGhpZ2hTY29yZSA9IGNvcnJlY3RDb3VudDtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICB3aW5kb3cuYWRkRXZlbnRMaXN0ZW5lcigna2V5ZG93bicsIGhhbmRsZUtleWRvd24pO1xuICAgIG5ld1Bvc2l0aW9uKCk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXYgY2xhc3M9XCJjb2x1bW5zIGlzLWNlbnRlcmVkXCI+XG4gIDxkaXYgY2xhc3M9XCJjb2x1bW4gaXMtNi1kZXNrdG9wXCI+XG4gICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICA8Q2hlc3Nib2FyZFxuICAgICAgICB7Y2hlc3Nncm91bmRDb25maWd9XG4gICAgICAgIGJpbmQ6ZmVuPXtmZW59XG4gICAgICAgIGJpbmQ6Y2hlc3Nncm91bmQ9e2NoZXNzZ3JvdW5kfVxuICAgICAgICBvcmllbnRhdGlvbj17JG9yaWVudGF0aW9ufVxuICAgICAgICBiaW5kOnNpemU9e2JvYXJkU2l6ZX1cbiAgICAgIC8+XG4gICAgPC9kaXY+XG4gICAgeyNpZiBnYW1lUnVubmluZ31cbiAgICAgIDxQcm9ncmVzc1RpbWVyIG1heD17bWF4VGltZX0gd2lkdGg9e2JvYXJkU2l6ZX0gb246Y29tcGxldGU9e2VuZEdhbWV9PjwvUHJvZ3Jlc3NUaW1lcj5cbiAgICB7L2lmfVxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiIHN0eWxlPVwid2lkdGg6IHtib2FyZFNpemV9cHg7XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiY29sdW1uc1wiPlxuICAgICAgICA8ZGl2IGNsYXNzPVwiY29sdW1uXCI+XG4gICAgICAgICAgPGRpdiBjbGFzcz1cImZpeGVkLWdyaWQgaGFzLTgtY29sc1wiPlxuICAgICAgICAgICAgPGRpdiBjbGFzcz1cImdyaWRcIj5cbiAgICAgICAgICAgICAgeyNlYWNoIGZpbGVzIGFzIGZpbGUgKGZpbGUpfVxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgICAgICAgICA8YnV0dG9uIGNsYXNzOnNlbGVjdGVkPXthbnN3ZXJGaWxlID09PSBmaWxlfSBjbGFzcz1cImJ1dHRvblwiXG4gICAgICAgICAgICAgICAgICAgICAgICAgIG9uOmNsaWNrPXsoKSA9PiBhbnN3ZXJGaWxlID0gZmlsZX0+e2ZpbGV9PC9idXR0b24+XG4gICAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICAgIHsvZWFjaH1cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvZGl2PlxuICAgICAgPGRpdiBjbGFzcz1cImNvbHVtbnNcIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNvbHVtblwiPlxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJmaXhlZC1ncmlkIGhhcy04LWNvbHNcIj5cbiAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJncmlkXCI+XG4gICAgICAgICAgICAgIHsjZWFjaCByYW5rcyBhcyByYW5rIChyYW5rKX1cbiAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgICAgICAgICAgPGJ1dHRvbiBjbGFzczpzZWxlY3RlZD17YW5zd2VyUmFuayA9PT0gcmFua30gY2xhc3M9XCJidXR0b25cIlxuICAgICAgICAgICAgICAgICAgICAgICAgICBvbjpjbGljaz17KCkgPT4gYW5zd2VyUmFuayA9IHJhbmt9PntyYW5rfTwvYnV0dG9uPlxuICAgICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgICB7L2VhY2h9XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgPC9kaXY+XG4gIDxkaXYgY2xhc3M9XCJjb2x1bW4gaXMtMi1kZXNrdG9wXCI+XG4gICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICB7I2lmICRvcmllbnRhdGlvbiA9PT0gJ3doaXRlJ31cbiAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1zbWFsbFwiIG9uOmNsaWNrPXsoKSA9PiB7XG4gICAgICAgICAgb3JpZW50YXRpb24uc2V0KCdibGFjaycpO1xuICAgICAgICB9fT5WaWV3IGFzIGJsYWNrXG4gICAgICAgIDwvYnV0dG9uPlxuICAgICAgezplbHNlfVxuICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXNtYWxsXCIgb246Y2xpY2s9eygpID0+IHtcbiAgICAgICAgICBvcmllbnRhdGlvbi5zZXQoJ3doaXRlJyk7XG4gICAgICAgIH19PlZpZXcgYXMgd2hpdGVcbiAgICAgICAgPC9idXR0b24+XG4gICAgICB7L2lmfVxuICAgIDwvZGl2PlxuICAgIHsjaWYgIWdhbWVSdW5uaW5nfVxuICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtc21hbGxcIiBvbjpjbGljaz17c3RhcnRHYW1lfT5TdGFydCBHYW1lPC9idXR0b24+XG4gICAgICA8L2Rpdj5cbiAgICB7L2lmfVxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgPHA+Q29ycmVjdDoge2NvcnJlY3RDb3VudH08L3A+XG4gICAgICA8cD5JbmNvcnJlY3Q6IHtpbmNvcnJlY3RDb3VudH08L3A+XG4gICAgICA8cD5IaWdoIFNjb3JlOiB7aGlnaFNjb3JlfTwvcD5cbiAgICA8L2Rpdj5cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuc2VsZWN0ZWQge1xuICAgIGJhY2tncm91bmQ6IHZhcigtLWJ1bG1hLXN1Y2Nlc3MpO1xuICB9XG5cbiAgLnNlbGVjdGVkOmhvdmVyIHtcbiAgICBiYWNrZ3JvdW5kOiB2YXIoLS1idWxtYS1zdWNjZXNzLTgwKVxuICB9XG5cbiAgLmdyaWQgYnV0dG9uIHtcbiAgICB3aWR0aDogOTUlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQWtQRSxxQ0FBVSxDQUNSLFVBQVUsQ0FBRSxJQUFJLGVBQWUsQ0FDakMsQ0FFQSxxQ0FBUyxNQUFPLENBQ2QsVUFBVSxDQUFFLElBQUksa0JBQWtCLENBQUM7QUFDdkMsRUFBRSxDQUVBLG1CQUFLLENBQUMsb0JBQU8sQ0FDWCxLQUFLLENBQUUsR0FDVCJ9 */");
+	append_styles(target, "svelte-h2egyb", ".selected.svelte-h2egyb.svelte-h2egyb{background:var(--bulma-success)}.selected.svelte-h2egyb.svelte-h2egyb:hover{background:var(--bulma-success-80)\n  }.grid.svelte-h2egyb button.svelte-h2egyb{width:95%}.answers-list.svelte-h2egyb.svelte-h2egyb{list-style-type:none}.incorrect.svelte-h2egyb.svelte-h2egyb{text-decoration:line-through}li.svelte-h2egyb.svelte-h2egyb{margin-bottom:1em}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSIsInNvdXJjZXMiOlsiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSAnc3ZlbHRlJztcbiAgaW1wb3J0IHsgZmxpcCB9IGZyb20gJ3N2ZWx0ZS9hbmltYXRlJztcbiAgaW1wb3J0IHsgZmx5IH0gZnJvbSAnc3ZlbHRlL3RyYW5zaXRpb24nO1xuICBpbXBvcnQgQ2hlc3Nib2FyZCBmcm9tICcuL2NvbXBvbmVudHMvQ2hlc3Nib2FyZC5zdmVsdGUnO1xuXG4gIGltcG9ydCB7IHBhcnNlUGduLCBzdGFydGluZ1Bvc2l0aW9uIH0gZnJvbSAnY2hlc3NvcHMvcGduJztcbiAgaW1wb3J0IHsgVXRpbCB9IGZyb20gJ3NyYy91dGlsJztcbiAgaW1wb3J0IHsgZ2V0UmFuZG9tR2FtZSB9IGZyb20gXCJzcmMvcmFuZG9tX2dhbWVzXCI7XG4gIGltcG9ydCB7IHBhcnNlU2FuIH0gZnJvbSBcImNoZXNzb3BzL3NhblwiO1xuICBpbXBvcnQgeyBtYWtlRmVuIH0gZnJvbSBcImNoZXNzb3BzL2ZlblwiO1xuICBpbXBvcnQgeyBtYWtlU3F1YXJlIH0gZnJvbSBcImNoZXNzb3BzL3V0aWxcIjtcbiAgaW1wb3J0IHsgcGVyc2lzdGVkIH0gZnJvbSBcInN2ZWx0ZS1wZXJzaXN0ZWQtc3RvcmVcIjtcbiAgaW1wb3J0IFByb2dyZXNzVGltZXIgZnJvbSBcIi4vY29tcG9uZW50cy9Qcm9ncmVzc1RpbWVyLnN2ZWx0ZVwiO1xuXG4gIGNvbnN0IG9yaWVudGF0aW9uID0gcGVyc2lzdGVkKCdub3RhdGlvbi5vcmllbnRhdGlvbicsICd3aGl0ZScpO1xuXG4gIGxldCBjb3JyZWN0Q291bnQgPSAwO1xuICBsZXQgaW5jb3JyZWN0Q291bnQgPSAwO1xuICBsZXQgY29ycmVjdEFuc3dlcjtcbiAgbGV0IGFuc3dlckFsbG93ZWQ7XG4gIGxldCBhbnN3ZXJWYWx1ZSA9ICcnO1xuICBsZXQgYW5zd2VyUmFuayA9ICcnO1xuICBsZXQgYW5zd2VyRmlsZSA9ICcnO1xuXG4gIGxldCBwb3NpdGlvblNob3duQXQ7XG5cbiAgY2xhc3MgQW5zd2VyIHtcbiAgICBjb25zdHJ1Y3RvcihnaXZlbkFuc3dlciwgY29ycmVjdEFuc3dlciwgdGltZVRvQW5zd2VyKSB7XG4gICAgICB0aGlzLmdpdmVuQW5zd2VyID0gZ2l2ZW5BbnN3ZXI7XG4gICAgICB0aGlzLmNvcnJlY3RBbnN3ZXIgPSBjb3JyZWN0QW5zd2VyO1xuICAgICAgdGhpcy50aW1lVG9BbnN3ZXIgPSB0aW1lVG9BbnN3ZXI7XG4gICAgfVxuXG4gICAgaXNDb3JyZWN0KCkge1xuICAgICAgcmV0dXJuIHRoaXMuZ2l2ZW5BbnN3ZXIgPT09IHRoaXMuY29ycmVjdEFuc3dlcjtcbiAgICB9XG4gIH1cblxuICAvKiogQHR5cGUge0Fuc3dlcltdfSAqL1xuICBsZXQgYW5zd2VycyA9IFtdO1xuXG4gIGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHtcbiAgICBmZW46ICc4LzgvOC84LzgvOC84LzgnLFxuICAgIGNvb3JkaW5hdGVzOiBmYWxzZSxcbiAgICBhbmltYXRpb246IHtcbiAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgfSxcbiAgICBoaWdobGlnaHQ6IHtcbiAgICAgIGxhc3RNb3ZlOiB0cnVlLFxuICAgIH0sXG4gICAgZHJhZ2dhYmxlOiB7XG4gICAgICBlbmFibGVkOiBmYWxzZSxcbiAgICB9LFxuICAgIHNlbGVjdGFibGU6IHtcbiAgICAgIGVuYWJsZWQ6IGZhbHNlLFxuICAgIH0sXG4gICAgb3JpZW50YXRpb246ICRvcmllbnRhdGlvbixcbiAgfTtcbiAgbGV0IGJvYXJkU2l6ZTtcbiAgbGV0IGNoZXNzZ3JvdW5kO1xuICBsZXQgZmVuO1xuICBsZXQgZGlzcGxheUdvb2RNZXNzYWdlO1xuXG4gIC8vIEdhbWUgc3R1ZmZcbiAgbGV0IGdhbWVSdW5uaW5nID0gZmFsc2U7XG4gIGxldCBoaWdoU2NvcmUgPSAwO1xuICBsZXQgbWF4VGltZSA9IDA7XG4gIGxldCBjb3JyZWN0Qm9udXMgPSAyO1xuICBsZXQgaW5jb3JyZWN0UGVuYWx0eSA9IDEwO1xuXG4gICQ6IHtcbiAgICBhbnN3ZXJWYWx1ZSA9IGAke2Fuc3dlckZpbGV9JHthbnN3ZXJSYW5rfWA7XG4gIH1cblxuICAkOiB7XG4gICAgaWYgKGFuc3dlclZhbHVlLmxlbmd0aCA9PT0gMikge1xuICAgICAgaGFuZGxlQW5zd2VyKCk7XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gbmV3UG9zaXRpb24oKSB7XG4gICAgYW5zd2VyQWxsb3dlZCA9IGZhbHNlO1xuICAgIGNvbnN0IGdhbWUgPSBnZXRSYW5kb21HYW1lKCk7XG4gICAgY29uc3QgcGduR2FtZSA9IHBhcnNlUGduKGdhbWUucGduKVswXTtcbiAgICBjb25zdCB0b3RhbFBsaWVzID0gWy4uLnBnbkdhbWUubW92ZXMubWFpbmxpbmUoKV0ubGVuZ3RoO1xuXG4gICAgY29uc3QgcmFuZG9tID0gVXRpbC5nZXRSYW5kb21JbnRCZXR3ZWVuKDEsIHRvdGFsUGxpZXMgLSAxKTtcbiAgICBjb25zdCBwb3NpdGlvblJlc3VsdCA9IHN0YXJ0aW5nUG9zaXRpb24ocGduR2FtZS5oZWFkZXJzKTtcbiAgICBjb25zdCBwb3NpdGlvbiA9IHBvc2l0aW9uUmVzdWx0LnVud3JhcCgpO1xuICAgIGNvbnN0IGFsbE5vZGVzID0gWy4uLnBnbkdhbWUubW92ZXMubWFpbmxpbmVOb2RlcygpXTtcblxuICAgIGlmIChbJ08tTycsICdPLU8tTyddLmluY2x1ZGVzKGFsbE5vZGVzW3JhbmRvbV0uZGF0YS5zYW4pKSB7XG4gICAgICAvLyBTa2lwIGNhc3RsZXNcbiAgICAgIHJldHVybiBuZXdQb3NpdGlvbigpO1xuICAgIH1cblxuICAgIGxldCBpO1xuICAgIGxldCBtb3ZlO1xuICAgIGxldCBuZXh0Tm9kZTtcblxuICAgIGZvciAoaSA9IDA7IGkgPCByYW5kb207IGkrKykge1xuICAgICAgY29uc3Qgbm9kZSA9IGFsbE5vZGVzW2ldO1xuICAgICAgbW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBub2RlLmRhdGEuc2FuKTtcbiAgICAgIHBvc2l0aW9uLnBsYXkobW92ZSk7XG4gICAgICBuZXh0Tm9kZSA9IGFsbE5vZGVzW2kgKyAxXTtcbiAgICB9XG4gICAgZmVuID0gbWFrZUZlbihwb3NpdGlvbi50b1NldHVwKCkpO1xuXG4gICAgY29uc3QgbmV4dE1vdmUgPSBwYXJzZVNhbihwb3NpdGlvbiwgbmV4dE5vZGUuZGF0YS5zYW4pO1xuICAgIGNvbnN0IGZyb20gPSBtYWtlU3F1YXJlKG5leHRNb3ZlLmZyb20pO1xuICAgIGNvbnN0IHRvID0gbWFrZVNxdWFyZShuZXh0TW92ZS50byk7XG4gICAgY29ycmVjdEFuc3dlciA9IHRvO1xuXG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgICBoaWdobGlnaHQ6IHtcbiAgICAgICAgICBsYXN0TW92ZTogdHJ1ZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH1cbiAgICAgIH0pO1xuICAgICAgY2hlc3Nncm91bmQubW92ZShmcm9tLCB0byk7XG4gICAgICBhbnN3ZXJWYWx1ZSA9ICcnO1xuICAgICAgYW5zd2VyQWxsb3dlZCA9IHRydWU7XG4gICAgICBwb3NpdGlvblNob3duQXQgPSBuZXcgRGF0ZSgpLmdldFRpbWUoKTtcbiAgICB9LCAyMDApXG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVBbnN3ZXIoKSB7XG4gICAgaWYgKCFhbnN3ZXJBbGxvd2VkKSB7XG4gICAgICByZXR1cm47XG4gICAgfVxuICAgIGlmIChhbnN3ZXJWYWx1ZS5sZW5ndGggIT09IDIpIHtcbiAgICAgIHJldHVybjtcbiAgICB9XG4gICAgbGV0IGNvcnJlY3RBbnN3ZXJEb3duY2FzZWQgPSBjb3JyZWN0QW5zd2VyLnRvTG93ZXJDYXNlKCk7XG4gICAgbGV0IGdpdmVuQW5zd2VyID0gYW5zd2VyVmFsdWUudG9Mb3dlckNhc2UoKS50cmltKCk7XG4gICAgbGV0IHRpbWVUb0Fuc3dlciA9IChuZXcgRGF0ZSgpLmdldFRpbWUoKSkgLSBwb3NpdGlvblNob3duQXQ7XG4gICAgYW5zd2VycyA9IFsuLi5hbnN3ZXJzLCBuZXcgQW5zd2VyKGdpdmVuQW5zd2VyLCBjb3JyZWN0QW5zd2VyRG93bmNhc2VkLCB0aW1lVG9BbnN3ZXIpXTtcbiAgICBpZiAoZ2l2ZW5BbnN3ZXIgPT09IGNvcnJlY3RBbnN3ZXJEb3duY2FzZWQpIHtcbiAgICAgIG1heFRpbWUgKz0gY29ycmVjdEJvbnVzO1xuICAgICAgY29ycmVjdENvdW50Kys7XG4gICAgfSBlbHNlIHtcbiAgICAgIG1heFRpbWUgLT0gaW5jb3JyZWN0UGVuYWx0eTtcbiAgICAgIGluY29ycmVjdENvdW50Kys7XG4gICAgfVxuICAgIGFuc3dlclJhbmsgPSAnJztcbiAgICBhbnN3ZXJGaWxlID0gJyc7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfVxuXG4gIGNvbnN0IGZpbGVzID0gWydhJywgJ2InLCAnYycsICdkJywgJ2UnLCAnZicsICdnJywgJ2gnXTtcbiAgY29uc3QgcmFua3MgPSBbJzEnLCAnMicsICczJywgJzQnLCAnNScsICc2JywgJzcnLCAnOCddO1xuXG4gIGZ1bmN0aW9uIGhhbmRsZUtleWRvd24oZXZlbnQpIHtcbiAgICBjb25zdCBrZXkgPSBldmVudC5rZXkudG9Mb3dlckNhc2UoKTtcbiAgICBpZiAoa2V5ID09PSAnYmFja3NwYWNlJykge1xuICAgICAgYW5zd2VyUmFuayA9ICcnO1xuICAgICAgYW5zd2VyRmlsZSA9ICcnO1xuICAgICAgcmV0dXJuO1xuICAgIH1cblxuICAgIGlmIChmaWxlcy5pbmNsdWRlcyhrZXkpKSB7XG4gICAgICBhbnN3ZXJGaWxlID0ga2V5O1xuICAgIH0gZWxzZSBpZiAocmFua3MuaW5jbHVkZXMoa2V5KSkge1xuICAgICAgYW5zd2VyUmFuayA9IGtleTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBzdGFydEdhbWUoKSB7XG4gICAgYW5zd2VycyA9IFtdO1xuICAgIGdhbWVSdW5uaW5nID0gdHJ1ZTtcbiAgICBtYXhUaW1lID0gMzA7XG4gICAgY29ycmVjdENvdW50ID0gMDtcbiAgICBpbmNvcnJlY3RDb3VudCA9IDA7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGVuZEdhbWUoKSB7XG4gICAgZ2FtZVJ1bm5pbmcgPSBmYWxzZTtcbiAgICBpZiAoY29ycmVjdENvdW50ID4gaGlnaFNjb3JlKSB7XG4gICAgICBoaWdoU2NvcmUgPSBjb3JyZWN0Q291bnQ7XG4gICAgfVxuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgd2luZG93LmFkZEV2ZW50TGlzdGVuZXIoJ2tleWRvd24nLCBoYW5kbGVLZXlkb3duKTtcbiAgICBuZXdQb3NpdGlvbigpO1xuICB9KTtcbjwvc2NyaXB0PlxuXG48ZGl2IGNsYXNzPVwiY29sdW1ucyBpcy1jZW50ZXJlZFwiPlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGlzLTYtZGVza3RvcFwiPlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgPENoZXNzYm9hcmRcbiAgICAgICAge2NoZXNzZ3JvdW5kQ29uZmlnfVxuICAgICAgICBiaW5kOmZlbj17ZmVufVxuICAgICAgICBiaW5kOmNoZXNzZ3JvdW5kPXtjaGVzc2dyb3VuZH1cbiAgICAgICAgb3JpZW50YXRpb249eyRvcmllbnRhdGlvbn1cbiAgICAgICAgYmluZDpzaXplPXtib2FyZFNpemV9XG4gICAgICAvPlxuICAgIDwvZGl2PlxuICAgIHsjaWYgZ2FtZVJ1bm5pbmd9XG4gICAgICA8UHJvZ3Jlc3NUaW1lciBtYXg9e21heFRpbWV9IHdpZHRoPXtib2FyZFNpemV9IG9uOmNvbXBsZXRlPXtlbmRHYW1lfT48L1Byb2dyZXNzVGltZXI+XG4gICAgey9pZn1cbiAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIiBzdHlsZT1cIndpZHRoOiB7Ym9hcmRTaXplfXB4O1wiPlxuICAgICAgPGRpdiBjbGFzcz1cImNvbHVtbnNcIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNvbHVtblwiPlxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJmaXhlZC1ncmlkIGhhcy04LWNvbHNcIj5cbiAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJncmlkXCI+XG4gICAgICAgICAgICAgIHsjZWFjaCBmaWxlcyBhcyBmaWxlIChmaWxlKX1cbiAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgICAgICAgICAgPGJ1dHRvbiBjbGFzczpzZWxlY3RlZD17YW5zd2VyRmlsZSA9PT0gZmlsZX0gY2xhc3M9XCJidXR0b25cIlxuICAgICAgICAgICAgICAgICAgICAgICAgICBvbjpjbGljaz17KCkgPT4gYW5zd2VyRmlsZSA9IGZpbGV9PntmaWxlfTwvYnV0dG9uPlxuICAgICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgICB7L2VhY2h9XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cbiAgICAgIDxkaXYgY2xhc3M9XCJjb2x1bW5zXCI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjb2x1bW5cIj5cbiAgICAgICAgICA8ZGl2IGNsYXNzPVwiZml4ZWQtZ3JpZCBoYXMtOC1jb2xzXCI+XG4gICAgICAgICAgICA8ZGl2IGNsYXNzPVwiZ3JpZFwiPlxuICAgICAgICAgICAgICB7I2VhY2ggcmFua3MgYXMgcmFuayAocmFuayl9XG4gICAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNlbGxcIj5cbiAgICAgICAgICAgICAgICAgIDxidXR0b24gY2xhc3M6c2VsZWN0ZWQ9e2Fuc3dlclJhbmsgPT09IHJhbmt9IGNsYXNzPVwiYnV0dG9uXCJcbiAgICAgICAgICAgICAgICAgICAgICAgICAgb246Y2xpY2s9eygpID0+IGFuc3dlclJhbmsgPSByYW5rfT57cmFua308L2J1dHRvbj5cbiAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgey9lYWNofVxuICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9kaXY+XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGlzLTItZGVza3RvcFwiPlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgeyNpZiAkb3JpZW50YXRpb24gPT09ICd3aGl0ZSd9XG4gICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtc21hbGxcIiBvbjpjbGljaz17KCkgPT4ge1xuICAgICAgICAgIG9yaWVudGF0aW9uLnNldCgnYmxhY2snKTtcbiAgICAgICAgfX0+VmlldyBhcyBibGFja1xuICAgICAgICA8L2J1dHRvbj5cbiAgICAgIHs6ZWxzZX1cbiAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1zbWFsbFwiIG9uOmNsaWNrPXsoKSA9PiB7XG4gICAgICAgICAgb3JpZW50YXRpb24uc2V0KCd3aGl0ZScpO1xuICAgICAgICB9fT5WaWV3IGFzIHdoaXRlXG4gICAgICAgIDwvYnV0dG9uPlxuICAgICAgey9pZn1cbiAgICA8L2Rpdj5cbiAgICB7I2lmICFnYW1lUnVubmluZ31cbiAgICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXNtYWxsXCIgb246Y2xpY2s9e3N0YXJ0R2FtZX0+U3RhcnQgR2FtZTwvYnV0dG9uPlxuICAgICAgPC9kaXY+XG4gICAgey9pZn1cbiAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgIDxwPkNvcnJlY3Q6IHtjb3JyZWN0Q291bnR9PC9wPlxuICAgICAgPHA+SW5jb3JyZWN0OiB7aW5jb3JyZWN0Q291bnR9PC9wPlxuICAgICAgPHA+SGlnaCBTY29yZToge2hpZ2hTY29yZX08L3A+XG4gICAgICB7I2lmIGFuc3dlcnMubGVuZ3RoID4gMH1cbiAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgICAgPGgzIGNsYXNzPVwiaXMtc2l6ZS0zXCI+QW5zd2VyczwvaDM+XG4gICAgICAgICAgPG9sIGNsYXNzPVwiYW5zd2Vycy1saXN0XCI+XG4gICAgICAgICAgICB7I2VhY2ggWy4uLmFuc3dlcnNdLnJldmVyc2UoKS5zbGljZSgwLCAxMCkgYXMgYW5zd2VyKGFuc3dlcil9XG4gICAgICAgICAgICAgIDxsaVxuICAgICAgICAgICAgICAgIGluOmZseT17e3k6IC0yMDAsIGR1cmF0aW9uOiAxMDAwfX1cbiAgICAgICAgICAgICAgICBhbmltYXRlOmZsaXBcbiAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDxzcGFuXG4gICAgICAgICAgICAgICAgICBjbGFzcz1cInRhZyBpcy1sYXJnZVwiXG4gICAgICAgICAgICAgICAgICBjbGFzczppcy1zdWNjZXNzPXthbnN3ZXIuaXNDb3JyZWN0KCl9XG4gICAgICAgICAgICAgICAgICBjbGFzczppcy1kYW5nZXI9eyFhbnN3ZXIuaXNDb3JyZWN0KCl9XG4gICAgICAgICAgICAgICAgICBjbGFzczppbmNvcnJlY3Q9eyFhbnN3ZXIuaXNDb3JyZWN0KCl9XG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgICAge2Fuc3dlci5naXZlbkFuc3dlcn1cbiAgICAgICAgICAgICAgICA8L3NwYW4+XG4gICAgICAgICAgICAgICAgeyNpZiAhYW5zd2VyLmlzQ29ycmVjdCgpfVxuICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3M9XCJ0YWcgaXMtbGFyZ2VcIj57YW5zd2VyLmNvcnJlY3RBbnN3ZXJ9PC9zcGFuPlxuICAgICAgICAgICAgICAgIHsvaWZ9XG4gICAgICAgICAgICAgICAgPHNwYW4gY2xhc3M9XCJ0aW1lXCI+eyhhbnN3ZXIudGltZVRvQW5zd2VyIC8gMTAwMCkudG9GaXhlZCgyKX1zPC9zcGFuPlxuICAgICAgICAgICAgICA8L2xpPlxuICAgICAgICAgICAgey9lYWNofVxuICAgICAgICAgIDwvb2w+XG4gICAgICAgIDwvZGl2PlxuICAgICAgey9pZn1cbiAgICA8L2Rpdj5cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuc2VsZWN0ZWQge1xuICAgIGJhY2tncm91bmQ6IHZhcigtLWJ1bG1hLXN1Y2Nlc3MpO1xuICB9XG5cbiAgLnNlbGVjdGVkOmhvdmVyIHtcbiAgICBiYWNrZ3JvdW5kOiB2YXIoLS1idWxtYS1zdWNjZXNzLTgwKVxuICB9XG5cbiAgLmdyaWQgYnV0dG9uIHtcbiAgICB3aWR0aDogOTUlO1xuICB9XG5cbiAgLmFuc3dlcnMtbGlzdCB7XG4gICAgbGlzdC1zdHlsZS10eXBlOiBub25lO1xuICB9XG5cbiAgLmNvcnJlY3Qge1xuICAgIGNvbG9yOiBncmVlbjtcbiAgfVxuXG4gIC5pbmNvcnJlY3Qge1xuICAgIHRleHQtZGVjb3JhdGlvbjogbGluZS10aHJvdWdoO1xuICB9XG5cbiAgbGkge1xuICAgIG1hcmdpbi1ib3R0b206IDFlbTtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFrU0UscUNBQVUsQ0FDUixVQUFVLENBQUUsSUFBSSxlQUFlLENBQ2pDLENBRUEscUNBQVMsTUFBTyxDQUNkLFVBQVUsQ0FBRSxJQUFJLGtCQUFrQixDQUFDO0FBQ3ZDLEVBQUUsQ0FFQSxtQkFBSyxDQUFDLG9CQUFPLENBQ1gsS0FBSyxDQUFFLEdBQ1QsQ0FFQSx5Q0FBYyxDQUNaLGVBQWUsQ0FBRSxJQUNuQixDQU1BLHNDQUFXLENBQ1QsZUFBZSxDQUFFLFlBQ25CLENBRUEsOEJBQUcsQ0FDRCxhQUFhLENBQUUsR0FDakIifQ== */");
 }
 
 function get_each_context(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[34] = list[i];
+	child_ctx[36] = list[i];
 	return child_ctx;
 }
 
 function get_each_context_1(ctx, list, i) {
 	const child_ctx = ctx.slice();
-	child_ctx[37] = list[i];
+	child_ctx[39] = list[i];
 	return child_ctx;
 }
 
-// (181:4) {#if gameRunning}
-function create_if_block_2(ctx) {
+function get_each_context_2(ctx, list, i) {
+	const child_ctx = ctx.slice();
+	child_ctx[42] = list[i];
+	return child_ctx;
+}
+
+// (203:4) {#if gameRunning}
+function create_if_block_4(ctx) {
 	let progresstimer;
 	let current;
 
 	progresstimer = new ProgressTimer({
 			props: {
-				max: /*maxTime*/ ctx[9],
-				width: /*boardSize*/ ctx[4]
+				max: /*maxTime*/ ctx[10],
+				width: /*boardSize*/ ctx[5]
 			},
 			$$inline: true
 		});
 
-	progresstimer.$on("complete", /*endGame*/ ctx[16]);
+	progresstimer.$on("complete", /*endGame*/ ctx[17]);
 
 	const block = {
 		c: function create() {
@@ -6942,8 +7358,8 @@ function create_if_block_2(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const progresstimer_changes = {};
-			if (dirty[0] & /*maxTime*/ 512) progresstimer_changes.max = /*maxTime*/ ctx[9];
-			if (dirty[0] & /*boardSize*/ 16) progresstimer_changes.width = /*boardSize*/ ctx[4];
+			if (dirty[0] & /*maxTime*/ 1024) progresstimer_changes.max = /*maxTime*/ ctx[10];
+			if (dirty[0] & /*boardSize*/ 32) progresstimer_changes.width = /*boardSize*/ ctx[5];
 			progresstimer.$set(progresstimer_changes);
 		},
 		i: function intro(local) {
@@ -6962,17 +7378,17 @@ function create_if_block_2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_2.name,
+		id: create_if_block_4.name,
 		type: "if",
-		source: "(181:4) {#if gameRunning}",
+		source: "(203:4) {#if gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (189:14) {#each files as file (file)}
-function create_each_block_1(key_1, ctx) {
+// (211:14) {#each files as file (file)}
+function create_each_block_2(key_1, ctx) {
 	let div;
 	let button;
 	let t1;
@@ -6980,7 +7396,7 @@ function create_each_block_1(key_1, ctx) {
 	let dispose;
 
 	function click_handler() {
-		return /*click_handler*/ ctx[21](/*file*/ ctx[37]);
+		return /*click_handler*/ ctx[22](/*file*/ ctx[42]);
 	}
 
 	const block = {
@@ -6989,13 +7405,13 @@ function create_each_block_1(key_1, ctx) {
 		c: function create() {
 			div = element("div");
 			button = element("button");
-			button.textContent = `${/*file*/ ctx[37]}`;
+			button.textContent = `${/*file*/ ctx[42]}`;
 			t1 = space();
-			attr_dev(button, "class", "button svelte-ii2nth");
-			toggle_class(button, "selected", /*answerFile*/ ctx[1] === /*file*/ ctx[37]);
-			add_location(button, file_1, 190, 18, 4512);
+			attr_dev(button, "class", "button svelte-h2egyb");
+			toggle_class(button, "selected", /*answerFile*/ ctx[1] === /*file*/ ctx[42]);
+			add_location(button, file_1, 212, 18, 5244);
 			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 189, 16, 4475);
+			add_location(div, file_1, 211, 16, 5207);
 			this.first = div;
 		},
 		m: function mount(target, anchor) {
@@ -7011,8 +7427,73 @@ function create_each_block_1(key_1, ctx) {
 		p: function update(new_ctx, dirty) {
 			ctx = new_ctx;
 
-			if (dirty[0] & /*answerFile, files*/ 8194) {
-				toggle_class(button, "selected", /*answerFile*/ ctx[1] === /*file*/ ctx[37]);
+			if (dirty[0] & /*answerFile, files*/ 16386) {
+				toggle_class(button, "selected", /*answerFile*/ ctx[1] === /*file*/ ctx[42]);
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_each_block_2.name,
+		type: "each",
+		source: "(211:14) {#each files as file (file)}",
+		ctx
+	});
+
+	return block;
+}
+
+// (225:14) {#each ranks as rank (rank)}
+function create_each_block_1(key_1, ctx) {
+	let div;
+	let button;
+	let t1;
+	let mounted;
+	let dispose;
+
+	function click_handler_1() {
+		return /*click_handler_1*/ ctx[23](/*rank*/ ctx[39]);
+	}
+
+	const block = {
+		key: key_1,
+		first: null,
+		c: function create() {
+			div = element("div");
+			button = element("button");
+			button.textContent = `${/*rank*/ ctx[39]}`;
+			t1 = space();
+			attr_dev(button, "class", "button svelte-h2egyb");
+			toggle_class(button, "selected", /*answerRank*/ ctx[0] === /*rank*/ ctx[39]);
+			add_location(button, file_1, 226, 18, 5720);
+			attr_dev(div, "class", "cell");
+			add_location(div, file_1, 225, 16, 5683);
+			this.first = div;
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, button);
+			append_dev(div, t1);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", click_handler_1, false);
+				mounted = true;
+			}
+		},
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
+
+			if (dirty[0] & /*answerRank, ranks*/ 32769) {
+				toggle_class(button, "selected", /*answerRank*/ ctx[0] === /*rank*/ ctx[39]);
 			}
 		},
 		d: function destroy(detaching) {
@@ -7029,79 +7510,14 @@ function create_each_block_1(key_1, ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(189:14) {#each files as file (file)}",
+		source: "(225:14) {#each ranks as rank (rank)}",
 		ctx
 	});
 
 	return block;
 }
 
-// (203:14) {#each ranks as rank (rank)}
-function create_each_block(key_1, ctx) {
-	let div;
-	let button;
-	let t1;
-	let mounted;
-	let dispose;
-
-	function click_handler_1() {
-		return /*click_handler_1*/ ctx[22](/*rank*/ ctx[34]);
-	}
-
-	const block = {
-		key: key_1,
-		first: null,
-		c: function create() {
-			div = element("div");
-			button = element("button");
-			button.textContent = `${/*rank*/ ctx[34]}`;
-			t1 = space();
-			attr_dev(button, "class", "button svelte-ii2nth");
-			toggle_class(button, "selected", /*answerRank*/ ctx[0] === /*rank*/ ctx[34]);
-			add_location(button, file_1, 204, 18, 4988);
-			attr_dev(div, "class", "cell");
-			add_location(div, file_1, 203, 16, 4951);
-			this.first = div;
-		},
-		m: function mount(target, anchor) {
-			insert_dev(target, div, anchor);
-			append_dev(div, button);
-			append_dev(div, t1);
-
-			if (!mounted) {
-				dispose = listen_dev(button, "click", click_handler_1, false);
-				mounted = true;
-			}
-		},
-		p: function update(new_ctx, dirty) {
-			ctx = new_ctx;
-
-			if (dirty[0] & /*answerRank, ranks*/ 16385) {
-				toggle_class(button, "selected", /*answerRank*/ ctx[0] === /*rank*/ ctx[34]);
-			}
-		},
-		d: function destroy(detaching) {
-			if (detaching) {
-				detach_dev(div);
-			}
-
-			mounted = false;
-			dispose();
-		}
-	};
-
-	dispatch_dev("SvelteRegisterBlock", {
-		block,
-		id: create_each_block.name,
-		type: "each",
-		source: "(203:14) {#each ranks as rank (rank)}",
-		ctx
-	});
-
-	return block;
-}
-
-// (222:6) {:else}
+// (244:6) {:else}
 function create_else_block(ctx) {
 	let button;
 	let mounted;
@@ -7112,13 +7528,13 @@ function create_else_block(ctx) {
 			button = element("button");
 			button.textContent = "View as white";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 222, 8, 5510);
+			add_location(button, file_1, 244, 8, 6242);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler_3*/ ctx[24], false);
+				dispose = listen_dev(button, "click", /*click_handler_3*/ ctx[25], false);
 				mounted = true;
 			}
 		},
@@ -7137,15 +7553,15 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(222:6) {:else}",
+		source: "(244:6) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (217:6) {#if $orientation === 'white'}
-function create_if_block_1(ctx) {
+// (239:6) {#if $orientation === 'white'}
+function create_if_block_3(ctx) {
 	let button;
 	let mounted;
 	let dispose;
@@ -7155,13 +7571,13 @@ function create_if_block_1(ctx) {
 			button = element("button");
 			button.textContent = "View as black";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 217, 8, 5359);
+			add_location(button, file_1, 239, 8, 6091);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler_2*/ ctx[23], false);
+				dispose = listen_dev(button, "click", /*click_handler_2*/ ctx[24], false);
 				mounted = true;
 			}
 		},
@@ -7178,17 +7594,17 @@ function create_if_block_1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_1.name,
+		id: create_if_block_3.name,
 		type: "if",
-		source: "(217:6) {#if $orientation === 'white'}",
+		source: "(239:6) {#if $orientation === 'white'}",
 		ctx
 	});
 
 	return block;
 }
 
-// (229:4) {#if !gameRunning}
-function create_if_block(ctx) {
+// (251:4) {#if !gameRunning}
+function create_if_block_2(ctx) {
 	let div;
 	let button;
 	let mounted;
@@ -7200,16 +7616,16 @@ function create_if_block(ctx) {
 			button = element("button");
 			button.textContent = "Start Game";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file_1, 230, 8, 5719);
+			add_location(button, file_1, 252, 8, 6451);
 			attr_dev(div, "class", "block");
-			add_location(div, file_1, 229, 6, 5691);
+			add_location(div, file_1, 251, 6, 6423);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
 			append_dev(div, button);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*startGame*/ ctx[15], false);
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[16], false);
 				mounted = true;
 			}
 		},
@@ -7226,9 +7642,258 @@ function create_if_block(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
+		id: create_if_block_2.name,
+		type: "if",
+		source: "(251:4) {#if !gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+// (260:6) {#if answers.length > 0}
+function create_if_block(ctx) {
+	let div;
+	let h3;
+	let t1;
+	let ol;
+	let each_blocks = [];
+	let each_1_lookup = new Map();
+	let each_value = ensure_array_like_dev([.../*answers*/ ctx[4]].reverse().slice(0, 10));
+	const get_key = ctx => /*answer*/ ctx[36];
+	validate_each_keys(ctx, each_value, get_each_context, get_key);
+
+	for (let i = 0; i < each_value.length; i += 1) {
+		let child_ctx = get_each_context(ctx, each_value, i);
+		let key = get_key(child_ctx);
+		each_1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
+	}
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			h3 = element("h3");
+			h3.textContent = "Answers";
+			t1 = space();
+			ol = element("ol");
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].c();
+			}
+
+			attr_dev(h3, "class", "is-size-3");
+			add_location(h3, file_1, 261, 10, 6755);
+			attr_dev(ol, "class", "answers-list svelte-h2egyb");
+			add_location(ol, file_1, 262, 10, 6800);
+			attr_dev(div, "class", "block");
+			add_location(div, file_1, 260, 8, 6725);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, h3);
+			append_dev(div, t1);
+			append_dev(div, ol);
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				if (each_blocks[i]) {
+					each_blocks[i].m(ol, null);
+				}
+			}
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*answers*/ 16) {
+				each_value = ensure_array_like_dev([.../*answers*/ ctx[4]].reverse().slice(0, 10));
+				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].r();
+				validate_each_keys(ctx, each_value, get_each_context, get_key);
+				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, ol, fix_and_destroy_block, create_each_block, null, get_each_context);
+				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].a();
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].d();
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(229:4) {#if !gameRunning}",
+		source: "(260:6) {#if answers.length > 0}",
+		ctx
+	});
+
+	return block;
+}
+
+// (277:16) {#if !answer.isCorrect()}
+function create_if_block_1(ctx) {
+	let span;
+	let t_value = /*answer*/ ctx[36].correctAnswer + "";
+	let t;
+
+	const block = {
+		c: function create() {
+			span = element("span");
+			t = text(t_value);
+			attr_dev(span, "class", "tag is-large");
+			add_location(span, file_1, 277, 18, 7384);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, span, anchor);
+			append_dev(span, t);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*answers*/ 16 && t_value !== (t_value = /*answer*/ ctx[36].correctAnswer + "")) set_data_dev(t, t_value);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(span);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_1.name,
+		type: "if",
+		source: "(277:16) {#if !answer.isCorrect()}",
+		ctx
+	});
+
+	return block;
+}
+
+// (264:12) {#each [...answers].reverse().slice(0, 10) as answer(answer)}
+function create_each_block(key_1, ctx) {
+	let li;
+	let span0;
+	let t0_value = /*answer*/ ctx[36].givenAnswer + "";
+	let t0;
+	let t1;
+	let show_if = !/*answer*/ ctx[36].isCorrect();
+	let t2;
+	let span1;
+	let t3_value = (/*answer*/ ctx[36].timeToAnswer / 1000).toFixed(2) + "";
+	let t3;
+	let t4;
+	let t5;
+	let li_intro;
+	let rect;
+	let stop_animation = noop;
+	let if_block = show_if && create_if_block_1(ctx);
+
+	const block = {
+		key: key_1,
+		first: null,
+		c: function create() {
+			li = element("li");
+			span0 = element("span");
+			t0 = text(t0_value);
+			t1 = space();
+			if (if_block) if_block.c();
+			t2 = space();
+			span1 = element("span");
+			t3 = text(t3_value);
+			t4 = text("s");
+			t5 = space();
+			attr_dev(span0, "class", "tag is-large svelte-h2egyb");
+			toggle_class(span0, "is-success", /*answer*/ ctx[36].isCorrect());
+			toggle_class(span0, "is-danger", !/*answer*/ ctx[36].isCorrect());
+			toggle_class(span0, "incorrect", !/*answer*/ ctx[36].isCorrect());
+			add_location(span0, file_1, 268, 16, 7030);
+			attr_dev(span1, "class", "time");
+			add_location(span1, file_1, 279, 16, 7479);
+			attr_dev(li, "class", "svelte-h2egyb");
+			add_location(li, file_1, 264, 14, 6914);
+			this.first = li;
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, li, anchor);
+			append_dev(li, span0);
+			append_dev(span0, t0);
+			append_dev(li, t1);
+			if (if_block) if_block.m(li, null);
+			append_dev(li, t2);
+			append_dev(li, span1);
+			append_dev(span1, t3);
+			append_dev(span1, t4);
+			append_dev(li, t5);
+		},
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
+			if (dirty[0] & /*answers*/ 16 && t0_value !== (t0_value = /*answer*/ ctx[36].givenAnswer + "")) set_data_dev(t0, t0_value);
+
+			if (dirty[0] & /*answers*/ 16) {
+				toggle_class(span0, "is-success", /*answer*/ ctx[36].isCorrect());
+			}
+
+			if (dirty[0] & /*answers*/ 16) {
+				toggle_class(span0, "is-danger", !/*answer*/ ctx[36].isCorrect());
+			}
+
+			if (dirty[0] & /*answers*/ 16) {
+				toggle_class(span0, "incorrect", !/*answer*/ ctx[36].isCorrect());
+			}
+
+			if (dirty[0] & /*answers*/ 16) show_if = !/*answer*/ ctx[36].isCorrect();
+
+			if (show_if) {
+				if (if_block) {
+					if_block.p(ctx, dirty);
+				} else {
+					if_block = create_if_block_1(ctx);
+					if_block.c();
+					if_block.m(li, t2);
+				}
+			} else if (if_block) {
+				if_block.d(1);
+				if_block = null;
+			}
+
+			if (dirty[0] & /*answers*/ 16 && t3_value !== (t3_value = (/*answer*/ ctx[36].timeToAnswer / 1000).toFixed(2) + "")) set_data_dev(t3, t3_value);
+		},
+		r: function measure() {
+			rect = li.getBoundingClientRect();
+		},
+		f: function fix() {
+			fix_position(li);
+			stop_animation();
+		},
+		a: function animate() {
+			stop_animation();
+			stop_animation = create_animation(li, rect, flip, {});
+		},
+		i: function intro(local) {
+			if (local) {
+				if (!li_intro) {
+					add_render_callback(() => {
+						li_intro = create_in_transition(li, fly, { y: -200, duration: 1000 });
+						li_intro.start();
+					});
+				}
+			}
+		},
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(li);
+			}
+
+			if (if_block) if_block.d();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_each_block.name,
+		type: "each",
+		source: "(264:12) {#each [...answers].reverse().slice(0, 10) as answer(answer)}",
 		ctx
 	});
 
@@ -7276,70 +7941,72 @@ function create_fragment(ctx) {
 	let p2;
 	let t12;
 	let t13;
+	let t14;
 	let current;
 
 	function chessboard_fen_binding(value) {
-		/*chessboard_fen_binding*/ ctx[18](value);
+		/*chessboard_fen_binding*/ ctx[19](value);
 	}
 
 	function chessboard_chessground_binding(value) {
-		/*chessboard_chessground_binding*/ ctx[19](value);
+		/*chessboard_chessground_binding*/ ctx[20](value);
 	}
 
 	function chessboard_size_binding(value) {
-		/*chessboard_size_binding*/ ctx[20](value);
+		/*chessboard_size_binding*/ ctx[21](value);
 	}
 
 	let chessboard_props = {
-		chessgroundConfig: /*chessgroundConfig*/ ctx[12],
-		orientation: /*$orientation*/ ctx[10]
+		chessgroundConfig: /*chessgroundConfig*/ ctx[13],
+		orientation: /*$orientation*/ ctx[11]
 	};
 
-	if (/*fen*/ ctx[6] !== void 0) {
-		chessboard_props.fen = /*fen*/ ctx[6];
+	if (/*fen*/ ctx[7] !== void 0) {
+		chessboard_props.fen = /*fen*/ ctx[7];
 	}
 
-	if (/*chessground*/ ctx[5] !== void 0) {
-		chessboard_props.chessground = /*chessground*/ ctx[5];
+	if (/*chessground*/ ctx[6] !== void 0) {
+		chessboard_props.chessground = /*chessground*/ ctx[6];
 	}
 
-	if (/*boardSize*/ ctx[4] !== void 0) {
-		chessboard_props.size = /*boardSize*/ ctx[4];
+	if (/*boardSize*/ ctx[5] !== void 0) {
+		chessboard_props.size = /*boardSize*/ ctx[5];
 	}
 
 	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
 	binding_callbacks.push(() => bind(chessboard, 'fen', chessboard_fen_binding));
 	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
 	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
-	let if_block0 = /*gameRunning*/ ctx[7] && create_if_block_2(ctx);
-	let each_value_1 = ensure_array_like_dev(/*files*/ ctx[13]);
-	const get_key = ctx => /*file*/ ctx[37];
-	validate_each_keys(ctx, each_value_1, get_each_context_1, get_key);
+	let if_block0 = /*gameRunning*/ ctx[8] && create_if_block_4(ctx);
+	let each_value_2 = ensure_array_like_dev(/*files*/ ctx[14]);
+	const get_key = ctx => /*file*/ ctx[42];
+	validate_each_keys(ctx, each_value_2, get_each_context_2, get_key);
+
+	for (let i = 0; i < each_value_2.length; i += 1) {
+		let child_ctx = get_each_context_2(ctx, each_value_2, i);
+		let key = get_key(child_ctx);
+		each0_lookup.set(key, each_blocks_1[i] = create_each_block_2(key, child_ctx));
+	}
+
+	let each_value_1 = ensure_array_like_dev(/*ranks*/ ctx[15]);
+	const get_key_1 = ctx => /*rank*/ ctx[39];
+	validate_each_keys(ctx, each_value_1, get_each_context_1, get_key_1);
 
 	for (let i = 0; i < each_value_1.length; i += 1) {
 		let child_ctx = get_each_context_1(ctx, each_value_1, i);
-		let key = get_key(child_ctx);
-		each0_lookup.set(key, each_blocks_1[i] = create_each_block_1(key, child_ctx));
-	}
-
-	let each_value = ensure_array_like_dev(/*ranks*/ ctx[14]);
-	const get_key_1 = ctx => /*rank*/ ctx[34];
-	validate_each_keys(ctx, each_value, get_each_context, get_key_1);
-
-	for (let i = 0; i < each_value.length; i += 1) {
-		let child_ctx = get_each_context(ctx, each_value, i);
 		let key = get_key_1(child_ctx);
-		each1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
+		each1_lookup.set(key, each_blocks[i] = create_each_block_1(key, child_ctx));
 	}
 
 	function select_block_type(ctx, dirty) {
-		if (/*$orientation*/ ctx[10] === 'white') return create_if_block_1;
+		if (/*$orientation*/ ctx[11] === 'white') return create_if_block_3;
 		return create_else_block;
 	}
 
 	let current_block_type = select_block_type(ctx);
 	let if_block1 = current_block_type(ctx);
-	let if_block2 = !/*gameRunning*/ ctx[7] && create_if_block(ctx);
+	let if_block2 = !/*gameRunning*/ ctx[8] && create_if_block_2(ctx);
+	let if_block3 = /*answers*/ ctx[4].length > 0 && create_if_block(ctx);
 
 	const block = {
 		c: function create() {
@@ -7388,41 +8055,43 @@ function create_fragment(ctx) {
 			t11 = space();
 			p2 = element("p");
 			t12 = text("High Score: ");
-			t13 = text(/*highScore*/ ctx[8]);
+			t13 = text(/*highScore*/ ctx[9]);
+			t14 = space();
+			if (if_block3) if_block3.c();
 			attr_dev(div0, "class", "block");
-			add_location(div0, file_1, 171, 4, 3891);
-			attr_dev(div1, "class", "grid svelte-ii2nth");
-			add_location(div1, file_1, 187, 12, 4397);
+			add_location(div0, file_1, 193, 4, 4623);
+			attr_dev(div1, "class", "grid svelte-h2egyb");
+			add_location(div1, file_1, 209, 12, 5129);
 			attr_dev(div2, "class", "fixed-grid has-8-cols");
-			add_location(div2, file_1, 186, 10, 4349);
+			add_location(div2, file_1, 208, 10, 5081);
 			attr_dev(div3, "class", "column");
-			add_location(div3, file_1, 185, 8, 4318);
+			add_location(div3, file_1, 207, 8, 5050);
 			attr_dev(div4, "class", "columns");
-			add_location(div4, file_1, 184, 6, 4288);
-			attr_dev(div5, "class", "grid svelte-ii2nth");
-			add_location(div5, file_1, 201, 12, 4873);
+			add_location(div4, file_1, 206, 6, 5020);
+			attr_dev(div5, "class", "grid svelte-h2egyb");
+			add_location(div5, file_1, 223, 12, 5605);
 			attr_dev(div6, "class", "fixed-grid has-8-cols");
-			add_location(div6, file_1, 200, 10, 4825);
+			add_location(div6, file_1, 222, 10, 5557);
 			attr_dev(div7, "class", "column");
-			add_location(div7, file_1, 199, 8, 4794);
+			add_location(div7, file_1, 221, 8, 5526);
 			attr_dev(div8, "class", "columns");
-			add_location(div8, file_1, 198, 6, 4764);
+			add_location(div8, file_1, 220, 6, 5496);
 			attr_dev(div9, "class", "block");
-			set_style(div9, "width", /*boardSize*/ ctx[4] + "px");
-			add_location(div9, file_1, 183, 4, 4232);
+			set_style(div9, "width", /*boardSize*/ ctx[5] + "px");
+			add_location(div9, file_1, 205, 4, 4964);
 			attr_dev(div10, "class", "column is-6-desktop");
-			add_location(div10, file_1, 170, 2, 3853);
+			add_location(div10, file_1, 192, 2, 4585);
 			attr_dev(div11, "class", "block");
-			add_location(div11, file_1, 215, 4, 5294);
-			add_location(p0, file_1, 234, 6, 5845);
-			add_location(p1, file_1, 235, 6, 5882);
-			add_location(p2, file_1, 236, 6, 5923);
+			add_location(div11, file_1, 237, 4, 6026);
+			add_location(p0, file_1, 256, 6, 6577);
+			add_location(p1, file_1, 257, 6, 6614);
+			add_location(p2, file_1, 258, 6, 6655);
 			attr_dev(div12, "class", "block");
-			add_location(div12, file_1, 233, 4, 5819);
+			add_location(div12, file_1, 255, 4, 6551);
 			attr_dev(div13, "class", "column is-2-desktop");
-			add_location(div13, file_1, 214, 2, 5256);
+			add_location(div13, file_1, 236, 2, 5988);
 			attr_dev(div14, "class", "columns is-centered");
-			add_location(div14, file_1, 169, 0, 3817);
+			add_location(div14, file_1, 191, 0, 4549);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7478,41 +8147,43 @@ function create_fragment(ctx) {
 			append_dev(div12, p2);
 			append_dev(p2, t12);
 			append_dev(p2, t13);
+			append_dev(div12, t14);
+			if (if_block3) if_block3.m(div12, null);
 			current = true;
 		},
 		p: function update(ctx, dirty) {
 			const chessboard_changes = {};
-			if (dirty[0] & /*$orientation*/ 1024) chessboard_changes.orientation = /*$orientation*/ ctx[10];
+			if (dirty[0] & /*$orientation*/ 2048) chessboard_changes.orientation = /*$orientation*/ ctx[11];
 
-			if (!updating_fen && dirty[0] & /*fen*/ 64) {
+			if (!updating_fen && dirty[0] & /*fen*/ 128) {
 				updating_fen = true;
-				chessboard_changes.fen = /*fen*/ ctx[6];
+				chessboard_changes.fen = /*fen*/ ctx[7];
 				add_flush_callback(() => updating_fen = false);
 			}
 
-			if (!updating_chessground && dirty[0] & /*chessground*/ 32) {
+			if (!updating_chessground && dirty[0] & /*chessground*/ 64) {
 				updating_chessground = true;
-				chessboard_changes.chessground = /*chessground*/ ctx[5];
+				chessboard_changes.chessground = /*chessground*/ ctx[6];
 				add_flush_callback(() => updating_chessground = false);
 			}
 
-			if (!updating_size && dirty[0] & /*boardSize*/ 16) {
+			if (!updating_size && dirty[0] & /*boardSize*/ 32) {
 				updating_size = true;
-				chessboard_changes.size = /*boardSize*/ ctx[4];
+				chessboard_changes.size = /*boardSize*/ ctx[5];
 				add_flush_callback(() => updating_size = false);
 			}
 
 			chessboard.$set(chessboard_changes);
 
-			if (/*gameRunning*/ ctx[7]) {
+			if (/*gameRunning*/ ctx[8]) {
 				if (if_block0) {
 					if_block0.p(ctx, dirty);
 
-					if (dirty[0] & /*gameRunning*/ 128) {
+					if (dirty[0] & /*gameRunning*/ 256) {
 						transition_in(if_block0, 1);
 					}
 				} else {
-					if_block0 = create_if_block_2(ctx);
+					if_block0 = create_if_block_4(ctx);
 					if_block0.c();
 					transition_in(if_block0, 1);
 					if_block0.m(div10, t1);
@@ -7527,20 +8198,20 @@ function create_fragment(ctx) {
 				check_outros();
 			}
 
-			if (dirty[0] & /*answerFile, files*/ 8194) {
-				each_value_1 = ensure_array_like_dev(/*files*/ ctx[13]);
-				validate_each_keys(ctx, each_value_1, get_each_context_1, get_key);
-				each_blocks_1 = update_keyed_each(each_blocks_1, dirty, get_key, 1, ctx, each_value_1, each0_lookup, div1, destroy_block, create_each_block_1, null, get_each_context_1);
+			if (dirty[0] & /*answerFile, files*/ 16386) {
+				each_value_2 = ensure_array_like_dev(/*files*/ ctx[14]);
+				validate_each_keys(ctx, each_value_2, get_each_context_2, get_key);
+				each_blocks_1 = update_keyed_each(each_blocks_1, dirty, get_key, 1, ctx, each_value_2, each0_lookup, div1, destroy_block, create_each_block_2, null, get_each_context_2);
 			}
 
-			if (dirty[0] & /*answerRank, ranks*/ 16385) {
-				each_value = ensure_array_like_dev(/*ranks*/ ctx[14]);
-				validate_each_keys(ctx, each_value, get_each_context, get_key_1);
-				each_blocks = update_keyed_each(each_blocks, dirty, get_key_1, 1, ctx, each_value, each1_lookup, div5, destroy_block, create_each_block, null, get_each_context);
+			if (dirty[0] & /*answerRank, ranks*/ 32769) {
+				each_value_1 = ensure_array_like_dev(/*ranks*/ ctx[15]);
+				validate_each_keys(ctx, each_value_1, get_each_context_1, get_key_1);
+				each_blocks = update_keyed_each(each_blocks, dirty, get_key_1, 1, ctx, each_value_1, each1_lookup, div5, destroy_block, create_each_block_1, null, get_each_context_1);
 			}
 
-			if (!current || dirty[0] & /*boardSize*/ 16) {
-				set_style(div9, "width", /*boardSize*/ ctx[4] + "px");
+			if (!current || dirty[0] & /*boardSize*/ 32) {
+				set_style(div9, "width", /*boardSize*/ ctx[5] + "px");
 			}
 
 			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block1) {
@@ -7555,11 +8226,11 @@ function create_fragment(ctx) {
 				}
 			}
 
-			if (!/*gameRunning*/ ctx[7]) {
+			if (!/*gameRunning*/ ctx[8]) {
 				if (if_block2) {
 					if_block2.p(ctx, dirty);
 				} else {
-					if_block2 = create_if_block(ctx);
+					if_block2 = create_if_block_2(ctx);
 					if_block2.c();
 					if_block2.m(div13, t5);
 				}
@@ -7570,7 +8241,20 @@ function create_fragment(ctx) {
 
 			if (!current || dirty[0] & /*correctCount*/ 4) set_data_dev(t7, /*correctCount*/ ctx[2]);
 			if (!current || dirty[0] & /*incorrectCount*/ 8) set_data_dev(t10, /*incorrectCount*/ ctx[3]);
-			if (!current || dirty[0] & /*highScore*/ 256) set_data_dev(t13, /*highScore*/ ctx[8]);
+			if (!current || dirty[0] & /*highScore*/ 512) set_data_dev(t13, /*highScore*/ ctx[9]);
+
+			if (/*answers*/ ctx[4].length > 0) {
+				if (if_block3) {
+					if_block3.p(ctx, dirty);
+				} else {
+					if_block3 = create_if_block(ctx);
+					if_block3.c();
+					if_block3.m(div12, null);
+				}
+			} else if (if_block3) {
+				if_block3.d(1);
+				if_block3 = null;
+			}
 		},
 		i: function intro(local) {
 			if (current) return;
@@ -7601,6 +8285,7 @@ function create_fragment(ctx) {
 
 			if_block1.d();
 			if (if_block2) if_block2.d();
+			if (if_block3) if_block3.d();
 		}
 	};
 
@@ -7621,7 +8306,7 @@ function instance($$self, $$props, $$invalidate) {
 	validate_slots('NotationTrainer', slots, []);
 	const orientation = persisted('notation.orientation', 'white');
 	validate_store(orientation, 'orientation');
-	component_subscribe($$self, orientation, value => $$invalidate(10, $orientation = value));
+	component_subscribe($$self, orientation, value => $$invalidate(11, $orientation = value));
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let correctAnswer;
@@ -7629,6 +8314,21 @@ function instance($$self, $$props, $$invalidate) {
 	let answerValue = '';
 	let answerRank = '';
 	let answerFile = '';
+	let positionShownAt;
+
+	class Answer {
+		constructor(givenAnswer, correctAnswer, timeToAnswer) {
+			this.givenAnswer = givenAnswer;
+			this.correctAnswer = correctAnswer;
+			this.timeToAnswer = timeToAnswer;
+		}
+
+		isCorrect() {
+			return this.givenAnswer === this.correctAnswer;
+		}
+	}
+
+	/** @type {Answer[]} */
 	let answers = [];
 
 	let chessgroundConfig = {
@@ -7680,7 +8380,7 @@ function instance($$self, $$props, $$invalidate) {
 			nextNode = allNodes[i + 1];
 		}
 
-		$$invalidate(6, fen = makeFen(position.toSetup()));
+		$$invalidate(7, fen = makeFen(position.toSetup()));
 		const nextMove = parseSan(position, nextNode.data.san);
 		const from = makeSquare(nextMove.from);
 		const to = makeSquare(nextMove.to);
@@ -7693,8 +8393,9 @@ function instance($$self, $$props, $$invalidate) {
 				});
 
 				chessground.move(from, to);
-				$$invalidate(17, answerValue = '');
+				$$invalidate(18, answerValue = '');
 				answerAllowed = true;
+				positionShownAt = new Date().getTime();
 			},
 			200
 		);
@@ -7709,11 +8410,16 @@ function instance($$self, $$props, $$invalidate) {
 			return;
 		}
 
-		if (answerValue.toLowerCase().trim() === correctAnswer.toLowerCase()) {
-			$$invalidate(9, maxTime += correctBonus);
+		let correctAnswerDowncased = correctAnswer.toLowerCase();
+		let givenAnswer = answerValue.toLowerCase().trim();
+		let timeToAnswer = new Date().getTime() - positionShownAt;
+		$$invalidate(4, answers = [...answers, new Answer(givenAnswer, correctAnswerDowncased, timeToAnswer)]);
+
+		if (givenAnswer === correctAnswerDowncased) {
+			$$invalidate(10, maxTime += correctBonus);
 			$$invalidate(2, correctCount++, correctCount);
 		} else {
-			$$invalidate(9, maxTime -= incorrectPenalty);
+			$$invalidate(10, maxTime -= incorrectPenalty);
 			$$invalidate(3, incorrectCount++, incorrectCount);
 		}
 
@@ -7742,18 +8448,19 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	function startGame() {
-		$$invalidate(7, gameRunning = true);
-		$$invalidate(9, maxTime = 30);
+		$$invalidate(4, answers = []);
+		$$invalidate(8, gameRunning = true);
+		$$invalidate(10, maxTime = 30);
 		$$invalidate(2, correctCount = 0);
 		$$invalidate(3, incorrectCount = 0);
 		newPosition();
 	}
 
 	function endGame() {
-		$$invalidate(7, gameRunning = false);
+		$$invalidate(8, gameRunning = false);
 
 		if (correctCount > highScore) {
-			$$invalidate(8, highScore = correctCount);
+			$$invalidate(9, highScore = correctCount);
 		}
 	}
 
@@ -7770,17 +8477,17 @@ function instance($$self, $$props, $$invalidate) {
 
 	function chessboard_fen_binding(value) {
 		fen = value;
-		$$invalidate(6, fen);
+		$$invalidate(7, fen);
 	}
 
 	function chessboard_chessground_binding(value) {
 		chessground = value;
-		$$invalidate(5, chessground);
+		$$invalidate(6, chessground);
 	}
 
 	function chessboard_size_binding(value) {
 		boardSize = value;
-		$$invalidate(4, boardSize);
+		$$invalidate(5, boardSize);
 	}
 
 	const click_handler = file => $$invalidate(1, answerFile = file);
@@ -7796,6 +8503,8 @@ function instance($$self, $$props, $$invalidate) {
 
 	$$self.$capture_state = () => ({
 		onMount,
+		flip,
+		fly,
 		Chessboard,
 		parsePgn,
 		startingPosition,
@@ -7814,6 +8523,8 @@ function instance($$self, $$props, $$invalidate) {
 		answerValue,
 		answerRank,
 		answerFile,
+		positionShownAt,
+		Answer,
 		answers,
 		chessgroundConfig,
 		boardSize,
@@ -7840,18 +8551,19 @@ function instance($$self, $$props, $$invalidate) {
 		if ('incorrectCount' in $$props) $$invalidate(3, incorrectCount = $$props.incorrectCount);
 		if ('correctAnswer' in $$props) correctAnswer = $$props.correctAnswer;
 		if ('answerAllowed' in $$props) answerAllowed = $$props.answerAllowed;
-		if ('answerValue' in $$props) $$invalidate(17, answerValue = $$props.answerValue);
+		if ('answerValue' in $$props) $$invalidate(18, answerValue = $$props.answerValue);
 		if ('answerRank' in $$props) $$invalidate(0, answerRank = $$props.answerRank);
 		if ('answerFile' in $$props) $$invalidate(1, answerFile = $$props.answerFile);
-		if ('answers' in $$props) answers = $$props.answers;
-		if ('chessgroundConfig' in $$props) $$invalidate(12, chessgroundConfig = $$props.chessgroundConfig);
-		if ('boardSize' in $$props) $$invalidate(4, boardSize = $$props.boardSize);
-		if ('chessground' in $$props) $$invalidate(5, chessground = $$props.chessground);
-		if ('fen' in $$props) $$invalidate(6, fen = $$props.fen);
+		if ('positionShownAt' in $$props) positionShownAt = $$props.positionShownAt;
+		if ('answers' in $$props) $$invalidate(4, answers = $$props.answers);
+		if ('chessgroundConfig' in $$props) $$invalidate(13, chessgroundConfig = $$props.chessgroundConfig);
+		if ('boardSize' in $$props) $$invalidate(5, boardSize = $$props.boardSize);
+		if ('chessground' in $$props) $$invalidate(6, chessground = $$props.chessground);
+		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
 		if ('displayGoodMessage' in $$props) displayGoodMessage = $$props.displayGoodMessage;
-		if ('gameRunning' in $$props) $$invalidate(7, gameRunning = $$props.gameRunning);
-		if ('highScore' in $$props) $$invalidate(8, highScore = $$props.highScore);
-		if ('maxTime' in $$props) $$invalidate(9, maxTime = $$props.maxTime);
+		if ('gameRunning' in $$props) $$invalidate(8, gameRunning = $$props.gameRunning);
+		if ('highScore' in $$props) $$invalidate(9, highScore = $$props.highScore);
+		if ('maxTime' in $$props) $$invalidate(10, maxTime = $$props.maxTime);
 		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
 		if ('incorrectPenalty' in $$props) incorrectPenalty = $$props.incorrectPenalty;
 	};
@@ -7863,11 +8575,11 @@ function instance($$self, $$props, $$invalidate) {
 	$$self.$$.update = () => {
 		if ($$self.$$.dirty[0] & /*answerFile, answerRank*/ 3) {
 			{
-				$$invalidate(17, answerValue = `${answerFile}${answerRank}`);
+				$$invalidate(18, answerValue = `${answerFile}${answerRank}`);
 			}
 		}
 
-		if ($$self.$$.dirty[0] & /*answerValue*/ 131072) {
+		if ($$self.$$.dirty[0] & /*answerValue*/ 262144) {
 			{
 				if (answerValue.length === 2) {
 					handleAnswer();
@@ -7881,6 +8593,7 @@ function instance($$self, $$props, $$invalidate) {
 		answerFile,
 		correctCount,
 		incorrectCount,
+		answers,
 		boardSize,
 		chessground,
 		fen,
