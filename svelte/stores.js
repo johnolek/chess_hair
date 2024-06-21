@@ -1,7 +1,7 @@
-import { persisted } from 'svelte-persisted-store';
+import { persisted } from "svelte-persisted-store";
 
-export const pieceSet = persisted('global.pieceSet', 'merida');
-export const boardStyle = persisted('global.boardStyle', 'brown');
+export const pieceSet = persisted("global.pieceSet", "merida");
+export const boardStyle = persisted("global.boardStyle", "brown");
 
 boardStyle.subscribe((value) => {
   if (document.body) {

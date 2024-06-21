@@ -1,6 +1,6 @@
 <script>
-  import { onMount } from 'svelte';
-  import { flip } from 'svelte/animate';
+  import { onMount } from "svelte";
+  import { flip } from "svelte/animate";
   import Config from "src/local_config";
   import { ConfigForm } from "src/local_config";
   import { boardOptions, pieceSetOptions } from "src/board/options";
@@ -8,48 +8,67 @@
 
   let myGames = [];
   let theirGames = [];
-  let title = 'Daily Games';
+  let title = "Daily Games";
   $: document.title = title;
   let pieceSet;
   let gameCount = null;
   let previousGameCount = null;
 
   $: {
-    if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
-      const newTitle = '♘'.repeat(gameCount);
+    if (
+      previousGameCount !== null &&
+      gameCount !== null &&
+      gameCount > previousGameCount
+    ) {
+      const newTitle = "♘".repeat(gameCount);
       animateTitle(newTitle);
     }
     if (gameCount === 0) {
-      setTitle('Not your turn');
+      setTitle("Not your turn");
     }
   }
 
   const chessDotComUsername = document.body.dataset.chessDotComUsername;
   const config = new Config();
   const configForm = new ConfigForm(config);
-  const updateFrequencyOption = config.getConfigOption('Update frequency in seconds', 5);
+  const updateFrequencyOption = config.getConfigOption(
+    "Update frequency in seconds",
+    5,
+  );
 
-  const boardOption = config.getConfigOption('Board', 'brown');
+  const boardOption = config.getConfigOption("Board", "brown");
   boardOption.setAllowedValues(boardOptions);
-  boardOption.addObserver(board => {
+  boardOption.addObserver((board) => {
     document.body.dataset.board = board;
     boardOption.setValue(board);
   });
 
-  const pieceSetOption = config.getConfigOption('Piece set', 'merida');
+  const pieceSetOption = config.getConfigOption("Piece set", "merida");
   pieceSetOption.setAllowedValues(pieceSetOptions);
-  pieceSetOption.addObserver(set => {
+  pieceSetOption.addObserver((set) => {
     pieceSet = set;
   });
   pieceSet = pieceSetOption.getValue();
 
-  const titleAnimationSpeedOption = config.getConfigOption('Title animation speed in ms', 250);
-  const titleAnimationLength = config.getConfigOption('Title animation length in ms', 3000);
-  const firstTitleAnimationText = config.getConfigOption('Title animation 1', '♘♞♘ New Move ♘♞♘');
-  const secondTitleAnimationText = config.getConfigOption('Title animation 2', '♞♘♞ New Move ♞♘♞');
+  const titleAnimationSpeedOption = config.getConfigOption(
+    "Title animation speed in ms",
+    250,
+  );
+  const titleAnimationLength = config.getConfigOption(
+    "Title animation length in ms",
+    3000,
+  );
+  const firstTitleAnimationText = config.getConfigOption(
+    "Title animation 1",
+    "♘♞♘ New Move ♘♞♘",
+  );
+  const secondTitleAnimationText = config.getConfigOption(
+    "Title animation 2",
+    "♞♘♞ New Move ♞♘♞",
+  );
 
-  const themeOption = config.getConfigOption('Theme', 'system');
-  themeOption.setAllowedValues(['system', 'dark', 'light']);
+  const themeOption = config.getConfigOption("Theme", "system");
+  themeOption.setAllowedValues(["system", "dark", "light"]);
 
   function animateTitle(finalTitle) {
     const string1 = firstTitleAnimationText.getValue();
@@ -100,29 +119,35 @@
    * @returns {Promise<Game[]>} The games
    */
   async function fetchGames() {
-    const response = await fetch(`https://api.chess.com/pub/player/${chessDotComUsername}/games`);
+    const response = await fetch(
+      `https://api.chess.com/pub/player/${chessDotComUsername}/games`,
+    );
     const data = await response.json();
     return data.games;
   }
 
   function filterMyTurnGames(games) {
-    return games.filter(game => (game.turn === 'white' && game.white.includes(chessDotComUsername)) || (game.turn === 'black' && game.black.includes(chessDotComUsername)));
+    return games.filter(
+      (game) =>
+        (game.turn === "white" && game.white.includes(chessDotComUsername)) ||
+        (game.turn === "black" && game.black.includes(chessDotComUsername)),
+    );
   }
 
   function filterTheirTurnGames(games) {
-    const myTurnGames = filterMyTurnGames(games)
+    const myTurnGames = filterMyTurnGames(games);
     const myTurnUrls = myTurnGames.map((game) => game.url);
     return games.filter((game) => !myTurnUrls.includes(game.url));
   }
 
   onMount(async () => {
     await updateGames();
-    configForm.addLinkToDOM('config');
+    configForm.addLinkToDOM("config");
     document.body.dataset.board = boardOption.getValue();
   });
 </script>
 
-<link id="piece-sprite" href="/piece-css/{pieceSet}.css" rel="stylesheet">
+<link id="piece-sprite" href="/piece-css/{pieceSet}.css" rel="stylesheet" />
 
 <h1 class="title">Daily Games</h1>
 <h2>My Turn</h2>
@@ -130,7 +155,7 @@
   <div animate:flip>
     <DailyGame
       {game}
-      myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"
+      myColor={game.white.includes(chessDotComUsername) ? "white" : "black"}
     />
   </div>
 {/each}
@@ -139,9 +164,7 @@
   <div animate:flip>
     <DailyGame
       {game}
-      myColor="{game.white.includes(chessDotComUsername) ? 'white' : 'black'}"
+      myColor={game.white.includes(chessDotComUsername) ? "white" : "black"}
     />
   </div>
 {/each}
-
-

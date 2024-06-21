@@ -1,13 +1,13 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount } from "svelte";
 
-  import Chessboard from './components/Chessboard.svelte';
+  import Chessboard from "./components/Chessboard.svelte";
   import ProgressTimer from "./components/ProgressTimer.svelte";
 
-  import { knightMovesData } from 'src/knight_moves_data';
+  import { knightMovesData } from "src/knight_moves_data";
   import Config from "src/local_config";
   import { ConfigForm } from "src/local_config";
-  import { Util } from 'src/util';
+  import { Util } from "src/util";
 
   let chessground;
   let jsonData = knightMovesData;
@@ -55,21 +55,66 @@
   let button6;
 
   const customBrushes = {
-    brand1: {key: 'brand1', color: Util.getRootCssVarValue('--brand-color-1'), opacity: 1, lineWidth: 15},
-    brand2: {key: 'brand2', color: Util.getRootCssVarValue('--brand-color-2'), opacity: 1, lineWidth: 15},
-    brand3: {key: 'brand3', color: Util.getRootCssVarValue('--brand-color-3'), opacity: 1, lineWidth: 15},
-    brand4: {key: 'brand4', color: Util.getRootCssVarValue('--brand-color-4'), opacity: 1, lineWidth: 15},
-    brand5: {key: 'brand5', color: Util.getRootCssVarValue('--brand-color-5'), opacity: 1, lineWidth: 15},
-    brand6: {key: 'brand6', color: Util.getRootCssVarValue('--brand-color-6'), opacity: 1, lineWidth: 15},
-    brand7: {key: 'brand7', color: Util.getRootCssVarValue('--brand-color-7'), opacity: 1, lineWidth: 15},
-    brand8: {key: 'brand8', color: Util.getRootCssVarValue('--brand-color-8'), opacity: 1, lineWidth: 15},
-    brand9: {key: 'brand9', color: Util.getRootCssVarValue('--brand-color-9'), opacity: 1, lineWidth: 15},
+    brand1: {
+      key: "brand1",
+      color: Util.getRootCssVarValue("--brand-color-1"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand2: {
+      key: "brand2",
+      color: Util.getRootCssVarValue("--brand-color-2"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand3: {
+      key: "brand3",
+      color: Util.getRootCssVarValue("--brand-color-3"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand4: {
+      key: "brand4",
+      color: Util.getRootCssVarValue("--brand-color-4"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand5: {
+      key: "brand5",
+      color: Util.getRootCssVarValue("--brand-color-5"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand6: {
+      key: "brand6",
+      color: Util.getRootCssVarValue("--brand-color-6"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand7: {
+      key: "brand7",
+      color: Util.getRootCssVarValue("--brand-color-7"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand8: {
+      key: "brand8",
+      color: Util.getRootCssVarValue("--brand-color-8"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand9: {
+      key: "brand9",
+      color: Util.getRootCssVarValue("--brand-color-9"),
+      opacity: 1,
+      lineWidth: 15,
+    },
   };
 
   initConfig();
 
   let chessgroundConfig = {
-    fen: '8/8/8/8/8/8/8/8',
+    fen: "8/8/8/8/8/8/8/8",
     animation: {
       enabled: true,
       duration: animationLengthOption.getValue(),
@@ -81,7 +126,7 @@
     selectable: false,
     drawable: {
       brushes: customBrushes,
-    }
+    },
   };
 
   onMount(() => {
@@ -107,9 +152,9 @@
   }
 
   function initKeyboardShortcuts() {
-    window.addEventListener('keydown', (event) => {
+    window.addEventListener("keydown", (event) => {
       const key = event.key;
-      if (key >= '1' && key <= '6') {
+      if (key >= "1" && key <= "6") {
         // Trigger click event on corresponding button
         const button = getButton(parseInt(key));
         button.click();
@@ -170,11 +215,11 @@
     const button = getButton(number);
     if (number === minimum) {
       correctCount += 1;
-      animateElement(button, 'correctAnswer');
+      animateElement(button, "correctAnswer");
       newPosition();
     } else {
       incorrectCount += 1;
-      animateElement(button, 'incorrectAnswer');
+      animateElement(button, "incorrectAnswer");
       if (gameRunning) {
         endGame();
       } else {
@@ -193,7 +238,7 @@
   function drawCorrectArrows(validPaths) {
     clearDrawings();
     const shapes = [];
-    const alreadyDrawn = new Set()
+    const alreadyDrawn = new Set();
     const brushKeys = Object.keys(customBrushes);
     let maxPathsToShow = maxPathsToDisplayOption.getValue();
     if (maxPathsToShow < 1) {
@@ -211,7 +256,12 @@
         if (alreadyDrawn.has(pair)) {
           return;
         }
-        const shape = {orig: pair[0], dest: pair[1], brush: brushKey, modifiers: {lineWidth: 10}}
+        const shape = {
+          orig: pair[0],
+          dest: pair[1],
+          brush: brushKey,
+          modifiers: { lineWidth: 10 },
+        };
         shapes.push(shape);
         alreadyDrawn.add(pair);
       });
@@ -220,14 +270,19 @@
     const mainPath = validPaths[0];
     const mainMovePairs = getMovePairsFromPath(mainPath);
     mainMovePairs.forEach((pair) => {
-      const shape = {orig: pair[0], dest: pair[1], brush: 'green', modifiers: {ineWidth: 10}}
+      const shape = {
+        orig: pair[0],
+        dest: pair[1],
+        brush: "green",
+        modifiers: { ineWidth: 10 },
+      };
       shapes.push(shape);
     });
 
     chessground.set({
       drawable: {
-        shapes: shapes
-      }
+        shapes: shapes,
+      },
     });
   }
 
@@ -246,10 +301,13 @@
       let addedToGroup = false;
 
       for (let group of groups) {
-        let overlap = group.some(groupPath => {
+        let overlap = group.some((groupPath) => {
           for (let i = 0; i < groupPath.length - 1; i++) {
             for (let j = 0; j < path.length - 1; j++) {
-              if (groupPath[i] === path[j] && groupPath[i + 1] === path[j + 1]) {
+              if (
+                groupPath[i] === path[j] &&
+                groupPath[i + 1] === path[j + 1]
+              ) {
                 return true;
               }
             }
@@ -299,14 +357,17 @@
 
     chessground.move(move[0], move[1]);
 
-    setTimeout(() => makeSequentialMoves(movePairs, callback), animationLengthOption.getValue());
+    setTimeout(
+      () => makeSequentialMoves(movePairs, callback),
+      animationLengthOption.getValue(),
+    );
   }
 
   function clearDrawings() {
     chessground.set({
       drawable: {
-        shapes: []
-      }
+        shapes: [],
+      },
     });
   }
 
@@ -318,18 +379,18 @@
     const key = keys[index];
     const previousKnightSquare = knightSquare;
     const previousKingSquare = kingSquare;
-    const squares = key.split('.');
+    const squares = key.split(".");
     knightSquare = squares[0];
     kingSquare = squares[1];
     positionData = jsonData[key];
     const king = {
-      role: 'king',
-      color: 'black',
-    }
+      role: "king",
+      color: "black",
+    };
     const knight = {
-      role: 'knight',
-      color: 'white',
-    }
+      role: "knight",
+      color: "white",
+    };
     const piecesDiff = new Map();
     if (previousKnightSquare && previousKingSquare) {
       piecesDiff.set(previousKnightSquare, undefined);
@@ -345,58 +406,91 @@
     element.classList.add(animationClass);
 
     // Listen for the animationend event
-    element.addEventListener('animationend', function () {
-      // Once the animation ends, remove the class
-      element.classList.remove(animationClass);
-    }, {once: true}); // The listener is removed after it's invoked once
+    element.addEventListener(
+      "animationend",
+      function () {
+        // Once the animation ends, remove the class
+        element.classList.remove(animationClass);
+      },
+      { once: true },
+    ); // The listener is removed after it's invoked once
   }
 
   function initConfig() {
-    config = new Config('knight_moves_game');
-    animationLengthOption = config.getConfigOption('Animation length (ms)', 300);
+    config = new Config("knight_moves_game");
+    animationLengthOption = config.getConfigOption(
+      "Animation length (ms)",
+      300,
+    );
 
-    maxPathsToDisplayOption = config.getConfigOption('Max paths to show', 6);
+    maxPathsToDisplayOption = config.getConfigOption("Max paths to show", 6);
 
     configForm = new ConfigForm(config);
-    configForm.addLinkToDOM('config');
+    configForm.addLinkToDOM("config");
   }
 </script>
 
-<link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet">
+<link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet" />
 
 <div class="columns">
   <div class="column column2 is-6-desktop">
     <div class="block">
-      <Chessboard
-        {chessgroundConfig}
-        bind:chessground={chessground}
-        bind:size={boardWidth}
-      />
+      <Chessboard {chessgroundConfig} bind:chessground bind:size={boardWidth} />
     </div>
 
     {#if gameRunning}
-      <ProgressTimer max=30 width={boardWidth} on:complete={endGame}/>
+      <ProgressTimer max="30" width={boardWidth} on:complete={endGame} />
     {/if}
 
     <div class="fixed-grid has-3-cols" style="width: {boardWidth}px">
       <div class="grid">
         <div class="cell">
-          <button class="button is-primary" id="1" on:click={() => processButton('1')} bind:this={button1}>1</button>
+          <button
+            class="button is-primary"
+            id="1"
+            on:click={() => processButton("1")}
+            bind:this={button1}>1</button
+          >
         </div>
         <div class="cell">
-          <button class="button is-primary" id="2" on:click={() => processButton('2')} bind:this={button2}>2</button>
+          <button
+            class="button is-primary"
+            id="2"
+            on:click={() => processButton("2")}
+            bind:this={button2}>2</button
+          >
         </div>
         <div class="cell">
-          <button class="button is-primary" id="3" on:click={() => processButton('3')} bind:this={button3}>3</button>
+          <button
+            class="button is-primary"
+            id="3"
+            on:click={() => processButton("3")}
+            bind:this={button3}>3</button
+          >
         </div>
         <div class="cell">
-          <button class="button is-primary" id="4" on:click={() => processButton('4')} bind:this={button4}>4</button>
+          <button
+            class="button is-primary"
+            id="4"
+            on:click={() => processButton("4")}
+            bind:this={button4}>4</button
+          >
         </div>
         <div class="cell">
-          <button class="button is-primary" id="5" on:click={() => processButton('5')} bind:this={button5}>5</button>
+          <button
+            class="button is-primary"
+            id="5"
+            on:click={() => processButton("5")}
+            bind:this={button5}>5</button
+          >
         </div>
         <div class="cell">
-          <button class="button is-primary" id="6" on:click={() => processButton('6')} bind:this={button6}>6</button>
+          <button
+            class="button is-primary"
+            id="6"
+            on:click={() => processButton("6")}
+            bind:this={button6}>6</button
+          >
         </div>
       </div>
     </div>
@@ -416,8 +510,11 @@
         <h2 class="is-size-5">High Score</h2>
         <div class="score is-size-2">{highScore}</div>
         {#if !gameRunning}
-          <button id="startTimedGame" on:click={startTimedGame}
-                  class="button is-primary">Start Timed Game
+          <button
+            id="startTimedGame"
+            on:click={startTimedGame}
+            class="button is-primary"
+            >Start Timed Game
           </button>
         {/if}
         {#if timeRemaining > 0}
@@ -429,29 +526,44 @@
       <div class="container has-text-centered">
         {#if !answerShown}
           <div class="block">
-            <button class="button is-info" disabled={answerShown || gameRunning} on:click|preventDefault={() => {
-          if (positionData) {
-            answerShown = true;
-            const correctPaths = positionData.paths;
-            const randomlySorted = sortRandomly(correctPaths);
-            groupedPaths = sortRandomly(getGroupedPaths(randomlySorted));
-            groupIndex = 0;
-          }
-        }}>Show answer
+            <button
+              class="button is-info"
+              disabled={answerShown || gameRunning}
+              on:click|preventDefault={() => {
+                if (positionData) {
+                  answerShown = true;
+                  const correctPaths = positionData.paths;
+                  const randomlySorted = sortRandomly(correctPaths);
+                  groupedPaths = sortRandomly(getGroupedPaths(randomlySorted));
+                  groupIndex = 0;
+                }
+              }}
+              >Show answer
             </button>
           </div>
         {:else}
           <div class="block">
-            <button class="button is-link" on:click={() => {
-              clearDrawings();
-              answerShown = false;
-            }}>
+            <button
+              class="button is-link"
+              on:click={() => {
+                clearDrawings();
+                answerShown = false;
+              }}
+            >
               Clear
             </button>
             {#if groupedPaths.length > 1}
               <div class="buttons has-addons">
-                <button class="button" on:click={decrementGroupIndex} disabled={disablePrev}>&laquo;</button>
-                <button class="button" on:click={incrementGroupIndex} disabled={disableNext}>&raquo;</button>
+                <button
+                  class="button"
+                  on:click={decrementGroupIndex}
+                  disabled={disablePrev}>&laquo;</button
+                >
+                <button
+                  class="button"
+                  on:click={incrementGroupIndex}
+                  disabled={disableNext}>&raquo;</button
+                >
               </div>
             {/if}
           </div>
@@ -511,8 +623,3 @@
     animation: correctAnswer 0.75s linear;
   }
 </style>
-
-
-
-
-

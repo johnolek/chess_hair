@@ -1,11 +1,11 @@
 <script>
-  import { onMount } from 'svelte';
-  import { flip } from 'svelte/animate';
-  import { fly } from 'svelte/transition';
-  import Chessboard from './components/Chessboard.svelte';
+  import { onMount } from "svelte";
+  import { flip } from "svelte/animate";
+  import { fly } from "svelte/transition";
+  import Chessboard from "./components/Chessboard.svelte";
 
-  import { parsePgn, startingPosition } from 'chessops/pgn';
-  import { Util } from 'src/util';
+  import { parsePgn, startingPosition } from "chessops/pgn";
+  import { Util } from "src/util";
   import { getRandomGame } from "src/random_games";
   import { parseSan } from "chessops/san";
   import { makeFen } from "chessops/fen";
@@ -13,15 +13,15 @@
   import { persisted } from "svelte-persisted-store";
   import ProgressTimer from "./components/ProgressTimer.svelte";
 
-  const orientation = persisted('notation.orientation', 'white');
+  const orientation = persisted("notation.orientation", "white");
 
   let correctCount = 0;
   let incorrectCount = 0;
   let correctAnswer;
   let answerAllowed;
-  let answerValue = '';
-  let answerRank = '';
-  let answerFile = '';
+  let answerValue = "";
+  let answerRank = "";
+  let answerFile = "";
 
   let positionShownAt;
 
@@ -42,7 +42,7 @@
   let answers = [];
 
   let chessgroundConfig = {
-    fen: '8/8/8/8/8/8/8/8',
+    fen: "8/8/8/8/8/8/8/8",
     coordinates: false,
     animation: {
       enabled: true,
@@ -90,7 +90,7 @@
     const position = positionResult.unwrap();
     const allNodes = [...pgnGame.moves.mainlineNodes()];
 
-    if (['O-O', 'O-O-O'].includes(allNodes[random].data.san)) {
+    if (["O-O", "O-O-O"].includes(allNodes[random].data.san)) {
       // Skip castles
       return newPosition();
     }
@@ -117,13 +117,13 @@
         highlight: {
           lastMove: true,
           check: false,
-        }
+        },
       });
       chessground.move(from, to);
-      answerValue = '';
+      answerValue = "";
       answerAllowed = true;
       positionShownAt = new Date().getTime();
-    }, 200)
+    }, 200);
   }
 
   function handleAnswer() {
@@ -135,8 +135,16 @@
     }
     let correctAnswerDowncased = correctAnswer.toLowerCase();
     let givenAnswer = answerValue.toLowerCase().trim();
-    let timeToAnswer = (new Date().getTime()) - positionShownAt;
-    answers = [...answers, new Answer(givenAnswer, correctAnswerDowncased, timeToAnswer, $orientation)];
+    let timeToAnswer = new Date().getTime() - positionShownAt;
+    answers = [
+      ...answers,
+      new Answer(
+        givenAnswer,
+        correctAnswerDowncased,
+        timeToAnswer,
+        $orientation,
+      ),
+    ];
     if (givenAnswer === correctAnswerDowncased) {
       maxTime += correctBonus;
       correctCount++;
@@ -144,19 +152,19 @@
       maxTime -= incorrectPenalty;
       incorrectCount++;
     }
-    answerRank = '';
-    answerFile = '';
+    answerRank = "";
+    answerFile = "";
     newPosition();
   }
 
-  const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-  const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
+  const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  const ranks = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
   function handleKeydown(event) {
     const key = event.key.toLowerCase();
-    if (key === 'backspace') {
-      answerRank = '';
-      answerFile = '';
+    if (key === "backspace") {
+      answerRank = "";
+      answerFile = "";
       return;
     }
 
@@ -184,7 +192,7 @@
   }
 
   onMount(() => {
-    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener("keydown", handleKeydown);
     newPosition();
   });
 </script>
@@ -194,14 +202,15 @@
     <div class="block">
       <Chessboard
         {chessgroundConfig}
-        bind:fen={fen}
-        bind:chessground={chessground}
+        bind:fen
+        bind:chessground
         orientation={$orientation}
         bind:size={boardSize}
       />
     </div>
     {#if gameRunning}
-      <ProgressTimer max={maxTime} width={boardSize} on:complete={endGame}></ProgressTimer>
+      <ProgressTimer max={maxTime} width={boardSize} on:complete={endGame}
+      ></ProgressTimer>
     {/if}
     <div class="block" style="width: {boardSize}px;">
       <div class="columns">
@@ -210,8 +219,11 @@
             <div class="grid">
               {#each files as file (file)}
                 <div class="cell">
-                  <button class:selected={answerFile === file} class="button"
-                          on:click={() => answerFile = file}>{file}</button>
+                  <button
+                    class:selected={answerFile === file}
+                    class="button"
+                    on:click={() => (answerFile = file)}>{file}</button
+                  >
                 </div>
               {/each}
             </div>
@@ -224,8 +236,13 @@
             <div class="grid">
               {#each ranks as rank (rank)}
                 <div class="cell">
-                  <button class:selected={answerRank === rank} class="button"
-                          on:click={() => answerRank = rank}>{rank}</button>
+                  <button
+                    class:selected={answerRank === rank}
+                    class="button"
+                    on:click={() => (answerRank = rank)}
+                  >
+                    {rank}
+                  </button>
                 </div>
               {/each}
             </div>
@@ -236,15 +253,21 @@
   </div>
   <div class="column is-2-desktop">
     <div class="block">
-      {#if $orientation === 'white'}
-        <button class="button is-small" on:click={() => {
-          orientation.set('black');
-        }}>View as black
+      {#if $orientation === "white"}
+        <button
+          class="button is-small"
+          on:click={() => {
+            orientation.set("black");
+          }}
+          >View as black
         </button>
       {:else}
-        <button class="button is-small" on:click={() => {
-          orientation.set('white');
-        }}>View as white
+        <button
+          class="button is-small"
+          on:click={() => {
+            orientation.set("white");
+          }}
+          >View as white
         </button>
       {/if}
     </div>
@@ -261,11 +284,8 @@
         <div class="block">
           <h3 class="is-size-3">Answers</h3>
           <ol class="answers-list">
-            {#each [...answers].reverse().slice(0, 10) as answer(answer)}
-              <li
-                in:fly={{y: -200, duration: 1000}}
-                animate:flip
-              >
+            {#each [...answers].reverse().slice(0, 10) as answer (answer)}
+              <li in:fly={{ y: -200, duration: 1000 }} animate:flip>
                 <span
                   class="tag is-large"
                   class:is-success={answer.isCorrect()}
@@ -277,7 +297,9 @@
                 {#if !answer.isCorrect()}
                   <span class="tag is-large">{answer.correctAnswer}</span>
                 {/if}
-                <span class="time">{(answer.timeToAnswer / 1000).toFixed(2)}s</span>
+                <span class="time"
+                  >{(answer.timeToAnswer / 1000).toFixed(2)}s</span
+                >
               </li>
             {/each}
           </ol>
@@ -293,7 +315,7 @@
   }
 
   .selected:hover {
-    background: var(--bulma-success-80)
+    background: var(--bulma-success-80);
   }
 
   .grid button {
