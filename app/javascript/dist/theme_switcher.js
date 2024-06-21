@@ -1407,8 +1407,8 @@ function persisted(key, initialValue, options) {
   return stores[storageType][key];
 }
 
-persisted('global.pieceSet', 'merida');
-const boardStyle = persisted('global.boardStyle', 'brown');
+persisted("global.pieceSet", "merida");
+const boardStyle = persisted("global.boardStyle", "brown");
 
 boardStyle.subscribe((value) => {
   if (document.body) {
@@ -1420,10 +1420,10 @@ boardStyle.subscribe((value) => {
 const file = "svelte/ThemeSwitcher.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-x6infa", "svg.svelte-x6infa{position:absolute}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiVGhlbWVTd2l0Y2hlci5zdmVsdGUiLCJzb3VyY2VzIjpbIlRoZW1lU3dpdGNoZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgYmx1ciB9IGZyb20gJ3N2ZWx0ZS90cmFuc2l0aW9uJztcbiAgaW1wb3J0IHsgYm9hcmRTdHlsZSB9IGZyb20gJy4vc3RvcmVzJztcbiAgaW1wb3J0IHsgb25Nb3VudCB9IGZyb20gJ3N2ZWx0ZSc7XG5cbiAgY29uc3QgY29uZmlnID0gbmV3IENvbmZpZygpO1xuICBjb25zdCB0aGVtZU9wdGlvbiA9IGNvbmZpZy5nZXRDb25maWdPcHRpb24oJ3RoZW1lJywgJ2RhcmsnKTtcbiAgdGhlbWVPcHRpb24uc2V0QWxsb3dlZFZhbHVlcygnbGlnaHQnLCAnZGFyaycpO1xuXG4gIGxldCB0aGVtZSA9IHRoZW1lT3B0aW9uLmdldFZhbHVlKCk7XG5cbiAgbGV0IG90aGVyVGhlbWUgPSB0aGVtZSA9PT0gJ2RhcmsnID8gJ2xpZ2h0JyA6ICdkYXJrJztcblxuICAkOiB7XG4gICAgb3RoZXJUaGVtZSA9IHRoZW1lID09PSAnZGFyaycgPyAnbGlnaHQnIDogJ2RhcmsnO1xuICB9XG5cbiAgJDoge1xuICAgIGNvbnN0IG9yaWdpbmFsVHJhbnNpdGlvbiA9IGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5zdHlsZS50cmFuc2l0aW9uO1xuICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5zdHlsZS50cmFuc2l0aW9uID0gJ2FsbCAwLjVzIGVhc2UnO1xuICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QuYWRkKHRoZW1lKTtcbiAgICBkb2N1bWVudC5kb2N1bWVudEVsZW1lbnQuZGF0YXNldC50aGVtZSA9IHRoZW1lO1xuICAgIHRoZW1lT3B0aW9uLnNldFZhbHVlKHRoZW1lKTtcbiAgICBpZiAodGhlbWUgPT09ICdsaWdodCcpIHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QucmVtb3ZlKCdkYXJrJyk7XG4gICAgfSBlbHNlIHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QucmVtb3ZlKCdsaWdodCcpO1xuICAgIH1cbiAgICBzZXRUaW1lb3V0KCgpID0+IHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5zdHlsZS50cmFuc2l0aW9uID0gb3JpZ2luYWxUcmFuc2l0aW9uO1xuICAgIH0sIDUwMCk7XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBkb2N1bWVudC5ib2R5LmRhdGFzZXQuYm9hcmQgPSAkYm9hcmRTdHlsZTtcbiAgfSk7XG48L3NjcmlwdD5cblxuPGRpdj5cbiAgICA8YnV0dG9uXG4gICAgICBjbGFzcz1cImljb25cIlxuICAgICAgdGl0bGU9XCJTd2l0Y2ggdG8ge290aGVyVGhlbWV9IG1vZGVcIlxuICAgICAgb246Y2xpY2s9e1xuICAgICAgICAoKSA9PiB7IHRoZW1lID0gb3RoZXJUaGVtZTsgfVxuICAgICAgfVxuICAgID5cbiAgICAgIHsjaWYgdGhlbWUgPT09ICdsaWdodCd9XG4gICAgICAgIDwhLS0gTW9vbiAtLT5cbiAgICAgICAgPHN2ZyB0cmFuc2l0aW9uOmJsdXIgc3R5bGU9XCJmaWxsOiB2YXIoLS1idWxtYS1saW5rKVwiIHhtbG5zPVwiaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmdcIiB2aWV3Qm94PVwiMCAwIDM4NCA1MTJcIj5cbiAgICAgICAgICA8cGF0aFxuICAgICAgICAgICAgZD1cIk0yMjMuNSAzMkMxMDAgMzIgMCAxMzIuMyAwIDI1NlMxMDAgNDgwIDIyMy41IDQ4MGM2MC42IDAgMTE1LjUtMjQuMiAxNTUuOC02My40YzUtNC45IDYuMy0xMi41IDMuMS0xOC43cy0xMC4xLTkuNy0xNy04LjVjLTkuOCAxLjctMTkuOCAyLjYtMzAuMSAyLjZjLTk2LjkgMC0xNzUuNS03OC44LTE3NS41LTE3NmMwLTY1LjggMzYtMTIzLjEgODkuMy0xNTMuM2M2LjEtMy41IDkuMi0xMC41IDcuNy0xNy4zcy03LjMtMTEuOS0xNC4zLTEyLjVjLTYuMy0uNS0xMi42LS44LTE5LS44elwiLz5cbiAgICAgICAgPC9zdmc+XG4gICAgICB7OmVsc2V9XG4gICAgICAgIDwhLS0gU3VuIC0tPlxuICAgICAgICA8c3ZnIHRyYW5zaXRpb246Ymx1ciBzdHlsZT1cImZpbGw6IHZhcigtLWJ1bG1hLXdhcm5pbmcpXCIgeG1sbnM9XCJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Z1wiIHZpZXdCb3g9XCIwIDAgNTEyIDUxMlwiPlxuICAgICAgICAgIDxwYXRoXG4gICAgICAgICAgICBkPVwiTTM3NS43IDE5LjdjLTEuNS04LTYuOS0xNC43LTE0LjQtMTcuOHMtMTYuMS0yLjItMjIuOCAyLjRMMjU2IDYxLjEgMTczLjUgNC4yYy02LjctNC42LTE1LjMtNS41LTIyLjgtMi40cy0xMi45IDkuOC0xNC40IDE3LjhsLTE4LjEgOTguNUwxOS43IDEzNi4zYy04IDEuNS0xNC43IDYuOS0xNy44IDE0LjRzLTIuMiAxNi4xIDIuNCAyMi44TDYxLjEgMjU2IDQuMiAzMzguNWMtNC42IDYuNy01LjUgMTUuMy0yLjQgMjIuOHM5LjggMTMgMTcuOCAxNC40bDk4LjUgMTguMSAxOC4xIDk4LjVjMS41IDggNi45IDE0LjcgMTQuNCAxNy44czE2LjEgMi4yIDIyLjgtMi40TDI1NiA0NTAuOWw4Mi41IDU2LjljNi43IDQuNiAxNS4zIDUuNSAyMi44IDIuNHMxMi45LTkuOCAxNC40LTE3LjhsMTguMS05OC41IDk4LjUtMTguMWM4LTEuNSAxNC43LTYuOSAxNy44LTE0LjRzMi4yLTE2LjEtMi40LTIyLjhMNDUwLjkgMjU2bDU2LjktODIuNWM0LjYtNi43IDUuNS0xNS4zIDIuNC0yMi44cy05LjgtMTIuOS0xNy44LTE0LjRsLTk4LjUtMTguMUwzNzUuNyAxOS43ek0yNjkuNiAxMTBsNjUuNi00NS4yIDE0LjQgNzguM2MxLjggOS44IDkuNSAxNy41IDE5LjMgMTkuM2w3OC4zIDE0LjRMNDAyIDI0Mi40Yy01LjcgOC4yLTUuNyAxOSAwIDI3LjJsNDUuMiA2NS42LTc4LjMgMTQuNGMtOS44IDEuOC0xNy41IDkuNS0xOS4zIDE5LjNsLTE0LjQgNzguM0wyNjkuNiA0MDJjLTguMi01LjctMTktNS43LTI3LjIgMGwtNjUuNiA0NS4yLTE0LjQtNzguM2MtMS44LTkuOC05LjUtMTcuNS0xOS4zLTE5LjNMNjQuOCAzMzUuMiAxMTAgMjY5LjZjNS43LTguMiA1LjctMTkgMC0yNy4yTDY0LjggMTc2LjhsNzguMy0xNC40YzkuOC0xLjggMTcuNS05LjUgMTkuMy0xOS4zbDE0LjQtNzguM0wyNDIuNCAxMTBjOC4yIDUuNyAxOSA1LjcgMjcuMiAwek0yNTYgMzY4YTExMiAxMTIgMCAxIDAgMC0yMjQgMTEyIDExMiAwIDEgMCAwIDIyNHpNMTkyIDI1NmE2NCA2NCAwIDEgMSAxMjggMCA2NCA2NCAwIDEgMSAtMTI4IDB6XCIvPlxuICAgICAgICA8L3N2Zz5cbiAgICAgIHsvaWZ9XG4gICAgPC9idXR0b24+XG48L2Rpdj5cblxuPHN0eWxlPlxuICBzdmcge1xuICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFnRUUsaUJBQUksQ0FDRixRQUFRLENBQUUsUUFDWiJ9 */");
+	append_styles(target, "svelte-x6infa", "svg.svelte-x6infa{position:absolute}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiVGhlbWVTd2l0Y2hlci5zdmVsdGUiLCJzb3VyY2VzIjpbIlRoZW1lU3dpdGNoZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgYmx1ciB9IGZyb20gXCJzdmVsdGUvdHJhbnNpdGlvblwiO1xuICBpbXBvcnQgeyBib2FyZFN0eWxlIH0gZnJvbSBcIi4vc3RvcmVzXCI7XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG5cbiAgY29uc3QgY29uZmlnID0gbmV3IENvbmZpZygpO1xuICBjb25zdCB0aGVtZU9wdGlvbiA9IGNvbmZpZy5nZXRDb25maWdPcHRpb24oXCJ0aGVtZVwiLCBcImRhcmtcIik7XG4gIHRoZW1lT3B0aW9uLnNldEFsbG93ZWRWYWx1ZXMoXCJsaWdodFwiLCBcImRhcmtcIik7XG5cbiAgbGV0IHRoZW1lID0gdGhlbWVPcHRpb24uZ2V0VmFsdWUoKTtcblxuICBsZXQgb3RoZXJUaGVtZSA9IHRoZW1lID09PSBcImRhcmtcIiA/IFwibGlnaHRcIiA6IFwiZGFya1wiO1xuXG4gICQ6IHtcbiAgICBvdGhlclRoZW1lID0gdGhlbWUgPT09IFwiZGFya1wiID8gXCJsaWdodFwiIDogXCJkYXJrXCI7XG4gIH1cblxuICAkOiB7XG4gICAgY29uc3Qgb3JpZ2luYWxUcmFuc2l0aW9uID0gZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LnN0eWxlLnRyYW5zaXRpb247XG4gICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LnN0eWxlLnRyYW5zaXRpb24gPSBcImFsbCAwLjVzIGVhc2VcIjtcbiAgICBkb2N1bWVudC5kb2N1bWVudEVsZW1lbnQuY2xhc3NMaXN0LmFkZCh0aGVtZSk7XG4gICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LmRhdGFzZXQudGhlbWUgPSB0aGVtZTtcbiAgICB0aGVtZU9wdGlvbi5zZXRWYWx1ZSh0aGVtZSk7XG4gICAgaWYgKHRoZW1lID09PSBcImxpZ2h0XCIpIHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QucmVtb3ZlKFwiZGFya1wiKTtcbiAgICB9IGVsc2Uge1xuICAgICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LmNsYXNzTGlzdC5yZW1vdmUoXCJsaWdodFwiKTtcbiAgICB9XG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBkb2N1bWVudC5kb2N1bWVudEVsZW1lbnQuc3R5bGUudHJhbnNpdGlvbiA9IG9yaWdpbmFsVHJhbnNpdGlvbjtcbiAgICB9LCA1MDApO1xuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgZG9jdW1lbnQuYm9keS5kYXRhc2V0LmJvYXJkID0gJGJvYXJkU3R5bGU7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXY+XG4gIDxidXR0b25cbiAgICBjbGFzcz1cImljb25cIlxuICAgIHRpdGxlPVwiU3dpdGNoIHRvIHtvdGhlclRoZW1lfSBtb2RlXCJcbiAgICBvbjpjbGljaz17KCkgPT4ge1xuICAgICAgdGhlbWUgPSBvdGhlclRoZW1lO1xuICAgIH19XG4gID5cbiAgICB7I2lmIHRoZW1lID09PSBcImxpZ2h0XCJ9XG4gICAgICA8IS0tIE1vb24gLS0+XG4gICAgICA8c3ZnXG4gICAgICAgIHRyYW5zaXRpb246Ymx1clxuICAgICAgICBzdHlsZT1cImZpbGw6IHZhcigtLWJ1bG1hLWxpbmspXCJcbiAgICAgICAgeG1sbnM9XCJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Z1wiXG4gICAgICAgIHZpZXdCb3g9XCIwIDAgMzg0IDUxMlwiXG4gICAgICA+XG4gICAgICAgIDxwYXRoXG4gICAgICAgICAgZD1cIk0yMjMuNSAzMkMxMDAgMzIgMCAxMzIuMyAwIDI1NlMxMDAgNDgwIDIyMy41IDQ4MGM2MC42IDAgMTE1LjUtMjQuMiAxNTUuOC02My40YzUtNC45IDYuMy0xMi41IDMuMS0xOC43cy0xMC4xLTkuNy0xNy04LjVjLTkuOCAxLjctMTkuOCAyLjYtMzAuMSAyLjZjLTk2LjkgMC0xNzUuNS03OC44LTE3NS41LTE3NmMwLTY1LjggMzYtMTIzLjEgODkuMy0xNTMuM2M2LjEtMy41IDkuMi0xMC41IDcuNy0xNy4zcy03LjMtMTEuOS0xNC4zLTEyLjVjLTYuMy0uNS0xMi42LS44LTE5LS44elwiXG4gICAgICAgIC8+XG4gICAgICA8L3N2Zz5cbiAgICB7OmVsc2V9XG4gICAgICA8IS0tIFN1biAtLT5cbiAgICAgIDxzdmdcbiAgICAgICAgdHJhbnNpdGlvbjpibHVyXG4gICAgICAgIHN0eWxlPVwiZmlsbDogdmFyKC0tYnVsbWEtd2FybmluZylcIlxuICAgICAgICB4bWxucz1cImh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnXCJcbiAgICAgICAgdmlld0JveD1cIjAgMCA1MTIgNTEyXCJcbiAgICAgID5cbiAgICAgICAgPHBhdGhcbiAgICAgICAgICBkPVwiTTM3NS43IDE5LjdjLTEuNS04LTYuOS0xNC43LTE0LjQtMTcuOHMtMTYuMS0yLjItMjIuOCAyLjRMMjU2IDYxLjEgMTczLjUgNC4yYy02LjctNC42LTE1LjMtNS41LTIyLjgtMi40cy0xMi45IDkuOC0xNC40IDE3LjhsLTE4LjEgOTguNUwxOS43IDEzNi4zYy04IDEuNS0xNC43IDYuOS0xNy44IDE0LjRzLTIuMiAxNi4xIDIuNCAyMi44TDYxLjEgMjU2IDQuMiAzMzguNWMtNC42IDYuNy01LjUgMTUuMy0yLjQgMjIuOHM5LjggMTMgMTcuOCAxNC40bDk4LjUgMTguMSAxOC4xIDk4LjVjMS41IDggNi45IDE0LjcgMTQuNCAxNy44czE2LjEgMi4yIDIyLjgtMi40TDI1NiA0NTAuOWw4Mi41IDU2LjljNi43IDQuNiAxNS4zIDUuNSAyMi44IDIuNHMxMi45LTkuOCAxNC40LTE3LjhsMTguMS05OC41IDk4LjUtMTguMWM4LTEuNSAxNC43LTYuOSAxNy44LTE0LjRzMi4yLTE2LjEtMi40LTIyLjhMNDUwLjkgMjU2bDU2LjktODIuNWM0LjYtNi43IDUuNS0xNS4zIDIuNC0yMi44cy05LjgtMTIuOS0xNy44LTE0LjRsLTk4LjUtMTguMUwzNzUuNyAxOS43ek0yNjkuNiAxMTBsNjUuNi00NS4yIDE0LjQgNzguM2MxLjggOS44IDkuNSAxNy41IDE5LjMgMTkuM2w3OC4zIDE0LjRMNDAyIDI0Mi40Yy01LjcgOC4yLTUuNyAxOSAwIDI3LjJsNDUuMiA2NS42LTc4LjMgMTQuNGMtOS44IDEuOC0xNy41IDkuNS0xOS4zIDE5LjNsLTE0LjQgNzguM0wyNjkuNiA0MDJjLTguMi01LjctMTktNS43LTI3LjIgMGwtNjUuNiA0NS4yLTE0LjQtNzguM2MtMS44LTkuOC05LjUtMTcuNS0xOS4zLTE5LjNMNjQuOCAzMzUuMiAxMTAgMjY5LjZjNS43LTguMiA1LjctMTkgMC0yNy4yTDY0LjggMTc2LjhsNzguMy0xNC40YzkuOC0xLjggMTcuNS05LjUgMTkuMy0xOS4zbDE0LjQtNzguM0wyNDIuNCAxMTBjOC4yIDUuNyAxOSA1LjcgMjcuMiAwek0yNTYgMzY4YTExMiAxMTIgMCAxIDAgMC0yMjQgMTEyIDExMiAwIDEgMCAwIDIyNHpNMTkyIDI1NmE2NCA2NCAwIDEgMSAxMjggMCA2NCA2NCAwIDEgMSAtMTI4IDB6XCJcbiAgICAgICAgLz5cbiAgICAgIDwvc3ZnPlxuICAgIHsvaWZ9XG4gIDwvYnV0dG9uPlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgc3ZnIHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBNEVFLGlCQUFJLENBQ0YsUUFBUSxDQUFFLFFBQ1oifQ== */");
 }
 
-// (54:6) {:else}
+// (60:4) {:else}
 function create_else_block(ctx) {
 	let svg;
 	let path;
@@ -1435,12 +1435,12 @@ function create_else_block(ctx) {
 			svg = svg_element("svg");
 			path = svg_element("path");
 			attr_dev(path, "d", "M375.7 19.7c-1.5-8-6.9-14.7-14.4-17.8s-16.1-2.2-22.8 2.4L256 61.1 173.5 4.2c-6.7-4.6-15.3-5.5-22.8-2.4s-12.9 9.8-14.4 17.8l-18.1 98.5L19.7 136.3c-8 1.5-14.7 6.9-17.8 14.4s-2.2 16.1 2.4 22.8L61.1 256 4.2 338.5c-4.6 6.7-5.5 15.3-2.4 22.8s9.8 13 17.8 14.4l98.5 18.1 18.1 98.5c1.5 8 6.9 14.7 14.4 17.8s16.1 2.2 22.8-2.4L256 450.9l82.5 56.9c6.7 4.6 15.3 5.5 22.8 2.4s12.9-9.8 14.4-17.8l18.1-98.5 98.5-18.1c8-1.5 14.7-6.9 17.8-14.4s2.2-16.1-2.4-22.8L450.9 256l56.9-82.5c4.6-6.7 5.5-15.3 2.4-22.8s-9.8-12.9-17.8-14.4l-98.5-18.1L375.7 19.7zM269.6 110l65.6-45.2 14.4 78.3c1.8 9.8 9.5 17.5 19.3 19.3l78.3 14.4L402 242.4c-5.7 8.2-5.7 19 0 27.2l45.2 65.6-78.3 14.4c-9.8 1.8-17.5 9.5-19.3 19.3l-14.4 78.3L269.6 402c-8.2-5.7-19-5.7-27.2 0l-65.6 45.2-14.4-78.3c-1.8-9.8-9.5-17.5-19.3-19.3L64.8 335.2 110 269.6c5.7-8.2 5.7-19 0-27.2L64.8 176.8l78.3-14.4c9.8-1.8 17.5-9.5 19.3-19.3l14.4-78.3L242.4 110c8.2 5.7 19 5.7 27.2 0zM256 368a112 112 0 1 0 0-224 112 112 0 1 0 0 224zM192 256a64 64 0 1 1 128 0 64 64 0 1 1 -128 0z");
-			add_location(path, file, 56, 10, 1922);
+			add_location(path, file, 67, 8, 1973);
 			set_style(svg, "fill", "var(--bulma-warning)");
 			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
 			attr_dev(svg, "viewBox", "0 0 512 512");
 			attr_dev(svg, "class", "svelte-x6infa");
-			add_location(svg, file, 55, 8, 1798);
+			add_location(svg, file, 61, 6, 1812);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, svg, anchor);
@@ -1481,14 +1481,14 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(54:6) {:else}",
+		source: "(60:4) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (48:6) {#if theme === 'light'}
+// (48:4) {#if theme === "light"}
 function create_if_block(ctx) {
 	let svg;
 	let path;
@@ -1500,12 +1500,12 @@ function create_if_block(ctx) {
 			svg = svg_element("svg");
 			path = svg_element("path");
 			attr_dev(path, "d", "M223.5 32C100 32 0 132.3 0 256S100 480 223.5 480c60.6 0 115.5-24.2 155.8-63.4c5-4.9 6.3-12.5 3.1-18.7s-10.1-9.7-17-8.5c-9.8 1.7-19.8 2.6-30.1 2.6c-96.9 0-175.5-78.8-175.5-176c0-65.8 36-123.1 89.3-153.3c6.1-3.5 9.2-10.5 7.7-17.3s-7.3-11.9-14.3-12.5c-6.3-.5-12.6-.8-19-.8z");
-			add_location(path, file, 50, 10, 1445);
+			add_location(path, file, 55, 8, 1460);
 			set_style(svg, "fill", "var(--bulma-link)");
 			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
 			attr_dev(svg, "viewBox", "0 0 384 512");
 			attr_dev(svg, "class", "svelte-x6infa");
-			add_location(svg, file, 49, 8, 1324);
+			add_location(svg, file, 49, 6, 1302);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, svg, anchor);
@@ -1546,7 +1546,7 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(48:6) {#if theme === 'light'}",
+		source: "(48:4) {#if theme === \\\"light\\\"}",
 		ctx
 	});
 
@@ -1565,7 +1565,7 @@ function create_fragment(ctx) {
 	const if_blocks = [];
 
 	function select_block_type(ctx, dirty) {
-		if (/*theme*/ ctx[0] === 'light') return 0;
+		if (/*theme*/ ctx[0] === "light") return 0;
 		return 1;
 	}
 
@@ -1579,7 +1579,7 @@ function create_fragment(ctx) {
 			if_block.c();
 			attr_dev(button, "class", "icon");
 			attr_dev(button, "title", button_title_value = "Switch to " + /*otherTheme*/ ctx[1] + " mode");
-			add_location(button, file, 40, 4, 1126);
+			add_location(button, file, 40, 2, 1124);
 			add_location(div, file, 39, 0, 1116);
 		},
 		l: function claim(nodes) {
@@ -1657,10 +1657,10 @@ function instance($$self, $$props, $$invalidate) {
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('ThemeSwitcher', slots, []);
 	const config = new Config();
-	const themeOption = config.getConfigOption('theme', 'dark');
-	themeOption.setAllowedValues('light', 'dark');
+	const themeOption = config.getConfigOption("theme", "dark");
+	themeOption.setAllowedValues("light", "dark");
 	let theme = themeOption.getValue();
-	let otherTheme = theme === 'dark' ? 'light' : 'dark';
+	let otherTheme = theme === "dark" ? "light" : "dark";
 
 	onMount(() => {
 		document.body.dataset.board = $boardStyle;
@@ -1700,22 +1700,22 @@ function instance($$self, $$props, $$invalidate) {
 	$$self.$$.update = () => {
 		if ($$self.$$.dirty & /*theme*/ 1) {
 			{
-				$$invalidate(1, otherTheme = theme === 'dark' ? 'light' : 'dark');
+				$$invalidate(1, otherTheme = theme === "dark" ? "light" : "dark");
 			}
 		}
 
 		if ($$self.$$.dirty & /*theme*/ 1) {
 			{
 				const originalTransition = document.documentElement.style.transition;
-				document.documentElement.style.transition = 'all 0.5s ease';
+				document.documentElement.style.transition = "all 0.5s ease";
 				document.documentElement.classList.add(theme);
 				document.documentElement.dataset.theme = theme;
 				themeOption.setValue(theme);
 
-				if (theme === 'light') {
-					document.documentElement.classList.remove('dark');
+				if (theme === "light") {
+					document.documentElement.classList.remove("dark");
 				} else {
-					document.documentElement.classList.remove('light');
+					document.documentElement.classList.remove("light");
 				}
 
 				setTimeout(

@@ -3282,8 +3282,8 @@ function persisted(key, initialValue, options) {
   return stores[storageType][key];
 }
 
-const pieceSet = persisted('global.pieceSet', 'merida');
-const boardStyle = persisted('global.boardStyle', 'brown');
+const pieceSet = persisted("global.pieceSet", "merida");
+const boardStyle = persisted("global.boardStyle", "brown");
 
 boardStyle.subscribe((value) => {
   if (document.body) {
@@ -3295,10 +3295,10 @@ boardStyle.subscribe((value) => {
 const file$1 = "svelte/components/Chessboard.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tICdzdmVsdGUnO1xuICBpbXBvcnQgeyBDaGVzc2dyb3VuZCB9IGZyb20gXCJjaGVzc2dyb3VuZFwiO1xuICBpbXBvcnQgeyBwaWVjZVNldCB9IGZyb20gJy4uL3N0b3Jlcyc7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb24gPSAnd2hpdGUnO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH1cbiAgICAgIH0pXG4gICAgfVxuICB9XG5cbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZDtcbiAgZXhwb3J0IGxldCBzaXplO1xuXG4gIGV4cG9ydCBsZXQgcGllY2VTZXRPdmVycmlkZTtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGU7XG5cbiAgbGV0IG1heFdpZHRoID0gJzcwdmgnO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7b3JpZW50YXRpb246IG9yaWVudGF0aW9ufSk7XG4gICAgfVxuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgY2hlc3Nncm91bmQgPSBDaGVzc2dyb3VuZChib2FyZENvbnRhaW5lciwgY2hlc3Nncm91bmRDb25maWcpO1xuICB9KTtcbjwvc2NyaXB0PlxuXG57I2lmIHBpZWNlU2V0T3ZlcnJpZGV9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiIHJlbD1cInN0eWxlc2hlZXRcIj5cbns6ZWxzZX1cbiAgPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy97JHBpZWNlU2V0fS5jc3NcIiByZWw9XCJzdHlsZXNoZWV0XCI+XG57L2lmfVxuXG48ZGl2IGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCIgYmluZDpjbGllbnRXaWR0aD17c2l6ZX0+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIj5cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuYm9hcmQtd3JhcHBlciB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQXlERSw2QkFBZSxDQUNiLFFBQVEsQ0FBRSxRQUFRLENBQ2xCLEtBQUssQ0FBRSxJQUNUIn0= */");
+	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZCB7Ym9hcmRTdHlsZU92ZXJyaWRlID8gYm9hcmRTdHlsZU92ZXJyaWRlIDogJyd9XCJcbiAgICBiaW5kOnRoaXM9e2JvYXJkQ29udGFpbmVyfVxuICAgIHN0eWxlPVwicG9zaXRpb246IHJlbGF0aXZlO3dpZHRoOiB7c2l6ZX1weDsgaGVpZ2h0OiB7c2l6ZX1weFwiXG4gID48L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBaUVFLDZCQUFlLENBQ2IsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QifQ== */");
 }
 
-// (45:0) {:else}
+// (49:0) {:else}
 function create_else_block(ctx) {
 	let link;
 	let link_href_value;
@@ -3309,7 +3309,7 @@ function create_else_block(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[4] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$1, 45, 2, 897);
+			add_location(link, file$1, 49, 2, 931);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -3330,7 +3330,7 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(45:0) {:else}",
+		source: "(49:0) {:else}",
 		ctx
 	});
 
@@ -3348,7 +3348,7 @@ function create_if_block(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSetOverride*/ ctx[1] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$1, 43, 2, 804);
+			add_location(link, file$1, 43, 2, 822);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -3405,11 +3405,11 @@ function create_fragment$1(ctx) {
 			set_style(div0, "position", "relative");
 			set_style(div0, "width", /*size*/ ctx[0] + "px");
 			set_style(div0, "height", /*size*/ ctx[0] + "px");
-			add_location(div0, file$1, 49, 2, 1064);
+			add_location(div0, file$1, 57, 2, 1107);
 			attr_dev(div1, "class", "board-wrapper svelte-16y75xy");
 			set_style(div1, "max-width", /*maxWidth*/ ctx[5]);
 			add_render_callback(() => /*div1_elementresize_handler*/ ctx[11].call(div1));
-			add_location(div1, file$1, 48, 0, 980);
+			add_location(div1, file$1, 52, 0, 1016);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3482,13 +3482,13 @@ function instance$1($$self, $$props, $$invalidate) {
 	validate_slots('Chessboard', slots, []);
 	let boardContainer;
 	let { chessgroundConfig = {} } = $$props;
-	let { orientation = 'white' } = $$props;
+	let { orientation = "white" } = $$props;
 	let { fen = null } = $$props;
 	let { chessground } = $$props;
 	let { size } = $$props;
-	let { pieceSetOverride } = $$props;
-	let { boardStyleOverride } = $$props;
-	let maxWidth = '70vh';
+	let { pieceSetOverride = null } = $$props;
+	let { boardStyleOverride = null } = $$props;
+	let maxWidth = "70vh";
 
 	onMount(() => {
 		$$invalidate(6, chessground = Chessground(boardContainer, chessgroundConfig));
@@ -3501,14 +3501,6 @@ function instance$1($$self, $$props, $$invalidate) {
 
 		if (size === undefined && !('size' in $$props || $$self.$$.bound[$$self.$$.props['size']])) {
 			console.warn("<Chessboard> was created without expected prop 'size'");
-		}
-
-		if (pieceSetOverride === undefined && !('pieceSetOverride' in $$props || $$self.$$.bound[$$self.$$.props['pieceSetOverride']])) {
-			console.warn("<Chessboard> was created without expected prop 'pieceSetOverride'");
-		}
-
-		if (boardStyleOverride === undefined && !('boardStyleOverride' in $$props || $$self.$$.bound[$$self.$$.props['boardStyleOverride']])) {
-			console.warn("<Chessboard> was created without expected prop 'boardStyleOverride'");
 		}
 	});
 
@@ -3755,9 +3747,9 @@ function create_each_block_1(key_1, ctx) {
 			attr_dev(input, "type", "radio");
 			input.__value = /*option*/ ctx[16];
 			set_input_value(input, input.__value);
-			add_location(input, file, 39, 10, 1161);
-			add_location(div, file, 38, 8, 1145);
-			add_location(label, file, 32, 6, 915);
+			add_location(input, file, 39, 10, 1170);
+			add_location(div, file, 38, 8, 1154);
+			add_location(label, file, 32, 6, 916);
 			binding_group.p(input);
 			this.first = label;
 		},
@@ -3811,7 +3803,7 @@ function create_each_block_1(key_1, ctx) {
 	return block;
 }
 
-// (53:4) {#each boardOptions as option(option)}
+// (53:4) {#each boardOptions as option (option)}
 function create_each_block(key_1, ctx) {
 	let label;
 	let div;
@@ -3847,9 +3839,9 @@ function create_each_block(key_1, ctx) {
 			attr_dev(input, "type", "radio");
 			input.__value = /*option*/ ctx[16];
 			set_input_value(input, input.__value);
-			add_location(input, file, 60, 10, 1748);
-			add_location(div, file, 59, 8, 1732);
-			add_location(label, file, 53, 6, 1494);
+			add_location(input, file, 60, 10, 1766);
+			add_location(div, file, 59, 8, 1750);
+			add_location(label, file, 53, 6, 1504);
 			binding_group.p(input);
 			this.first = label;
 		},
@@ -3896,7 +3888,7 @@ function create_each_block(key_1, ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(53:4) {#each boardOptions as option(option)}",
+		source: "(53:4) {#each boardOptions as option (option)}",
 		ctx
 	});
 
@@ -3980,19 +3972,19 @@ function create_fragment(ctx) {
 			}
 
 			attr_dev(h20, "class", "is-size-2");
-			add_location(h20, file, 26, 4, 676);
+			add_location(h20, file, 26, 4, 677);
 			attr_dev(div0, "class", "column is-one-third");
-			add_location(div0, file, 25, 2, 638);
+			add_location(div0, file, 25, 2, 639);
 			attr_dev(h21, "class", "is-size-2");
-			add_location(h21, file, 30, 4, 825);
+			add_location(h21, file, 30, 4, 826);
 			attr_dev(div1, "class", "column is-one-third");
-			add_location(div1, file, 29, 2, 787);
+			add_location(div1, file, 29, 2, 788);
 			attr_dev(h22, "class", "is-size-2");
-			add_location(h22, file, 51, 4, 1406);
+			add_location(h22, file, 51, 4, 1415);
 			attr_dev(div2, "class", "column is-one-third");
-			add_location(div2, file, 50, 2, 1368);
+			add_location(div2, file, 50, 2, 1377);
 			attr_dev(div3, "class", "columns");
-			add_location(div3, file, 24, 0, 614);
+			add_location(div3, file, 24, 0, 615);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");

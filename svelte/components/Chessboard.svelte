@@ -1,11 +1,11 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount } from "svelte";
   import { Chessground } from "chessground";
-  import { pieceSet } from '../stores';
+  import { pieceSet } from "../stores";
 
   let boardContainer;
   export let chessgroundConfig = {};
-  export let orientation = 'white';
+  export let orientation = "white";
 
   export let fen = null;
 
@@ -16,22 +16,22 @@
         highlight: {
           lastMove: false,
           check: false,
-        }
-      })
+        },
+      });
     }
   }
 
   export let chessground;
   export let size;
 
-  export let pieceSetOverride;
-  export let boardStyleOverride;
+  export let pieceSetOverride = null;
+  export let boardStyleOverride = null;
 
-  let maxWidth = '70vh';
+  let maxWidth = "70vh";
 
   $: {
     if (orientation && chessground) {
-      chessground.set({orientation: orientation});
+      chessground.set({ orientation: orientation });
     }
   }
 
@@ -41,17 +41,25 @@
 </script>
 
 {#if pieceSetOverride}
-  <link id="piece-sprite" href="/piece-css/{pieceSetOverride}.css" rel="stylesheet">
+  <link
+    id="piece-sprite"
+    href="/piece-css/{pieceSetOverride}.css"
+    rel="stylesheet"
+  />
 {:else}
-  <link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet">
+  <link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet" />
 {/if}
 
-<div class="board-wrapper" style="max-width: {maxWidth}" bind:clientWidth={size}>
+<div
+  class="board-wrapper"
+  style="max-width: {maxWidth}"
+  bind:clientWidth={size}
+>
   <div
     class="is2d {boardStyleOverride ? boardStyleOverride : ''}"
     bind:this={boardContainer}
-    style="position: relative;width: {size}px; height: {size}px">
-  </div>
+    style="position: relative;width: {size}px; height: {size}px"
+  ></div>
 </div>
 
 <style>

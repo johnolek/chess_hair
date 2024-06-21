@@ -1269,27 +1269,27 @@ function create_fragment$1(ctx) {
 			attr_dev(a, "href", a_href_value = /*game*/ ctx[0].url);
 			attr_dev(a, "class", "button is-link is-small");
 			attr_dev(a, "target", "_blank");
-			add_location(a, file$1, 61, 8, 1412);
+			add_location(a, file$1, 61, 8, 1418);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file$1, 60, 6, 1384);
+			add_location(div0, file$1, 60, 6, 1390);
 			attr_dev(div1, "class", "is2d");
 			attr_dev(div1, "id", div1_id_value = /*game*/ ctx[0].url);
-			add_location(div1, file$1, 65, 10, 1568);
+			add_location(div1, file$1, 67, 10, 1594);
 			attr_dev(div2, "class", "cell");
-			add_location(div2, file$1, 64, 8, 1539);
+			add_location(div2, file$1, 66, 8, 1565);
 			attr_dev(div3, "class", "is2d reversed");
 			attr_dev(div3, "id", div3_id_value = "" + (/*game*/ ctx[0].url + "-reversed"));
-			add_location(div3, file$1, 68, 10, 1690);
+			add_location(div3, file$1, 70, 10, 1716);
 			attr_dev(div4, "class", "cell");
-			add_location(div4, file$1, 67, 8, 1661);
+			add_location(div4, file$1, 69, 8, 1687);
 			attr_dev(div5, "class", "grid");
-			add_location(div5, file$1, 63, 6, 1512);
+			add_location(div5, file$1, 65, 6, 1538);
 			attr_dev(div6, "class", "box");
-			add_location(div6, file$1, 59, 4, 1360);
+			add_location(div6, file$1, 59, 4, 1366);
 			attr_dev(div7, "class", "fixed-grid has-2-cols");
-			add_location(div7, file$1, 58, 2, 1320);
+			add_location(div7, file$1, 58, 2, 1326);
 			attr_dev(div8, "class", "block");
-			add_location(div8, file$1, 57, 0, 1298);
+			add_location(div8, file$1, 57, 0, 1304);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1357,13 +1357,13 @@ function instance$1($$self, $$props, $$invalidate) {
 	let reversedViewer;
 	let mainWidth;
 	let mainStyle;
-	let { myColor = 'white' } = $$props;
-	const otherColor = myColor === 'white' ? 'black' : 'white';
+	let { myColor = "white" } = $$props;
+	const otherColor = myColor === "white" ? "black" : "white";
 
 	onMount(() => {
 		pgnViewer = Ts(pgnViewerContainer, {
 			pgn: game.pgn,
-			initialPly: 'last',
+			initialPly: "last",
 			orientation: myColor,
 			scrollToMove: false,
 			menu: {
@@ -1374,7 +1374,7 @@ function instance$1($$self, $$props, $$invalidate) {
 
 		reversedViewer = Ts(reversedBoard, {
 			pgn: game.pgn,
-			initialPly: 'last',
+			initialPly: "last",
 			orientation: otherColor,
 			scrollToMove: false,
 			showClocks: false,
@@ -1385,7 +1385,7 @@ function instance$1($$self, $$props, $$invalidate) {
 			}
 		});
 
-		pgnViewer.div.addEventListener('pathChange', event => {
+		pgnViewer.div.addEventListener("pathChange", event => {
 			reversedViewer.toPath(event.detail.path);
 		});
 	});
@@ -1499,7 +1499,7 @@ function get_each_context_1(ctx, list, i) {
 	return child_ctx;
 }
 
-// (129:0) {#each myGames as game (game.url)}
+// (154:0) {#each myGames as game (game.url)}
 function create_each_block_1(key_1, ctx) {
 	let div;
 	let dailygame;
@@ -1511,8 +1511,8 @@ function create_each_block_1(key_1, ctx) {
 			props: {
 				game: /*game*/ ctx[23],
 				myColor: /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
-				? 'white'
-				: 'black'
+				? "white"
+				: "black"
 			},
 			$$inline: true
 		});
@@ -1523,7 +1523,7 @@ function create_each_block_1(key_1, ctx) {
 		c: function create() {
 			div = element("div");
 			create_component(dailygame.$$.fragment);
-			add_location(div, file, 129, 2, 4246);
+			add_location(div, file, 154, 2, 4386);
 			this.first = div;
 		},
 		m: function mount(target, anchor) {
@@ -1537,8 +1537,8 @@ function create_each_block_1(key_1, ctx) {
 			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[23];
 
 			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
-			? 'white'
-			: 'black';
+			? "white"
+			: "black";
 
 			dailygame.$set(dailygame_changes);
 		},
@@ -1575,14 +1575,14 @@ function create_each_block_1(key_1, ctx) {
 		block,
 		id: create_each_block_1.name,
 		type: "each",
-		source: "(129:0) {#each myGames as game (game.url)}",
+		source: "(154:0) {#each myGames as game (game.url)}",
 		ctx
 	});
 
 	return block;
 }
 
-// (138:0) {#each theirGames as game (game.url)}
+// (163:0) {#each theirGames as game (game.url)}
 function create_each_block(key_1, ctx) {
 	let div;
 	let dailygame;
@@ -1595,8 +1595,8 @@ function create_each_block(key_1, ctx) {
 			props: {
 				game: /*game*/ ctx[23],
 				myColor: /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
-				? 'white'
-				: 'black'
+				? "white"
+				: "black"
 			},
 			$$inline: true
 		});
@@ -1608,7 +1608,7 @@ function create_each_block(key_1, ctx) {
 			div = element("div");
 			create_component(dailygame.$$.fragment);
 			t = space();
-			add_location(div, file, 138, 2, 4456);
+			add_location(div, file, 163, 2, 4594);
 			this.first = div;
 		},
 		m: function mount(target, anchor) {
@@ -1623,8 +1623,8 @@ function create_each_block(key_1, ctx) {
 			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[23];
 
 			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
-			? 'white'
-			: 'black';
+			? "white"
+			: "black";
 
 			dailygame.$set(dailygame_changes);
 		},
@@ -1661,7 +1661,7 @@ function create_each_block(key_1, ctx) {
 		block,
 		id: create_each_block.name,
 		type: "each",
-		source: "(138:0) {#each theirGames as game (game.url)}",
+		source: "(163:0) {#each theirGames as game (game.url)}",
 		ctx
 	});
 
@@ -1733,11 +1733,11 @@ function create_fragment(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file, 124, 0, 4081);
+			add_location(link, file, 149, 0, 4219);
 			attr_dev(h1, "class", "title");
-			add_location(h1, file, 126, 0, 4157);
-			add_location(h20, file, 127, 0, 4192);
-			add_location(h21, file, 136, 0, 4396);
+			add_location(h1, file, 151, 0, 4297);
+			add_location(h20, file, 152, 0, 4332);
+			add_location(h21, file, 161, 0, 4534);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1858,15 +1858,15 @@ function instance($$self, $$props, $$invalidate) {
 	validate_slots('DailyGames', slots, []);
 	let myGames = [];
 	let theirGames = [];
-	let title = 'Daily Games';
+	let title = "Daily Games";
 	let pieceSet;
 	let gameCount = null;
 	let previousGameCount = null;
 	const chessDotComUsername = document.body.dataset.chessDotComUsername;
 	const config = new Config();
 	const configForm = new ConfigForm(config);
-	const updateFrequencyOption = config.getConfigOption('Update frequency in seconds', 5);
-	const boardOption = config.getConfigOption('Board', 'brown');
+	const updateFrequencyOption = config.getConfigOption("Update frequency in seconds", 5);
+	const boardOption = config.getConfigOption("Board", "brown");
 	boardOption.setAllowedValues(boardOptions);
 
 	boardOption.addObserver(board => {
@@ -1874,7 +1874,7 @@ function instance($$self, $$props, $$invalidate) {
 		boardOption.setValue(board);
 	});
 
-	const pieceSetOption = config.getConfigOption('Piece set', 'merida');
+	const pieceSetOption = config.getConfigOption("Piece set", "merida");
 	pieceSetOption.setAllowedValues(pieceSetOptions);
 
 	pieceSetOption.addObserver(set => {
@@ -1882,12 +1882,12 @@ function instance($$self, $$props, $$invalidate) {
 	});
 
 	pieceSet = pieceSetOption.getValue();
-	const titleAnimationSpeedOption = config.getConfigOption('Title animation speed in ms', 250);
-	const titleAnimationLength = config.getConfigOption('Title animation length in ms', 3000);
-	const firstTitleAnimationText = config.getConfigOption('Title animation 1', '♘♞♘ New Move ♘♞♘');
-	const secondTitleAnimationText = config.getConfigOption('Title animation 2', '♞♘♞ New Move ♞♘♞');
-	const themeOption = config.getConfigOption('Theme', 'system');
-	themeOption.setAllowedValues(['system', 'dark', 'light']);
+	const titleAnimationSpeedOption = config.getConfigOption("Title animation speed in ms", 250);
+	const titleAnimationLength = config.getConfigOption("Title animation length in ms", 3000);
+	const firstTitleAnimationText = config.getConfigOption("Title animation 1", "♘♞♘ New Move ♘♞♘");
+	const secondTitleAnimationText = config.getConfigOption("Title animation 2", "♞♘♞ New Move ♞♘♞");
+	const themeOption = config.getConfigOption("Theme", "system");
+	themeOption.setAllowedValues(["system", "dark", "light"]);
 
 	function animateTitle(finalTitle) {
 		const string1 = firstTitleAnimationText.getValue();
@@ -1949,7 +1949,7 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	function filterMyTurnGames(games) {
-		return games.filter(game => game.turn === 'white' && game.white.includes(chessDotComUsername) || game.turn === 'black' && game.black.includes(chessDotComUsername));
+		return games.filter(game => game.turn === "white" && game.white.includes(chessDotComUsername) || game.turn === "black" && game.black.includes(chessDotComUsername));
 	}
 
 	function filterTheirTurnGames(games) {
@@ -1960,7 +1960,7 @@ function instance($$self, $$props, $$invalidate) {
 
 	onMount(async () => {
 		await updateGames();
-		configForm.addLinkToDOM('config');
+		configForm.addLinkToDOM("config");
 		document.body.dataset.board = boardOption.getValue();
 	});
 
@@ -2024,12 +2024,12 @@ function instance($$self, $$props, $$invalidate) {
 		if ($$self.$$.dirty & /*previousGameCount, gameCount*/ 96) {
 			{
 				if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
-					const newTitle = ('♘').repeat(gameCount);
+					const newTitle = ("♘").repeat(gameCount);
 					animateTitle(newTitle);
 				}
 
 				if (gameCount === 0) {
-					setTitle('Not your turn');
+					setTitle("Not your turn");
 				}
 			}
 		}

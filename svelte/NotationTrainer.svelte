@@ -1,7 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { flip } from "svelte/animate";
-  import { fly } from "svelte/transition";
+  import { blur } from "svelte/transition";
   import Chessboard from "./components/Chessboard.svelte";
 
   import { parsePgn, startingPosition } from "chessops/pgn";
@@ -162,7 +162,7 @@
 
   function handleKeydown(event) {
     const key = event.key.toLowerCase();
-    if (key === "backspace") {
+    if (["backspace", "escape"].includes(key)) {
       answerRank = "";
       answerFile = "";
       return;
@@ -221,6 +221,7 @@
                 <div class="cell">
                   <button
                     class:selected={answerFile === file}
+                    class:unselected={answerFile !== "" && file !== answerFile}
                     class="button"
                     on:click={() => (answerFile = file)}>{file}</button
                   >
@@ -238,6 +239,7 @@
                 <div class="cell">
                   <button
                     class:selected={answerRank === rank}
+                    class:unselected={answerRank !== "" && rank !== answerRank}
                     class="button"
                     on:click={() => (answerRank = rank)}
                   >
@@ -285,7 +287,7 @@
           <h3 class="is-size-3">Answers</h3>
           <ol class="answers-list">
             {#each [...answers].reverse().slice(0, 10) as answer (answer)}
-              <li in:fly={{ y: -200, duration: 1000 }} animate:flip>
+              <li in:blur animate:flip>
                 <span
                   class="tag is-large"
                   class:is-success={answer.isCorrect()}
@@ -316,6 +318,14 @@
 
   .selected:hover {
     background: var(--bulma-success-80);
+  }
+
+  .unselected {
+    background: var(--bulma-grey);
+  }
+
+  .unselected:hover {
+    background: var(--bulma-grey-dark);
   }
 
   .grid button {
