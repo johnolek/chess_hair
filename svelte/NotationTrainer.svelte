@@ -191,6 +191,18 @@
     }
   }
 
+  function setAnswerFile(file) {
+    if (answerAllowed) {
+      answerFile = file;
+    }
+  }
+
+  function setAnswerRank(rank) {
+    if (answerAllowed) {
+      answerRank = rank;
+    }
+  }
+
   onMount(() => {
     window.addEventListener("keydown", handleKeydown);
     newPosition();
@@ -218,12 +230,12 @@
           <div class="fixed-grid has-8-cols">
             <div class="grid">
               {#each files as file (file)}
-                <div class="cell">
+                <div class="cell is-flex is-justify-content-center">
                   <button
                     class:selected={answerFile === file}
                     class:unselected={answerFile !== "" && file !== answerFile}
                     class="button"
-                    on:click={() => (answerFile = file)}>{file}</button
+                    on:click={() => setAnswerFile(file)}>{file}</button
                   >
                 </div>
               {/each}
@@ -236,12 +248,12 @@
           <div class="fixed-grid has-8-cols">
             <div class="grid">
               {#each ranks as rank (rank)}
-                <div class="cell">
+                <div class="cell is-flex is-justify-content-center">
                   <button
                     class:selected={answerRank === rank}
                     class:unselected={answerRank !== "" && rank !== answerRank}
                     class="button"
-                    on:click={() => (answerRank = rank)}
+                    on:click={() => setAnswerRank(rank)}
                   >
                     {rank}
                   </button>
@@ -326,10 +338,6 @@
 
   .unselected:hover {
     background: var(--bulma-grey-dark);
-  }
-
-  .grid button {
-    width: 95%;
   }
 
   .answers-list {
