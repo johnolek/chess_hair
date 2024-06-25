@@ -64,9 +64,10 @@
 
   // Game stuff
   let gameRunning = false;
-  let highScore = 0;
+  let highScoreWhite = 0;
+  let highScoreBlack = 0;
   let maxTime = 0;
-  let correctBonus = 2;
+  let correctBonus = 0;
   let incorrectPenalty = 10;
 
   $: {
@@ -127,6 +128,7 @@
   }
 
   function handleAnswer() {
+    correctBonus = correctBonus * 0.98;
     if (!answerAllowed) {
       return;
     }
@@ -181,13 +183,20 @@
     maxTime = 30;
     correctCount = 0;
     incorrectCount = 0;
+    correctBonus = 1.33;
     newPosition();
   }
 
   function endGame() {
     gameRunning = false;
-    if (correctCount > highScore) {
-      highScore = correctCount;
+    if ($orientation === "white") {
+      if (correctCount > highScoreWhite) {
+        highScoreWhite = correctCount;
+      }
+    } else {
+      if (correctCount > highScoreBlack) {
+        highScoreBlack = correctCount;
+      }
     }
   }
 
@@ -266,25 +275,27 @@
     </div>
   </div>
   <div class="column is-2-desktop">
-    <div class="block">
-      {#if $orientation === "white"}
-        <button
-          class="button is-small"
-          on:click={() => {
-            orientation.set("black");
-          }}
-          >View as black
-        </button>
-      {:else}
-        <button
-          class="button is-small"
-          on:click={() => {
-            orientation.set("white");
-          }}
-          >View as white
-        </button>
-      {/if}
-    </div>
+    {#if !gameRunning}
+      <div class="block">
+        {#if $orientation === "white"}
+          <button
+            class="button is-small"
+            on:click={() => {
+              orientation.set("black");
+            }}
+            >View as black
+          </button>
+        {:else}
+          <button
+            class="button is-small"
+            on:click={() => {
+              orientation.set("white");
+            }}
+            >View as white
+          </button>
+        {/if}
+      </div>
+    {/if}
     {#if !gameRunning}
       <div class="block">
         <button class="button is-small" on:click={startGame}>Start Game</button>
@@ -293,7 +304,8 @@
     <div class="block">
       <p>Correct: {correctCount}</p>
       <p>Incorrect: {incorrectCount}</p>
-      <p>High Score: {highScore}</p>
+      <p>High Score (white): {highScoreWhite}</p>
+      <p>High Score (black): {highScoreBlack}</p>
       {#if answers.length > 0}
         <div class="block">
           <h3 class="is-size-3">Answers</h3>
