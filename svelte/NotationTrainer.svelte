@@ -12,6 +12,7 @@
   import ProgressTimer from "./components/ProgressTimer.svelte";
   import { Chess } from "chessops";
   import Counter from "./components/Counter.svelte";
+  import DisappearingContent from "./components/DisappearingContent.svelte";
 
   const orientation = persisted("notation.orientation", "white");
 
@@ -19,6 +20,10 @@
   let incorrectCount = 0;
   let nextMove;
   let colorToMove;
+  let otherColor = Util.otherColor($orientation);
+  $: {
+    otherColor = Util.otherColor($orientation);
+  }
 
   let positionShownAt;
 
@@ -203,21 +208,42 @@
 <div class="columns is-centered">
   <div class="column is-6-desktop">
     <div class="block">
-      <div
-        class="block is-flex is-justify-content-center"
-        style="width: {boardSize}px; position: relative;"
-      >
-        <span class="tag is-size-3 is-{colorToMove}">
-          {nextMove}
-        </span>
-      </div>
       <Chessboard
         {chessgroundConfig}
         bind:fen
         bind:chessground
         orientation={$orientation}
         bind:size={boardSize}
-      />
+      >
+        <DisappearingContent key={nextMove} slot="centered-content">
+          <span class="tag is-size-3 is-{colorToMove}">
+            {nextMove}
+          </span>
+        </DisappearingContent>
+      </Chessboard>
+    </div>
+    <div
+      class="block is-flex is-justify-content-center"
+      style="width: {boardSize}px"
+    >
+      <span class="tag is-size-3 is-{colorToMove} mr-3">
+        {nextMove}
+      </span>
+      {#if !gameRunning}
+        <button class="button is-primary" on:click={startGame}
+          >Start Game
+        </button>
+      {/if}
+      {#if !gameRunning}
+        <button
+          class="button is-{otherColor} change-orientation-button ml-3"
+          on:click={() => {
+            orientation.set(otherColor);
+            newPosition();
+          }}
+          >Play {otherColor}
+        </button>
+      {/if}
     </div>
     {#if gameRunning}
       <ProgressTimer max={maxTime} width={boardSize} on:complete={endGame}
@@ -225,23 +251,6 @@
     {/if}
   </div>
   <div class="column is-2-desktop">
-    {#if !gameRunning}
-      <div class="block">
-        <button
-          class="button is-small change-orientation-button"
-          on:click={() => {
-            orientation.set(Util.otherColor($orientation));
-            newPosition();
-          }}
-          >Play {Util.otherColor($orientation)}
-        </button>
-      </div>
-    {/if}
-    {#if !gameRunning}
-      <div class="block">
-        <button class="button is-small" on:click={startGame}>Start Game</button>
-      </div>
-    {/if}
     <div class="block">
       <Counter number={correctCount} title="Correct" />
       <Counter number={incorrectCount} title="Incorrect" />
@@ -252,6 +261,4 @@
 </div>
 
 <style>
-  .change-orientation-button {
-  }
 </style>

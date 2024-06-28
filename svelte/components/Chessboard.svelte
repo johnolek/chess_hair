@@ -55,6 +55,9 @@
   style="max-width: {maxWidth}"
   bind:clientWidth={size}
 >
+  <div class="centered-content">
+    <slot name="centered-content"></slot>
+  </div>
   <div
     class="is2d {boardStyleOverride ? boardStyleOverride : ''}"
     bind:this={boardContainer}
@@ -66,5 +69,13 @@
   .board-wrapper {
     position: relative;
     width: 100%;
+  }
+  .centered-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3; /* required to appear in front of pieces */
+    opacity: 0.8;
   }
 </style>

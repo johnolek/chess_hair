@@ -3,6 +3,19 @@ import { boardOptions, pieceSetOptions } from 'src/board/options';
 /** @returns {void} */
 function noop() {}
 
+/**
+ * @template T
+ * @template S
+ * @param {T} tar
+ * @param {S} src
+ * @returns {T & S}
+ */
+function assign(tar, src) {
+	// @ts-ignore
+	for (const k in src) tar[k] = src[k];
+	return /** @type {T & S} */ (tar);
+}
+
 /** @returns {void} */
 function add_location(element, file, line, column, char) {
 	element.__svelte_meta = {
@@ -65,6 +78,64 @@ function subscribe(store, ...callbacks) {
 /** @returns {void} */
 function component_subscribe(component, store, callback) {
 	component.$$.on_destroy.push(subscribe(store, callback));
+}
+
+function create_slot(definition, ctx, $$scope, fn) {
+	if (definition) {
+		const slot_ctx = get_slot_context(definition, ctx, $$scope, fn);
+		return definition[0](slot_ctx);
+	}
+}
+
+function get_slot_context(definition, ctx, $$scope, fn) {
+	return definition[1] && fn ? assign($$scope.ctx.slice(), definition[1](fn(ctx))) : $$scope.ctx;
+}
+
+function get_slot_changes(definition, $$scope, dirty, fn) {
+	if (definition[2] && fn) {
+		const lets = definition[2](fn(dirty));
+		if ($$scope.dirty === undefined) {
+			return lets;
+		}
+		if (typeof lets === 'object') {
+			const merged = [];
+			const len = Math.max($$scope.dirty.length, lets.length);
+			for (let i = 0; i < len; i += 1) {
+				merged[i] = $$scope.dirty[i] | lets[i];
+			}
+			return merged;
+		}
+		return $$scope.dirty | lets;
+	}
+	return $$scope.dirty;
+}
+
+/** @returns {void} */
+function update_slot_base(
+	slot,
+	slot_definition,
+	ctx,
+	$$scope,
+	slot_changes,
+	get_slot_context_fn
+) {
+	if (slot_changes) {
+		const slot_context = get_slot_context(slot_definition, ctx, $$scope, get_slot_context_fn);
+		slot.p(slot_context, slot_changes);
+	}
+}
+
+/** @returns {any[] | -1} */
+function get_all_dirty_from_scope($$scope) {
+	if ($$scope.ctx.length > 32) {
+		const dirty = [];
+		const length = $$scope.ctx.length / 32;
+		for (let i = 0; i < length; i++) {
+			dirty[i] = -1;
+		}
+		return dirty;
+	}
+	return -1;
 }
 
 /**
@@ -3295,8 +3366,11 @@ boardStyle.subscribe((value) => {
 const file$1 = "svelte/components/Chessboard.svelte";
 
 function add_css(target) {
-	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZCB7Ym9hcmRTdHlsZU92ZXJyaWRlID8gYm9hcmRTdHlsZU92ZXJyaWRlIDogJyd9XCJcbiAgICBiaW5kOnRoaXM9e2JvYXJkQ29udGFpbmVyfVxuICAgIHN0eWxlPVwicG9zaXRpb246IHJlbGF0aXZlO3dpZHRoOiB7c2l6ZX1weDsgaGVpZ2h0OiB7c2l6ZX1weFwiXG4gID48L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBaUVFLDZCQUFlLENBQ2IsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QifQ== */");
+	append_styles(target, "svelte-iagpad", ".board-wrapper.svelte-iagpad{position:relative;width:100%}.centered-content.svelte-iagpad{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdiBjbGFzcz1cImNlbnRlcmVkLWNvbnRlbnRcIj5cbiAgICA8c2xvdCBuYW1lPVwiY2VudGVyZWQtY29udGVudFwiPjwvc2xvdD5cbiAgPC9kaXY+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIlxuICA+PC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuYm9hcmQtd3JhcHBlciB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG4gIC5jZW50ZXJlZC1jb250ZW50IHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gICAgdG9wOiA1MCU7XG4gICAgbGVmdDogNTAlO1xuICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlKC01MCUsIC01MCUpO1xuICAgIHotaW5kZXg6IDM7IC8qIHJlcXVpcmVkIHRvIGFwcGVhciBpbiBmcm9udCBvZiBwaWVjZXMgKi9cbiAgICBvcGFjaXR5OiAwLjg7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBb0VFLDRCQUFlLENBQ2IsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QsQ0FDQSwrQkFBa0IsQ0FDaEIsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsR0FBRyxDQUFFLEdBQUcsQ0FDUixJQUFJLENBQUUsR0FBRyxDQUNULFNBQVMsQ0FBRSxVQUFVLElBQUksQ0FBQyxDQUFDLElBQUksQ0FBQyxDQUNoQyxPQUFPLENBQUUsQ0FBQyxDQUNWLE9BQU8sQ0FBRSxHQUNYIn0= */");
 }
+
+const get_centered_content_slot_changes = dirty => ({});
+const get_centered_content_slot_context = ctx => ({});
 
 // (49:0) {:else}
 function create_else_block(ctx) {
@@ -3377,11 +3451,14 @@ function create_if_block(ctx) {
 }
 
 function create_fragment$1(ctx) {
-	let t;
-	let div1;
+	let t0;
+	let div2;
 	let div0;
-	let div0_class_value;
-	let div1_resize_listener;
+	let t1;
+	let div1;
+	let div1_class_value;
+	let div2_resize_listener;
+	let current;
 
 	function select_block_type(ctx, dirty) {
 		if (/*pieceSetOverride*/ ctx[1]) return create_if_block;
@@ -3390,37 +3467,52 @@ function create_fragment$1(ctx) {
 
 	let current_block_type = select_block_type(ctx);
 	let if_block = current_block_type(ctx);
+	const centered_content_slot_template = /*#slots*/ ctx[11]["centered-content"];
+	const centered_content_slot = create_slot(centered_content_slot_template, ctx, /*$$scope*/ ctx[10], get_centered_content_slot_context);
 
 	const block = {
 		c: function create() {
 			if_block.c();
-			t = space();
-			div1 = element("div");
+			t0 = space();
+			div2 = element("div");
 			div0 = element("div");
-
-			attr_dev(div0, "class", div0_class_value = "is2d " + (/*boardStyleOverride*/ ctx[2]
-			? /*boardStyleOverride*/ ctx[2]
-			: '') + " svelte-16y75xy");
-
-			set_style(div0, "position", "relative");
-			set_style(div0, "width", /*size*/ ctx[0] + "px");
-			set_style(div0, "height", /*size*/ ctx[0] + "px");
+			if (centered_content_slot) centered_content_slot.c();
+			t1 = space();
+			div1 = element("div");
+			attr_dev(div0, "class", "centered-content svelte-iagpad");
 			add_location(div0, file$1, 57, 2, 1107);
-			attr_dev(div1, "class", "board-wrapper svelte-16y75xy");
-			set_style(div1, "max-width", /*maxWidth*/ ctx[5]);
-			add_render_callback(() => /*div1_elementresize_handler*/ ctx[11].call(div1));
-			add_location(div1, file$1, 52, 0, 1016);
+
+			attr_dev(div1, "class", div1_class_value = "is2d " + (/*boardStyleOverride*/ ctx[2]
+			? /*boardStyleOverride*/ ctx[2]
+			: '') + " svelte-iagpad");
+
+			set_style(div1, "position", "relative");
+			set_style(div1, "width", /*size*/ ctx[0] + "px");
+			set_style(div1, "height", /*size*/ ctx[0] + "px");
+			add_location(div1, file$1, 60, 2, 1191);
+			attr_dev(div2, "class", "board-wrapper svelte-iagpad");
+			set_style(div2, "max-width", /*maxWidth*/ ctx[5]);
+			add_render_callback(() => /*div2_elementresize_handler*/ ctx[13].call(div2));
+			add_location(div2, file$1, 52, 0, 1016);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
 		},
 		m: function mount(target, anchor) {
 			if_block.m(target, anchor);
-			insert_dev(target, t, anchor);
-			insert_dev(target, div1, anchor);
-			append_dev(div1, div0);
-			/*div0_binding*/ ctx[10](div0);
-			div1_resize_listener = add_iframe_resize_listener(div1, /*div1_elementresize_handler*/ ctx[11].bind(div1));
+			insert_dev(target, t0, anchor);
+			insert_dev(target, div2, anchor);
+			append_dev(div2, div0);
+
+			if (centered_content_slot) {
+				centered_content_slot.m(div0, null);
+			}
+
+			append_dev(div2, t1);
+			append_dev(div2, div1);
+			/*div1_binding*/ ctx[12](div1);
+			div2_resize_listener = add_iframe_resize_listener(div2, /*div2_elementresize_handler*/ ctx[13].bind(div2));
+			current = true;
 		},
 		p: function update(ctx, [dirty]) {
 			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
@@ -3431,35 +3523,58 @@ function create_fragment$1(ctx) {
 
 				if (if_block) {
 					if_block.c();
-					if_block.m(t.parentNode, t);
+					if_block.m(t0.parentNode, t0);
 				}
 			}
 
-			if (dirty & /*boardStyleOverride*/ 4 && div0_class_value !== (div0_class_value = "is2d " + (/*boardStyleOverride*/ ctx[2]
+			if (centered_content_slot) {
+				if (centered_content_slot.p && (!current || dirty & /*$$scope*/ 1024)) {
+					update_slot_base(
+						centered_content_slot,
+						centered_content_slot_template,
+						ctx,
+						/*$$scope*/ ctx[10],
+						!current
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[10])
+						: get_slot_changes(centered_content_slot_template, /*$$scope*/ ctx[10], dirty, get_centered_content_slot_changes),
+						get_centered_content_slot_context
+					);
+				}
+			}
+
+			if (!current || dirty & /*boardStyleOverride*/ 4 && div1_class_value !== (div1_class_value = "is2d " + (/*boardStyleOverride*/ ctx[2]
 			? /*boardStyleOverride*/ ctx[2]
-			: '') + " svelte-16y75xy")) {
-				attr_dev(div0, "class", div0_class_value);
+			: '') + " svelte-iagpad")) {
+				attr_dev(div1, "class", div1_class_value);
 			}
 
-			if (dirty & /*size*/ 1) {
-				set_style(div0, "width", /*size*/ ctx[0] + "px");
+			if (!current || dirty & /*size*/ 1) {
+				set_style(div1, "width", /*size*/ ctx[0] + "px");
 			}
 
-			if (dirty & /*size*/ 1) {
-				set_style(div0, "height", /*size*/ ctx[0] + "px");
+			if (!current || dirty & /*size*/ 1) {
+				set_style(div1, "height", /*size*/ ctx[0] + "px");
 			}
 		},
-		i: noop,
-		o: noop,
+		i: function intro(local) {
+			if (current) return;
+			transition_in(centered_content_slot, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(centered_content_slot, local);
+			current = false;
+		},
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(t);
-				detach_dev(div1);
+				detach_dev(t0);
+				detach_dev(div2);
 			}
 
 			if_block.d(detaching);
-			/*div0_binding*/ ctx[10](null);
-			div1_resize_listener();
+			if (centered_content_slot) centered_content_slot.d(detaching);
+			/*div1_binding*/ ctx[12](null);
+			div2_resize_listener();
 		}
 	};
 
@@ -3479,7 +3594,7 @@ function instance$1($$self, $$props, $$invalidate) {
 	validate_store(pieceSet, 'pieceSet');
 	component_subscribe($$self, pieceSet, $$value => $$invalidate(4, $pieceSet = $$value));
 	let { $$slots: slots = {}, $$scope } = $$props;
-	validate_slots('Chessboard', slots, []);
+	validate_slots('Chessboard', slots, ['centered-content']);
 	let boardContainer;
 	let { chessgroundConfig = {} } = $$props;
 	let { orientation = "white" } = $$props;
@@ -3518,14 +3633,14 @@ function instance$1($$self, $$props, $$invalidate) {
 		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Chessboard> was created with unknown prop '${key}'`);
 	});
 
-	function div0_binding($$value) {
+	function div1_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			boardContainer = $$value;
 			$$invalidate(3, boardContainer);
 		});
 	}
 
-	function div1_elementresize_handler() {
+	function div2_elementresize_handler() {
 		size = this.clientWidth;
 		$$invalidate(0, size);
 	}
@@ -3538,6 +3653,7 @@ function instance$1($$self, $$props, $$invalidate) {
 		if ('size' in $$props) $$invalidate(0, size = $$props.size);
 		if ('pieceSetOverride' in $$props) $$invalidate(1, pieceSetOverride = $$props.pieceSetOverride);
 		if ('boardStyleOverride' in $$props) $$invalidate(2, boardStyleOverride = $$props.boardStyleOverride);
+		if ('$$scope' in $$props) $$invalidate(10, $$scope = $$props.$$scope);
 	};
 
 	$$self.$capture_state = () => ({
@@ -3604,8 +3720,10 @@ function instance$1($$self, $$props, $$invalidate) {
 		chessgroundConfig,
 		orientation,
 		fen,
-		div0_binding,
-		div1_elementresize_handler
+		$$scope,
+		slots,
+		div1_binding,
+		div2_elementresize_handler
 	];
 }
 
