@@ -7865,16 +7865,16 @@ function create_default_slot(ctx) {
 			span = element("span");
 			t = text(/*nextMove*/ ctx[3]);
 			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4]);
-			add_location(span, file, 218, 10, 5558);
+			add_location(span, file, 218, 10, 5646);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, span, anchor);
 			append_dev(span, t);
 		},
 		p: function update(ctx, dirty) {
-			if (dirty & /*nextMove*/ 8) set_data_dev(t, /*nextMove*/ ctx[3]);
+			if (dirty[0] & /*nextMove*/ 8) set_data_dev(t, /*nextMove*/ ctx[3]);
 
-			if (dirty & /*colorToMove*/ 16 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4])) {
+			if (dirty[0] & /*colorToMove*/ 16 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4])) {
 				attr_dev(span, "class", span_class_value);
 			}
 		},
@@ -7921,9 +7921,9 @@ function create_centered_content_slot(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const disappearingcontent_changes = {};
-			if (dirty & /*nextMove*/ 8) disappearingcontent_changes.key = /*nextMove*/ ctx[3];
+			if (dirty[0] & /*nextMove*/ 8) disappearingcontent_changes.key = /*nextMove*/ ctx[3];
 
-			if (dirty & /*$$scope, colorToMove, nextMove*/ 1073741848) {
+			if (dirty[0] & /*colorToMove, nextMove*/ 24 | dirty[1] & /*$$scope*/ 2) {
 				disappearingcontent_changes.$$scope = { dirty, ctx };
 			}
 
@@ -7965,13 +7965,13 @@ function create_if_block_2(ctx) {
 			button = element("button");
 			button.textContent = "Start Game";
 			attr_dev(button, "class", "button is-primary");
-			add_location(button, file, 232, 8, 5934);
+			add_location(button, file, 232, 8, 6022);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*startGame*/ ctx[16], false);
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[18], false);
 				mounted = true;
 			}
 		},
@@ -8012,7 +8012,7 @@ function create_if_block_1(ctx) {
 			t0 = text("Play ");
 			t1 = text(/*otherColor*/ ctx[5]);
 			attr_dev(button, "class", button_class_value = "button is-" + /*otherColor*/ ctx[5] + " change-orientation-button ml-3");
-			add_location(button, file, 237, 8, 6074);
+			add_location(button, file, 237, 8, 6162);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
@@ -8020,14 +8020,14 @@ function create_if_block_1(ctx) {
 			append_dev(button, t1);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler*/ ctx[21], false);
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[23], false);
 				mounted = true;
 			}
 		},
 		p: function update(ctx, dirty) {
-			if (dirty & /*otherColor*/ 32) set_data_dev(t1, /*otherColor*/ ctx[5]);
+			if (dirty[0] & /*otherColor*/ 32) set_data_dev(t1, /*otherColor*/ ctx[5]);
 
-			if (dirty & /*otherColor*/ 32 && button_class_value !== (button_class_value = "button is-" + /*otherColor*/ ctx[5] + " change-orientation-button ml-3")) {
+			if (dirty[0] & /*otherColor*/ 32 && button_class_value !== (button_class_value = "button is-" + /*otherColor*/ ctx[5] + " change-orientation-button ml-3")) {
 				attr_dev(button, "class", button_class_value);
 			}
 		},
@@ -8059,13 +8059,13 @@ function create_if_block(ctx) {
 
 	progresstimer = new ProgressTimer({
 			props: {
-				max: /*maxTime*/ ctx[12],
+				max: /*maxTime*/ ctx[10],
 				width: /*boardSize*/ ctx[6]
 			},
 			$$inline: true
 		});
 
-	progresstimer.$on("complete", /*endGame*/ ctx[17]);
+	progresstimer.$on("complete", /*endGame*/ ctx[19]);
 
 	const block = {
 		c: function create() {
@@ -8077,8 +8077,8 @@ function create_if_block(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const progresstimer_changes = {};
-			if (dirty & /*maxTime*/ 4096) progresstimer_changes.max = /*maxTime*/ ctx[12];
-			if (dirty & /*boardSize*/ 64) progresstimer_changes.width = /*boardSize*/ ctx[6];
+			if (dirty[0] & /*maxTime*/ 1024) progresstimer_changes.max = /*maxTime*/ ctx[10];
+			if (dirty[0] & /*boardSize*/ 64) progresstimer_changes.width = /*boardSize*/ ctx[6];
 			progresstimer.$set(progresstimer_changes);
 		},
 		i: function intro(local) {
@@ -8135,19 +8135,19 @@ function create_fragment(ctx) {
 	let current;
 
 	function chessboard_fen_binding(value) {
-		/*chessboard_fen_binding*/ ctx[18](value);
+		/*chessboard_fen_binding*/ ctx[20](value);
 	}
 
 	function chessboard_chessground_binding(value) {
-		/*chessboard_chessground_binding*/ ctx[19](value);
+		/*chessboard_chessground_binding*/ ctx[21](value);
 	}
 
 	function chessboard_size_binding(value) {
-		/*chessboard_size_binding*/ ctx[20](value);
+		/*chessboard_size_binding*/ ctx[22](value);
 	}
 
 	let chessboard_props = {
-		chessgroundConfig: /*chessgroundConfig*/ ctx[14],
+		chessgroundConfig: /*chessgroundConfig*/ ctx[16],
 		orientation: /*$orientation*/ ctx[0],
 		$$slots: {
 			"centered-content": [create_centered_content_slot]
@@ -8193,7 +8193,7 @@ function create_fragment(ctx) {
 
 	counter2 = new Counter({
 			props: {
-				number: /*highScoreWhite*/ ctx[10],
+				number: /*$highScoreWhite*/ ctx[12],
 				title: "High Score (white)"
 			},
 			$$inline: true
@@ -8201,7 +8201,7 @@ function create_fragment(ctx) {
 
 	counter3 = new Counter({
 			props: {
-				number: /*highScoreBlack*/ ctx[11],
+				number: /*$highScoreBlack*/ ctx[11],
 				title: "High Score (black)"
 			},
 			$$inline: true
@@ -8234,20 +8234,20 @@ function create_fragment(ctx) {
 			t8 = space();
 			create_component(counter3.$$.fragment);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 209, 4, 5298);
+			add_location(div0, file, 209, 4, 5386);
 			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4] + " mr-3");
-			add_location(span, file, 228, 6, 5817);
+			add_location(span, file, 228, 6, 5905);
 			attr_dev(div1, "class", "block is-flex is-justify-content-center");
 			set_style(div1, "width", /*boardSize*/ ctx[6] + "px");
-			add_location(div1, file, 224, 4, 5711);
+			add_location(div1, file, 224, 4, 5799);
 			attr_dev(div2, "class", "column is-6-desktop");
-			add_location(div2, file, 208, 2, 5260);
+			add_location(div2, file, 208, 2, 5348);
 			attr_dev(div3, "class", "block");
-			add_location(div3, file, 253, 4, 6513);
+			add_location(div3, file, 253, 4, 6601);
 			attr_dev(div4, "class", "column is-2-desktop");
-			add_location(div4, file, 252, 2, 6475);
+			add_location(div4, file, 252, 2, 6563);
 			attr_dev(div5, "class", "columns is-centered");
-			add_location(div5, file, 207, 0, 5224);
+			add_location(div5, file, 207, 0, 5312);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -8279,36 +8279,36 @@ function create_fragment(ctx) {
 			mount_component(counter3, div3, null);
 			current = true;
 		},
-		p: function update(ctx, [dirty]) {
+		p: function update(ctx, dirty) {
 			const chessboard_changes = {};
-			if (dirty & /*$orientation*/ 1) chessboard_changes.orientation = /*$orientation*/ ctx[0];
+			if (dirty[0] & /*$orientation*/ 1) chessboard_changes.orientation = /*$orientation*/ ctx[0];
 
-			if (dirty & /*$$scope, nextMove, colorToMove*/ 1073741848) {
+			if (dirty[0] & /*nextMove, colorToMove*/ 24 | dirty[1] & /*$$scope*/ 2) {
 				chessboard_changes.$$scope = { dirty, ctx };
 			}
 
-			if (!updating_fen && dirty & /*fen*/ 256) {
+			if (!updating_fen && dirty[0] & /*fen*/ 256) {
 				updating_fen = true;
 				chessboard_changes.fen = /*fen*/ ctx[8];
 				add_flush_callback(() => updating_fen = false);
 			}
 
-			if (!updating_chessground && dirty & /*chessground*/ 128) {
+			if (!updating_chessground && dirty[0] & /*chessground*/ 128) {
 				updating_chessground = true;
 				chessboard_changes.chessground = /*chessground*/ ctx[7];
 				add_flush_callback(() => updating_chessground = false);
 			}
 
-			if (!updating_size && dirty & /*boardSize*/ 64) {
+			if (!updating_size && dirty[0] & /*boardSize*/ 64) {
 				updating_size = true;
 				chessboard_changes.size = /*boardSize*/ ctx[6];
 				add_flush_callback(() => updating_size = false);
 			}
 
 			chessboard.$set(chessboard_changes);
-			if (!current || dirty & /*nextMove*/ 8) set_data_dev(t1, /*nextMove*/ ctx[3]);
+			if (!current || dirty[0] & /*nextMove*/ 8) set_data_dev(t1, /*nextMove*/ ctx[3]);
 
-			if (!current || dirty & /*colorToMove*/ 16 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4] + " mr-3")) {
+			if (!current || dirty[0] & /*colorToMove*/ 16 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4] + " mr-3")) {
 				attr_dev(span, "class", span_class_value);
 			}
 
@@ -8338,7 +8338,7 @@ function create_fragment(ctx) {
 				if_block1 = null;
 			}
 
-			if (!current || dirty & /*boardSize*/ 64) {
+			if (!current || dirty[0] & /*boardSize*/ 64) {
 				set_style(div1, "width", /*boardSize*/ ctx[6] + "px");
 			}
 
@@ -8346,7 +8346,7 @@ function create_fragment(ctx) {
 				if (if_block2) {
 					if_block2.p(ctx, dirty);
 
-					if (dirty & /*gameRunning*/ 512) {
+					if (dirty[0] & /*gameRunning*/ 512) {
 						transition_in(if_block2, 1);
 					}
 				} else {
@@ -8366,16 +8366,16 @@ function create_fragment(ctx) {
 			}
 
 			const counter0_changes = {};
-			if (dirty & /*correctCount*/ 2) counter0_changes.number = /*correctCount*/ ctx[1];
+			if (dirty[0] & /*correctCount*/ 2) counter0_changes.number = /*correctCount*/ ctx[1];
 			counter0.$set(counter0_changes);
 			const counter1_changes = {};
-			if (dirty & /*incorrectCount*/ 4) counter1_changes.number = /*incorrectCount*/ ctx[2];
+			if (dirty[0] & /*incorrectCount*/ 4) counter1_changes.number = /*incorrectCount*/ ctx[2];
 			counter1.$set(counter1_changes);
 			const counter2_changes = {};
-			if (dirty & /*highScoreWhite*/ 1024) counter2_changes.number = /*highScoreWhite*/ ctx[10];
+			if (dirty[0] & /*$highScoreWhite*/ 4096) counter2_changes.number = /*$highScoreWhite*/ ctx[12];
 			counter2.$set(counter2_changes);
 			const counter3_changes = {};
-			if (dirty & /*highScoreBlack*/ 2048) counter3_changes.number = /*highScoreBlack*/ ctx[11];
+			if (dirty[0] & /*$highScoreBlack*/ 2048) counter3_changes.number = /*$highScoreBlack*/ ctx[11];
 			counter3.$set(counter3_changes);
 		},
 		i: function intro(local) {
@@ -8429,12 +8429,20 @@ function whoseMoveIsIt(ply) {
 }
 
 function instance($$self, $$props, $$invalidate) {
+	let $highScoreBlack;
+	let $highScoreWhite;
 	let $orientation;
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('NotationTrainer', slots, []);
 	const orientation = persisted("notation.orientation", "white");
 	validate_store(orientation, 'orientation');
 	component_subscribe($$self, orientation, value => $$invalidate(0, $orientation = value));
+	const highScoreBlack = persisted("notation.highScoreBlack", 0);
+	validate_store(highScoreBlack, 'highScoreBlack');
+	component_subscribe($$self, highScoreBlack, value => $$invalidate(11, $highScoreBlack = value));
+	const highScoreWhite = persisted("notation.highScoreWhite", 0);
+	validate_store(highScoreWhite, 'highScoreWhite');
+	component_subscribe($$self, highScoreWhite, value => $$invalidate(12, $highScoreWhite = value));
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let nextMove;
@@ -8481,8 +8489,6 @@ function instance($$self, $$props, $$invalidate) {
 	// Game stuff
 	let gameRunning = false;
 
-	let highScoreWhite = 0;
-	let highScoreBlack = 0;
 	let maxTime = 0;
 	let correctBonus = 0;
 	let incorrectPenalty = 10;
@@ -8541,10 +8547,10 @@ function instance($$self, $$props, $$invalidate) {
 		answers = [...answers, new Answer(userSan, answerSan, timeToAnswer, $orientation)];
 
 		if (isCorrect) {
-			$$invalidate(12, maxTime += correctBonus);
+			$$invalidate(10, maxTime += correctBonus);
 			$$invalidate(1, correctCount++, correctCount);
 		} else {
-			$$invalidate(12, maxTime -= incorrectPenalty);
+			$$invalidate(10, maxTime -= incorrectPenalty);
 			$$invalidate(2, incorrectCount++, incorrectCount);
 		}
 
@@ -8554,7 +8560,7 @@ function instance($$self, $$props, $$invalidate) {
 	function startGame() {
 		answers = [];
 		$$invalidate(9, gameRunning = true);
-		$$invalidate(12, maxTime = 30);
+		$$invalidate(10, maxTime = 30);
 		$$invalidate(1, correctCount = 0);
 		$$invalidate(2, incorrectCount = 0);
 		correctBonus = 2.75;
@@ -8565,12 +8571,12 @@ function instance($$self, $$props, $$invalidate) {
 		$$invalidate(9, gameRunning = false);
 
 		if ($orientation === "white") {
-			if (correctCount > highScoreWhite) {
-				$$invalidate(10, highScoreWhite = correctCount);
+			if (correctCount > $highScoreWhite) {
+				highScoreWhite.set(correctCount);
 			}
 		} else {
-			if (correctCount > highScoreBlack) {
-				$$invalidate(11, highScoreBlack = correctCount);
+			if (correctCount > $highScoreBlack) {
+				highScoreBlack.set(correctCount);
 			}
 		}
 	}
@@ -8638,6 +8644,8 @@ function instance($$self, $$props, $$invalidate) {
 		Counter,
 		DisappearingContent,
 		orientation,
+		highScoreBlack,
+		highScoreWhite,
 		correctCount,
 		incorrectCount,
 		nextMove,
@@ -8651,8 +8659,6 @@ function instance($$self, $$props, $$invalidate) {
 		chessground,
 		fen,
 		gameRunning,
-		highScoreWhite,
-		highScoreBlack,
 		maxTime,
 		correctBonus,
 		incorrectPenalty,
@@ -8663,6 +8669,8 @@ function instance($$self, $$props, $$invalidate) {
 		startGame,
 		endGame,
 		getLegalMovesForFen,
+		$highScoreBlack,
+		$highScoreWhite,
 		$orientation
 	});
 
@@ -8674,14 +8682,12 @@ function instance($$self, $$props, $$invalidate) {
 		if ('otherColor' in $$props) $$invalidate(5, otherColor = $$props.otherColor);
 		if ('positionShownAt' in $$props) positionShownAt = $$props.positionShownAt;
 		if ('answers' in $$props) answers = $$props.answers;
-		if ('chessgroundConfig' in $$props) $$invalidate(14, chessgroundConfig = $$props.chessgroundConfig);
+		if ('chessgroundConfig' in $$props) $$invalidate(16, chessgroundConfig = $$props.chessgroundConfig);
 		if ('boardSize' in $$props) $$invalidate(6, boardSize = $$props.boardSize);
 		if ('chessground' in $$props) $$invalidate(7, chessground = $$props.chessground);
 		if ('fen' in $$props) $$invalidate(8, fen = $$props.fen);
 		if ('gameRunning' in $$props) $$invalidate(9, gameRunning = $$props.gameRunning);
-		if ('highScoreWhite' in $$props) $$invalidate(10, highScoreWhite = $$props.highScoreWhite);
-		if ('highScoreBlack' in $$props) $$invalidate(11, highScoreBlack = $$props.highScoreBlack);
-		if ('maxTime' in $$props) $$invalidate(12, maxTime = $$props.maxTime);
+		if ('maxTime' in $$props) $$invalidate(10, maxTime = $$props.maxTime);
 		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
 		if ('incorrectPenalty' in $$props) incorrectPenalty = $$props.incorrectPenalty;
 	};
@@ -8691,7 +8697,7 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	$$self.$$.update = () => {
-		if ($$self.$$.dirty & /*$orientation*/ 1) {
+		if ($$self.$$.dirty[0] & /*$orientation*/ 1) {
 			{
 				$$invalidate(5, otherColor = Util.otherColor($orientation));
 			}
@@ -8709,10 +8715,12 @@ function instance($$self, $$props, $$invalidate) {
 		chessground,
 		fen,
 		gameRunning,
-		highScoreWhite,
-		highScoreBlack,
 		maxTime,
+		$highScoreBlack,
+		$highScoreWhite,
 		orientation,
+		highScoreBlack,
+		highScoreWhite,
 		chessgroundConfig,
 		newPosition,
 		startGame,
@@ -8727,7 +8735,7 @@ function instance($$self, $$props, $$invalidate) {
 class NotationTrainer extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance, create_fragment, safe_not_equal, {});
+		init(this, options, instance, create_fragment, safe_not_equal, {}, null, [-1, -1]);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,

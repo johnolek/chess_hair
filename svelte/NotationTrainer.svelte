@@ -15,6 +15,8 @@
   import DisappearingContent from "./components/DisappearingContent.svelte";
 
   const orientation = persisted("notation.orientation", "white");
+  const highScoreBlack = persisted("notation.highScoreBlack", 0);
+  const highScoreWhite = persisted("notation.highScoreWhite", 0);
 
   let correctCount = 0;
   let incorrectCount = 0;
@@ -75,8 +77,6 @@
 
   // Game stuff
   let gameRunning = false;
-  let highScoreWhite = 0;
-  let highScoreBlack = 0;
   let maxTime = 0;
   let correctBonus = 0;
   let incorrectPenalty = 10;
@@ -175,12 +175,12 @@
   function endGame() {
     gameRunning = false;
     if ($orientation === "white") {
-      if (correctCount > highScoreWhite) {
-        highScoreWhite = correctCount;
+      if (correctCount > $highScoreWhite) {
+        highScoreWhite.set(correctCount);
       }
     } else {
-      if (correctCount > highScoreBlack) {
-        highScoreBlack = correctCount;
+      if (correctCount > $highScoreBlack) {
+        highScoreBlack.set(correctCount);
       }
     }
   }
@@ -254,8 +254,8 @@
     <div class="block">
       <Counter number={correctCount} title="Correct" />
       <Counter number={incorrectCount} title="Incorrect" />
-      <Counter number={highScoreWhite} title="High Score (white)" />
-      <Counter number={highScoreBlack} title="High Score (black)" />
+      <Counter number={$highScoreWhite} title="High Score (white)" />
+      <Counter number={$highScoreBlack} title="High Score (black)" />
     </div>
   </div>
 </div>
