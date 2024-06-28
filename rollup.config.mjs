@@ -76,4 +76,13 @@ export default [
       file: 'app/javascript/dist/global_config.js'
     },
   },
+  {
+    ...sharedConfig,
+    input: './svelte/Puzzles.svelte',
+    output: {
+      ...sharedOutputOptions,
+      name: 'Puzzles',
+      file: 'app/javascript/dist/puzzles.js'
+    },
+  },
 ]

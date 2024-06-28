@@ -19,6 +19,9 @@ class ApplicationController < ActionController::Base
   def global_config
   end
 
+  def puzzles
+  end
+
   private
 
   def set_default_body_attributes

@@ -1,0 +1,14 @@
+<% content_for :title, 'Puzzles' %>
+<% content_for :head do %>
+  <%= javascript_import_module_tag 'dist/puzzles' %>
+  <script type="module">
+    import Puzzles from 'dist/puzzles';
+    document.addEventListener('DOMContentLoaded', () => {
+      new Puzzles({
+        target: document.getElementById('main'),
+      })
+    });
+  </script>
+<% end %>
+
+<div id="main"></div>

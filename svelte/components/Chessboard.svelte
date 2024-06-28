@@ -63,6 +63,9 @@
     bind:this={boardContainer}
     style="position: relative;width: {size}px; height: {size}px"
   ></div>
+  <div class="block mt-2">
+    <slot name="below-board"></slot>
+  </div>
 </div>
 
 <style>

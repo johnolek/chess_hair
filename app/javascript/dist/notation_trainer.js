@@ -3773,9 +3773,11 @@ boardStyle.subscribe((value) => {
 const file$4 = "svelte/components/Chessboard.svelte";
 
 function add_css$1(target) {
-	append_styles(target, "svelte-iagpad", ".board-wrapper.svelte-iagpad{position:relative;width:100%}.centered-content.svelte-iagpad{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdiBjbGFzcz1cImNlbnRlcmVkLWNvbnRlbnRcIj5cbiAgICA8c2xvdCBuYW1lPVwiY2VudGVyZWQtY29udGVudFwiPjwvc2xvdD5cbiAgPC9kaXY+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIlxuICA+PC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuYm9hcmQtd3JhcHBlciB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG4gIC5jZW50ZXJlZC1jb250ZW50IHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gICAgdG9wOiA1MCU7XG4gICAgbGVmdDogNTAlO1xuICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlKC01MCUsIC01MCUpO1xuICAgIHotaW5kZXg6IDM7IC8qIHJlcXVpcmVkIHRvIGFwcGVhciBpbiBmcm9udCBvZiBwaWVjZXMgKi9cbiAgICBvcGFjaXR5OiAwLjg7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBb0VFLDRCQUFlLENBQ2IsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QsQ0FDQSwrQkFBa0IsQ0FDaEIsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsR0FBRyxDQUFFLEdBQUcsQ0FDUixJQUFJLENBQUUsR0FBRyxDQUNULFNBQVMsQ0FBRSxVQUFVLElBQUksQ0FBQyxDQUFDLElBQUksQ0FBQyxDQUNoQyxPQUFPLENBQUUsQ0FBQyxDQUNWLE9BQU8sQ0FBRSxHQUNYIn0= */");
+	append_styles(target, "svelte-iagpad", ".board-wrapper.svelte-iagpad{position:relative;width:100%}.centered-content.svelte-iagpad{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdiBjbGFzcz1cImNlbnRlcmVkLWNvbnRlbnRcIj5cbiAgICA8c2xvdCBuYW1lPVwiY2VudGVyZWQtY29udGVudFwiPjwvc2xvdD5cbiAgPC9kaXY+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIlxuICA+PC9kaXY+XG4gIDxkaXYgY2xhc3M9XCJibG9jayBtdC0yXCI+XG4gICAgPHNsb3QgbmFtZT1cImJlbG93LWJvYXJkXCI+PC9zbG90PlxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbiAgLmNlbnRlcmVkLWNvbnRlbnQge1xuICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTtcbiAgICB0b3A6IDUwJTtcbiAgICBsZWZ0OiA1MCU7XG4gICAgdHJhbnNmb3JtOiB0cmFuc2xhdGUoLTUwJSwgLTUwJSk7XG4gICAgei1pbmRleDogMzsgLyogcmVxdWlyZWQgdG8gYXBwZWFyIGluIGZyb250IG9mIHBpZWNlcyAqL1xuICAgIG9wYWNpdHk6IDAuODtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUF1RUUsNEJBQWUsQ0FDYixRQUFRLENBQUUsUUFBUSxDQUNsQixLQUFLLENBQUUsSUFDVCxDQUNBLCtCQUFrQixDQUNoQixRQUFRLENBQUUsUUFBUSxDQUNsQixHQUFHLENBQUUsR0FBRyxDQUNSLElBQUksQ0FBRSxHQUFHLENBQ1QsU0FBUyxDQUFFLFVBQVUsSUFBSSxDQUFDLENBQUMsSUFBSSxDQUFDLENBQ2hDLE9BQU8sQ0FBRSxDQUFDLENBQ1YsT0FBTyxDQUFFLEdBQ1gifQ== */");
 }
 
+const get_below_board_slot_changes = dirty => ({});
+const get_below_board_slot_context = ctx => ({});
 const get_centered_content_slot_changes = dirty => ({});
 const get_centered_content_slot_context = ctx => ({});
 
@@ -3859,12 +3861,14 @@ function create_if_block$2(ctx) {
 
 function create_fragment$4(ctx) {
 	let t0;
-	let div2;
+	let div3;
 	let div0;
 	let t1;
 	let div1;
 	let div1_class_value;
-	let div2_resize_listener;
+	let t2;
+	let div2;
+	let div3_resize_listener;
 	let current;
 
 	function select_block_type(ctx, dirty) {
@@ -3876,16 +3880,21 @@ function create_fragment$4(ctx) {
 	let if_block = current_block_type(ctx);
 	const centered_content_slot_template = /*#slots*/ ctx[11]["centered-content"];
 	const centered_content_slot = create_slot(centered_content_slot_template, ctx, /*$$scope*/ ctx[10], get_centered_content_slot_context);
+	const below_board_slot_template = /*#slots*/ ctx[11]["below-board"];
+	const below_board_slot = create_slot(below_board_slot_template, ctx, /*$$scope*/ ctx[10], get_below_board_slot_context);
 
 	const block = {
 		c: function create() {
 			if_block.c();
 			t0 = space();
-			div2 = element("div");
+			div3 = element("div");
 			div0 = element("div");
 			if (centered_content_slot) centered_content_slot.c();
 			t1 = space();
 			div1 = element("div");
+			t2 = space();
+			div2 = element("div");
+			if (below_board_slot) below_board_slot.c();
 			attr_dev(div0, "class", "centered-content svelte-iagpad");
 			add_location(div0, file$4, 57, 2, 1107);
 
@@ -3897,10 +3906,12 @@ function create_fragment$4(ctx) {
 			set_style(div1, "width", /*size*/ ctx[0] + "px");
 			set_style(div1, "height", /*size*/ ctx[0] + "px");
 			add_location(div1, file$4, 60, 2, 1191);
-			attr_dev(div2, "class", "board-wrapper svelte-iagpad");
-			set_style(div2, "max-width", /*maxWidth*/ ctx[5]);
-			add_render_callback(() => /*div2_elementresize_handler*/ ctx[13].call(div2));
-			add_location(div2, file$4, 52, 0, 1016);
+			attr_dev(div2, "class", "block mt-2");
+			add_location(div2, file$4, 65, 2, 1368);
+			attr_dev(div3, "class", "board-wrapper svelte-iagpad");
+			set_style(div3, "max-width", /*maxWidth*/ ctx[5]);
+			add_render_callback(() => /*div3_elementresize_handler*/ ctx[13].call(div3));
+			add_location(div3, file$4, 52, 0, 1016);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3908,17 +3919,24 @@ function create_fragment$4(ctx) {
 		m: function mount(target, anchor) {
 			if_block.m(target, anchor);
 			insert_dev(target, t0, anchor);
-			insert_dev(target, div2, anchor);
-			append_dev(div2, div0);
+			insert_dev(target, div3, anchor);
+			append_dev(div3, div0);
 
 			if (centered_content_slot) {
 				centered_content_slot.m(div0, null);
 			}
 
-			append_dev(div2, t1);
-			append_dev(div2, div1);
+			append_dev(div3, t1);
+			append_dev(div3, div1);
 			/*div1_binding*/ ctx[12](div1);
-			div2_resize_listener = add_iframe_resize_listener(div2, /*div2_elementresize_handler*/ ctx[13].bind(div2));
+			append_dev(div3, t2);
+			append_dev(div3, div2);
+
+			if (below_board_slot) {
+				below_board_slot.m(div2, null);
+			}
+
+			div3_resize_listener = add_iframe_resize_listener(div3, /*div3_elementresize_handler*/ ctx[13].bind(div3));
 			current = true;
 		},
 		p: function update(ctx, [dirty]) {
@@ -3962,26 +3980,44 @@ function create_fragment$4(ctx) {
 			if (!current || dirty & /*size*/ 1) {
 				set_style(div1, "height", /*size*/ ctx[0] + "px");
 			}
+
+			if (below_board_slot) {
+				if (below_board_slot.p && (!current || dirty & /*$$scope*/ 1024)) {
+					update_slot_base(
+						below_board_slot,
+						below_board_slot_template,
+						ctx,
+						/*$$scope*/ ctx[10],
+						!current
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[10])
+						: get_slot_changes(below_board_slot_template, /*$$scope*/ ctx[10], dirty, get_below_board_slot_changes),
+						get_below_board_slot_context
+					);
+				}
+			}
 		},
 		i: function intro(local) {
 			if (current) return;
 			transition_in(centered_content_slot, local);
+			transition_in(below_board_slot, local);
 			current = true;
 		},
 		o: function outro(local) {
 			transition_out(centered_content_slot, local);
+			transition_out(below_board_slot, local);
 			current = false;
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
 				detach_dev(t0);
-				detach_dev(div2);
+				detach_dev(div3);
 			}
 
 			if_block.d(detaching);
 			if (centered_content_slot) centered_content_slot.d(detaching);
 			/*div1_binding*/ ctx[12](null);
-			div2_resize_listener();
+			if (below_board_slot) below_board_slot.d(detaching);
+			div3_resize_listener();
 		}
 	};
 
@@ -4001,7 +4037,7 @@ function instance$4($$self, $$props, $$invalidate) {
 	validate_store(pieceSet, 'pieceSet');
 	component_subscribe($$self, pieceSet, $$value => $$invalidate(4, $pieceSet = $$value));
 	let { $$slots: slots = {}, $$scope } = $$props;
-	validate_slots('Chessboard', slots, ['centered-content']);
+	validate_slots('Chessboard', slots, ['centered-content','below-board']);
 	let boardContainer;
 	let { chessgroundConfig = {} } = $$props;
 	let { orientation = "white" } = $$props;
@@ -4047,7 +4083,7 @@ function instance$4($$self, $$props, $$invalidate) {
 		});
 	}
 
-	function div2_elementresize_handler() {
+	function div3_elementresize_handler() {
 		size = this.clientWidth;
 		$$invalidate(0, size);
 	}
@@ -4130,7 +4166,7 @@ function instance$4($$self, $$props, $$invalidate) {
 		$$scope,
 		slots,
 		div1_binding,
-		div2_elementresize_handler
+		div3_elementresize_handler
 	];
 }
 

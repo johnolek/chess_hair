@@ -24,6 +24,14 @@ class Util {
     }
     return "white";
   }
+
+  static whoseMoveIsIt(ply) {
+    return ply % 2 === 0 ? "white" : "black";
+  }
+
+  static currentMicrotime() {
+    return new Date().getTime();
+  }
 }
 
 export { Util };
