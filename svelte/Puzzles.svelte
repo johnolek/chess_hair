@@ -8,6 +8,7 @@
   import { parseSan } from "chessops/san";
   import { Chess, makeUci, parseUci } from "chessops";
   import { makeSquare, parseSquare } from "chessops/util";
+  import { persisted } from "svelte-persisted-store";
 
   let fen;
   let chessground;
@@ -38,21 +39,83 @@
     },
     orientation: orientation,
   };
-  let boardSize;
 
-  let puzzleIds = ["EUB6t", "RxzYi", "MX2SS", "UiyYS", "r8hk8"];
+  const puzzleIdsToWorkOn = persisted("puzzles.idsToWorkOn", [
+    "EUB6t",
+    "RxzYi",
+    "MX2SS",
+    "UiyYS",
+    "r8hk8",
+  ]);
 
+  let newPuzzleIds;
+  function addPuzzleIdToWorkOn() {
+    if (newPuzzleIds.length < 3) {
+      newPuzzleIds = "";
+      return;
+    }
+    const idsToAdd = newPuzzleIds.split(",").map((id) => id.trim());
+    const currentPuzzleIds = new Set($puzzleIdsToWorkOn);
+    idsToAdd.forEach((id) => currentPuzzleIds.add(id));
+    puzzleIdsToWorkOn.set([...currentPuzzleIds]);
+    newPuzzleIds = "";
+    setActivePuzzleIds();
+  }
+
+  function removePuzzleId(puzzleId) {
+    const currentPuzzleIds = new Set($puzzleIdsToWorkOn);
+    currentPuzzleIds.delete(puzzleId.trim());
+    puzzleIdsToWorkOn.set([...currentPuzzleIds]);
+  }
+
+  const solveTimes = persisted("puzzles.solveTimes", {});
+
+  let currentPuzzleIds = [];
+  let currentPuzzleId;
   let puzzleShownAt;
   let puzzleIndex = 0;
 
-  async function getNextPuzzle() {
-    const puzzleId = puzzleIds[puzzleIndex];
-    const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`);
-    const data = await response.json();
-    // Loop
-    puzzleIndex = (puzzleIndex + 1) % puzzleIds.length;
+  let batchSize = 10;
+  let timeGoal = 15000;
+  let minimumSolves = 3;
 
-    return data;
+  function setActivePuzzleIds() {
+    const all = $puzzleIdsToWorkOn;
+    let selectedPuzzles = [];
+
+    for (let puzzleId of all) {
+      let times = $solveTimes[puzzleId] || [];
+
+      if (times.length < minimumSolves) {
+        selectedPuzzles.push(puzzleId);
+      } else {
+        let lastThreeSolves = times.slice(-3);
+        let averageTime =
+          lastThreeSolves.reduce((a, b) => a + b, 0) / lastThreeSolves.length;
+
+        if (averageTime > timeGoal) {
+          selectedPuzzles.push(puzzleId);
+        }
+      }
+
+      if (selectedPuzzles.length >= batchSize) {
+        break;
+      }
+    }
+
+    currentPuzzleIds = selectedPuzzles;
+  }
+
+  async function getNextPuzzle() {
+    currentPuzzleId = Util.getRandomElement(currentPuzzleIds);
+    const response = await fetch(
+      `https://lichess.org/api/puzzle/${currentPuzzleId}`,
+    );
+    if (response.status === 404) {
+      removePuzzleId(currentPuzzleId);
+      return getNextPuzzle();
+    }
+    return await response.json();
   }
 
   let moves;
@@ -157,6 +220,19 @@
   function handlePuzzleComplete() {
     puzzleComplete = true;
     const timeToSolve = Util.currentMicrotime() - puzzleShownAt;
+    if (!madeMistake) {
+      addSolveTime(currentPuzzleId, timeToSolve);
+    }
+    setActivePuzzleIds();
+  }
+
+  function addSolveTime(puzzleId, time) {
+    const times = $solveTimes;
+    const timesForPuzzle = times[puzzleId] || [];
+
+    timesForPuzzle.push(time);
+    times[puzzleId] = timesForPuzzle;
+    solveTimes.set(times);
   }
 
   let successMessage = null;
@@ -180,6 +256,7 @@
   }
 
   onMount(async () => {
+    setActivePuzzleIds();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
         nextButton.click();
@@ -192,42 +269,63 @@
 <div class="columns is-centered">
   <div class="column is-6-desktop">
     <div class="block">
-      <Chessboard
-        {chessgroundConfig}
-        {orientation}
-        bind:chessground
-        bind:size={boardSize}
-      >
-        <div slot="below-board">
-          {#if puzzleComplete}
-            <div class="block is-flex is-justify-content-center">
-              <button
-                class="button is-primary"
-                bind:this={nextButton}
-                on:click={async () => {
-                  await loadNextPuzzle();
-                }}
-                >Next
-              </button>
-            </div>
-          {/if}
-        </div>
-      </Chessboard>
+      {#if currentPuzzleIds.length > 0}
+        <Chessboard {chessgroundConfig} {orientation} bind:chessground>
+          <div slot="below-board">
+            {#if puzzleComplete}
+              <div class="block is-flex is-justify-content-center">
+                <button
+                  class="button is-primary"
+                  bind:this={nextButton}
+                  on:click={async () => {
+                    await loadNextPuzzle();
+                  }}
+                  >Next
+                </button>
+              </div>
+            {/if}
+          </div>
+        </Chessboard>
+      {:else}
+        <p>All puzzles complete, add some more!</p>
+      {/if}
     </div>
   </div>
   <div class="column is-2-desktop">
     <div class="box">
       <div class="block is-flex is-justify-content-center">
         {#if successMessage}
-          <span transition:fade class="tag is-success is-size-4">
+          <span in:fade class="tag is-success is-size-4">
             {successMessage}
           </span>
         {/if}
         {#if failureMessage}
-          <span transition:fade class="tag is-danger is-size-4">
+          <span in:fade class="tag is-danger is-size-4">
             {failureMessage}
           </span>
         {/if}
+      </div>
+    </div>
+    <div class="box">
+      <div class="block">
+        {$puzzleIdsToWorkOn.length} total puzzles
+      </div>
+      {#if currentPuzzleIds}
+        <div class="block">
+          Currently working on {currentPuzzleIds.length} puzzles
+        </div>
+      {/if}
+      <div class="block">
+        <form on:submit|preventDefault={addPuzzleIdToWorkOn}>
+          <label for="newPuzzleId">New Puzzle ID(s):</label>
+          <input
+            type="text"
+            id="newPuzzleId"
+            bind:value={newPuzzleIds}
+            placeholder=""
+          />
+          <button class="button is-primary" type="submit">Add</button>
+        </form>
       </div>
     </div>
   </div>

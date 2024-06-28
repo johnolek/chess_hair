@@ -303,6 +303,16 @@ function listen(node, event, handler, options) {
 }
 
 /**
+ * @returns {(event: any) => any} */
+function prevent_default(fn) {
+	return function (event) {
+		event.preventDefault();
+		// @ts-ignore
+		return fn.call(this, event);
+	};
+}
+
+/**
  * @param {Element} node
  * @param {string} attribute
  * @param {string} [value]
@@ -319,6 +329,12 @@ function attr(node, attribute, value) {
  */
 function children(element) {
 	return Array.from(element.childNodes);
+}
+
+/**
+ * @returns {void} */
+function set_input_value(input, value) {
+	input.value = value == null ? '' : value;
 }
 
 /**
@@ -717,7 +733,7 @@ function wait() {
  * @returns {void}
  */
 function dispatch(node, direction, kind) {
-	node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
+	node.dispatchEvent(custom_event(`${'intro' }${kind}`));
 }
 
 const outroing = new Set();
@@ -791,58 +807,27 @@ const null_transition = { duration: 0 };
  * @param {Element & ElementCSSInlineStyle} node
  * @param {TransitionFn} fn
  * @param {any} params
- * @param {boolean} intro
- * @returns {{ run(b: 0 | 1): void; end(): void; }}
+ * @returns {{ start(): void; invalidate(): void; end(): void; }}
  */
-function create_bidirectional_transition(node, fn, params, intro) {
+function create_in_transition(node, fn, params) {
 	/**
 	 * @type {TransitionOptions} */
-	const options = { direction: 'both' };
+	const options = { direction: 'in' };
 	let config = fn(node, params, options);
-	let t = intro ? 0 : 1;
-
-	/**
-	 * @type {Program | null} */
-	let running_program = null;
-
-	/**
-	 * @type {PendingProgram | null} */
-	let pending_program = null;
-	let animation_name = null;
-
-	/** @type {boolean} */
-	let original_inert_value;
+	let running = false;
+	let animation_name;
+	let task;
+	let uid = 0;
 
 	/**
 	 * @returns {void} */
-	function clear_animation() {
+	function cleanup() {
 		if (animation_name) delete_rule(node, animation_name);
 	}
 
 	/**
-	 * @param {PendingProgram} program
-	 * @param {number} duration
-	 * @returns {Program}
-	 */
-	function init(program, duration) {
-		const d = /** @type {Program['d']} */ (program.b - t);
-		duration *= Math.abs(d);
-		return {
-			a: t,
-			b: program.b,
-			d,
-			duration,
-			start: program.start,
-			end: program.start + duration,
-			group: program.group
-		};
-	}
-
-	/**
-	 * @param {INTRO | OUTRO} b
-	 * @returns {void}
-	 */
-	function go(b) {
+	 * @returns {void} */
+	function go() {
 		const {
 			delay = 0,
 			duration = 300,
@@ -850,103 +835,50 @@ function create_bidirectional_transition(node, fn, params, intro) {
 			tick = noop,
 			css
 		} = config || null_transition;
-
-		/**
-		 * @type {PendingProgram} */
-		const program = {
-			start: now() + delay,
-			b
-		};
-
-		if (!b) {
-			// @ts-ignore todo: improve typings
-			program.group = outros;
-			outros.r += 1;
-		}
-
-		if ('inert' in node) {
-			if (b) {
-				if (original_inert_value !== undefined) {
-					// aborted/reversed outro — restore previous inert value
-					node.inert = original_inert_value;
+		if (css) animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+		tick(0, 1);
+		const start_time = now() + delay;
+		const end_time = start_time + duration;
+		if (task) task.abort();
+		running = true;
+		add_render_callback(() => dispatch(node, true, 'start'));
+		task = loop((now) => {
+			if (running) {
+				if (now >= end_time) {
+					tick(1, 0);
+					dispatch(node, true, 'end');
+					cleanup();
+					return (running = false);
 				}
-			} else {
-				original_inert_value = /** @type {HTMLElement} */ (node).inert;
-				node.inert = true;
+				if (now >= start_time) {
+					const t = easing((now - start_time) / duration);
+					tick(t, 1 - t);
+				}
 			}
-		}
-
-		if (running_program || pending_program) {
-			pending_program = program;
-		} else {
-			// if this is an intro, and there's a delay, we need to do
-			// an initial tick and/or apply CSS animation immediately
-			if (css) {
-				clear_animation();
-				animation_name = create_rule(node, t, b, duration, delay, easing, css);
-			}
-			if (b) tick(0, 1);
-			running_program = init(program, duration);
-			add_render_callback(() => dispatch(node, b, 'start'));
-			loop((now) => {
-				if (pending_program && now > pending_program.start) {
-					running_program = init(pending_program, duration);
-					pending_program = null;
-					dispatch(node, running_program.b, 'start');
-					if (css) {
-						clear_animation();
-						animation_name = create_rule(
-							node,
-							t,
-							running_program.b,
-							running_program.duration,
-							0,
-							easing,
-							config.css
-						);
-					}
-				}
-				if (running_program) {
-					if (now >= running_program.end) {
-						tick((t = running_program.b), 1 - t);
-						dispatch(node, running_program.b, 'end');
-						if (!pending_program) {
-							// we're done
-							if (running_program.b) {
-								// intro — we can tidy up immediately
-								clear_animation();
-							} else {
-								// outro — needs to be coordinated
-								if (!--running_program.group.r) run_all(running_program.group.c);
-							}
-						}
-						running_program = null;
-					} else if (now >= running_program.start) {
-						const p = now - running_program.start;
-						t = running_program.a + running_program.d * easing(p / running_program.duration);
-						tick(t, 1 - t);
-					}
-				}
-				return !!(running_program || pending_program);
-			});
-		}
+			return running;
+		});
 	}
+	let started = false;
 	return {
-		run(b) {
+		start() {
+			if (started) return;
+			started = true;
+			delete_rule(node);
 			if (is_function(config)) {
-				wait().then(() => {
-					const opts = { direction: b ? 'in' : 'out' };
-					// @ts-ignore
-					config = config(opts);
-					go(b);
-				});
+				config = config(options);
+				wait().then(go);
 			} else {
-				go(b);
+				go();
 			}
 		},
+		invalidate() {
+			started = false;
+		},
 		end() {
-			clear_animation();
-			running_program = pending_program = null;
+			if (running) {
+				cleanup();
+				running = false;
+			}
 		}
 	};
 }
@@ -1260,7 +1192,10 @@ function listen_dev(
 	has_stop_immediate_propagation
 ) {
 	const modifiers =
-		[];
+		options === true ? ['capture'] : options ? Array.from(Object.keys(options)) : [];
+	if (has_prevent_default) modifiers.push('preventDefault');
+	if (has_stop_propagation) modifiers.push('stopPropagation');
+	if (has_stop_immediate_propagation) modifiers.push('stopImmediatePropagation');
 	dispatch_dev('SvelteDOMAddEventListener', { node, event, handler, modifiers });
 	const dispose = listen(node, event, handler, options);
 	return () => {
@@ -3521,13 +3456,15 @@ function getStorage(type) {
 }
 function persisted(key, initialValue, options) {
   var _a, _b, _c, _d, _e, _f, _g, _h;
-  const serializer = (_a = void 0 ) != null ? _a : JSON;
-  const storageType = (_b = void 0 ) != null ? _b : "local";
-  const syncTabs = (_c = void 0 ) != null ? _c : true;
-  const onWriteError = (_e = (_d = void 0 ) != null ? _d : void 0 ) != null ? _e : (e) => console.error(`Error when writing value from persisted store "${key}" to ${storageType}`, e);
-  const onParseError = (_f = void 0 ) != null ? _f : (newVal, e) => console.error(`Error when parsing ${newVal ? '"' + newVal + '"' : "value"} from persisted store "${key}"`, e);
-  const beforeRead = (_g = void 0 ) != null ? _g : (val) => val;
-  const beforeWrite = (_h = void 0 ) != null ? _h : (val) => val;
+  if (options == null ? void 0 : options.onError)
+    console.warn("onError has been deprecated. Please use onWriteError instead");
+  const serializer = (_a = options == null ? void 0 : options.serializer) != null ? _a : JSON;
+  const storageType = (_b = options == null ? void 0 : options.storage) != null ? _b : "local";
+  const syncTabs = (_c = options == null ? void 0 : options.syncTabs) != null ? _c : true;
+  const onWriteError = (_e = (_d = options == null ? void 0 : options.onWriteError) != null ? _d : options == null ? void 0 : options.onError) != null ? _e : (e) => console.error(`Error when writing value from persisted store "${key}" to ${storageType}`, e);
+  const onParseError = (_f = options == null ? void 0 : options.onParseError) != null ? _f : (newVal, e) => console.error(`Error when parsing ${newVal ? '"' + newVal + '"' : "value"} from persisted store "${key}"`, e);
+  const beforeRead = (_g = options == null ? void 0 : options.beforeRead) != null ? _g : (val) => val;
+  const beforeWrite = (_h = options == null ? void 0 : options.beforeWrite) != null ? _h : (val) => val;
   const browser = typeof window !== "undefined" && typeof document !== "undefined";
   const storage = browser ? getStorage(storageType) : null;
   function updateStorage(key2, value) {
@@ -3620,7 +3557,7 @@ const get_centered_content_slot_changes = dirty => ({});
 const get_centered_content_slot_context = ctx => ({});
 
 // (49:0) {:else}
-function create_else_block(ctx) {
+function create_else_block$1(ctx) {
 	let link;
 	let link_href_value;
 
@@ -3649,7 +3586,7 @@ function create_else_block(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_else_block.name,
+		id: create_else_block$1.name,
 		type: "else",
 		source: "(49:0) {:else}",
 		ctx
@@ -3711,7 +3648,7 @@ function create_fragment$1(ctx) {
 
 	function select_block_type(ctx, dirty) {
 		if (/*pieceSetOverride*/ ctx[1]) return create_if_block$1;
-		return create_else_block;
+		return create_else_block$1;
 	}
 
 	let current_block_type = select_block_type(ctx);
@@ -6871,8 +6808,115 @@ const parseSan = (pos, san) => {
 /* svelte/Puzzles.svelte generated by Svelte v4.2.18 */
 const file = "svelte/Puzzles.svelte";
 
-// (202:10) {#if puzzleComplete}
-function create_if_block_2(ctx) {
+// (289:6) {:else}
+function create_else_block(ctx) {
+	let p;
+
+	const block = {
+		c: function create() {
+			p = element("p");
+			p.textContent = "All puzzles complete, add some more!";
+			add_location(p, file, 289, 8, 7593);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, p, anchor);
+		},
+		p: noop,
+		i: noop,
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(p);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_else_block.name,
+		type: "else",
+		source: "(289:6) {:else}",
+		ctx
+	});
+
+	return block;
+}
+
+// (272:6) {#if currentPuzzleIds.length > 0}
+function create_if_block_3(ctx) {
+	let chessboard;
+	let updating_chessground;
+	let current;
+
+	function chessboard_chessground_binding(value) {
+		/*chessboard_chessground_binding*/ ctx[16](value);
+	}
+
+	let chessboard_props = {
+		chessgroundConfig: /*chessgroundConfig*/ ctx[9],
+		orientation: /*orientation*/ ctx[1],
+		$$slots: { "below-board": [create_below_board_slot] },
+		$$scope: { ctx }
+	};
+
+	if (/*chessground*/ ctx[0] !== void 0) {
+		chessboard_props.chessground = /*chessground*/ ctx[0];
+	}
+
+	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
+	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
+
+	const block = {
+		c: function create() {
+			create_component(chessboard.$$.fragment);
+		},
+		m: function mount(target, anchor) {
+			mount_component(chessboard, target, anchor);
+			current = true;
+		},
+		p: function update(ctx, dirty) {
+			const chessboard_changes = {};
+			if (dirty[0] & /*orientation*/ 2) chessboard_changes.orientation = /*orientation*/ ctx[1];
+
+			if (dirty[0] & /*nextButton, puzzleComplete*/ 48 | dirty[1] & /*$$scope*/ 1024) {
+				chessboard_changes.$$scope = { dirty, ctx };
+			}
+
+			if (!updating_chessground && dirty[0] & /*chessground*/ 1) {
+				updating_chessground = true;
+				chessboard_changes.chessground = /*chessground*/ ctx[0];
+				add_flush_callback(() => updating_chessground = false);
+			}
+
+			chessboard.$set(chessboard_changes);
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(chessboard.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(chessboard.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			destroy_component(chessboard, detaching);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_3.name,
+		type: "if",
+		source: "(272:6) {#if currentPuzzleIds.length > 0}",
+		ctx
+	});
+
+	return block;
+}
+
+// (275:12) {#if puzzleComplete}
+function create_if_block_4(ctx) {
 	let div;
 	let button;
 	let mounted;
@@ -6884,17 +6928,17 @@ function create_if_block_2(ctx) {
 			button = element("button");
 			button.textContent = "Next";
 			attr_dev(button, "class", "button is-primary");
-			add_location(button, file, 203, 14, 5279);
+			add_location(button, file, 276, 16, 7243);
 			attr_dev(div, "class", "block is-flex is-justify-content-center");
-			add_location(div, file, 202, 12, 5211);
+			add_location(div, file, 275, 14, 7173);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
 			append_dev(div, button);
-			/*button_binding*/ ctx[9](button);
+			/*button_binding*/ ctx[14](button);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler*/ ctx[10], false);
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[15], false, false, false, false);
 				mounted = true;
 			}
 		},
@@ -6904,7 +6948,7 @@ function create_if_block_2(ctx) {
 				detach_dev(div);
 			}
 
-			/*button_binding*/ ctx[9](null);
+			/*button_binding*/ ctx[14](null);
 			mounted = false;
 			dispose();
 		}
@@ -6912,37 +6956,37 @@ function create_if_block_2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_2.name,
+		id: create_if_block_4.name,
 		type: "if",
-		source: "(202:10) {#if puzzleComplete}",
+		source: "(275:12) {#if puzzleComplete}",
 		ctx
 	});
 
 	return block;
 }
 
-// (201:8) 
+// (274:10) 
 function create_below_board_slot(ctx) {
 	let div;
-	let if_block = /*puzzleComplete*/ ctx[3] && create_if_block_2(ctx);
+	let if_block = /*puzzleComplete*/ ctx[4] && create_if_block_4(ctx);
 
 	const block = {
 		c: function create() {
 			div = element("div");
 			if (if_block) if_block.c();
 			attr_dev(div, "slot", "below-board");
-			add_location(div, file, 200, 8, 5143);
+			add_location(div, file, 273, 10, 7101);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
 			if (if_block) if_block.m(div, null);
 		},
 		p: function update(ctx, dirty) {
-			if (/*puzzleComplete*/ ctx[3]) {
+			if (/*puzzleComplete*/ ctx[4]) {
 				if (if_block) {
 					if_block.p(ctx, dirty);
 				} else {
-					if_block = create_if_block_2(ctx);
+					if_block = create_if_block_4(ctx);
 					if_block.c();
 					if_block.m(div, null);
 				}
@@ -6964,62 +7008,97 @@ function create_below_board_slot(ctx) {
 		block,
 		id: create_below_board_slot.name,
 		type: "slot",
-		source: "(201:8) ",
+		source: "(274:10) ",
 		ctx
 	});
 
 	return block;
 }
 
-// (221:8) {#if successMessage}
-function create_if_block_1(ctx) {
+// (297:8) {#if successMessage}
+function create_if_block_2(ctx) {
 	let span;
 	let t;
-	let span_transition;
-	let current;
+	let span_intro;
 
 	const block = {
 		c: function create() {
 			span = element("span");
-			t = text(/*successMessage*/ ctx[5]);
+			t = text(/*successMessage*/ ctx[6]);
 			attr_dev(span, "class", "tag is-success is-size-4");
-			add_location(span, file, 221, 10, 5762);
+			add_location(span, file, 297, 10, 7826);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, span, anchor);
 			append_dev(span, t);
-			current = true;
 		},
 		p: function update(ctx, dirty) {
-			if (!current || dirty & /*successMessage*/ 32) set_data_dev(t, /*successMessage*/ ctx[5]);
+			if (dirty[0] & /*successMessage*/ 64) set_data_dev(t, /*successMessage*/ ctx[6]);
 		},
 		i: function intro(local) {
-			if (current) return;
-
 			if (local) {
-				add_render_callback(() => {
-					if (!current) return;
-					if (!span_transition) span_transition = create_bidirectional_transition(span, fade, {}, true);
-					span_transition.run(1);
-				});
+				if (!span_intro) {
+					add_render_callback(() => {
+						span_intro = create_in_transition(span, fade, {});
+						span_intro.start();
+					});
+				}
 			}
-
-			current = true;
 		},
-		o: function outro(local) {
-			if (local) {
-				if (!span_transition) span_transition = create_bidirectional_transition(span, fade, {}, false);
-				span_transition.run(0);
-			}
-
-			current = false;
-		},
+		o: noop,
 		d: function destroy(detaching) {
 			if (detaching) {
 				detach_dev(span);
 			}
+		}
+	};
 
-			if (detaching && span_transition) span_transition.end();
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_2.name,
+		type: "if",
+		source: "(297:8) {#if successMessage}",
+		ctx
+	});
+
+	return block;
+}
+
+// (302:8) {#if failureMessage}
+function create_if_block_1(ctx) {
+	let span;
+	let t;
+	let span_intro;
+
+	const block = {
+		c: function create() {
+			span = element("span");
+			t = text(/*failureMessage*/ ctx[7]);
+			attr_dev(span, "class", "tag is-danger is-size-4");
+			add_location(span, file, 302, 10, 7974);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, span, anchor);
+			append_dev(span, t);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*failureMessage*/ 128) set_data_dev(t, /*failureMessage*/ ctx[7]);
+		},
+		i: function intro(local) {
+			if (local) {
+				if (!span_intro) {
+					add_render_callback(() => {
+						span_intro = create_in_transition(span, fade, {});
+						span_intro.start();
+					});
+				}
+			}
+		},
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(span);
+			}
 		}
 	};
 
@@ -7027,62 +7106,43 @@ function create_if_block_1(ctx) {
 		block,
 		id: create_if_block_1.name,
 		type: "if",
-		source: "(221:8) {#if successMessage}",
+		source: "(302:8) {#if failureMessage}",
 		ctx
 	});
 
 	return block;
 }
 
-// (226:8) {#if failureMessage}
+// (313:6) {#if currentPuzzleIds}
 function create_if_block(ctx) {
-	let span;
-	let t;
-	let span_transition;
-	let current;
+	let div;
+	let t0;
+	let t1_value = /*currentPuzzleIds*/ ctx[3].length + "";
+	let t1;
+	let t2;
 
 	const block = {
 		c: function create() {
-			span = element("span");
-			t = text(/*failureMessage*/ ctx[6]);
-			attr_dev(span, "class", "tag is-danger is-size-4");
-			add_location(span, file, 226, 10, 5918);
+			div = element("div");
+			t0 = text("Currently working on ");
+			t1 = text(t1_value);
+			t2 = text(" puzzles");
+			attr_dev(div, "class", "block");
+			add_location(div, file, 313, 8, 8254);
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, span, anchor);
-			append_dev(span, t);
-			current = true;
+			insert_dev(target, div, anchor);
+			append_dev(div, t0);
+			append_dev(div, t1);
+			append_dev(div, t2);
 		},
 		p: function update(ctx, dirty) {
-			if (!current || dirty & /*failureMessage*/ 64) set_data_dev(t, /*failureMessage*/ ctx[6]);
-		},
-		i: function intro(local) {
-			if (current) return;
-
-			if (local) {
-				add_render_callback(() => {
-					if (!current) return;
-					if (!span_transition) span_transition = create_bidirectional_transition(span, fade, {}, true);
-					span_transition.run(1);
-				});
-			}
-
-			current = true;
-		},
-		o: function outro(local) {
-			if (local) {
-				if (!span_transition) span_transition = create_bidirectional_transition(span, fade, {}, false);
-				span_transition.run(0);
-			}
-
-			current = false;
+			if (dirty[0] & /*currentPuzzleIds*/ 8 && t1_value !== (t1_value = /*currentPuzzleIds*/ ctx[3].length + "")) set_data_dev(t1, t1_value);
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(span);
+				detach_dev(div);
 			}
-
-			if (detaching && span_transition) span_transition.end();
 		}
 	};
 
@@ -7090,7 +7150,7 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(226:8) {#if failureMessage}",
+		source: "(313:6) {#if currentPuzzleIds}",
 		ctx
 	});
 
@@ -7098,180 +7158,253 @@ function create_if_block(ctx) {
 }
 
 function create_fragment(ctx) {
-	let div5;
+	let div8;
 	let div1;
 	let div0;
-	let chessboard;
-	let updating_chessground;
-	let updating_size;
+	let current_block_type_index;
+	let if_block0;
 	let t0;
-	let div4;
+	let div7;
 	let div3;
 	let div2;
 	let t1;
+	let t2;
+	let div6;
+	let div4;
+	let t3_value = /*$puzzleIdsToWorkOn*/ ctx[8].length + "";
+	let t3;
+	let t4;
+	let t5;
+	let t6;
+	let div5;
+	let form;
+	let label;
+	let t8;
+	let input;
+	let t9;
+	let button;
 	let current;
+	let mounted;
+	let dispose;
+	const if_block_creators = [create_if_block_3, create_else_block];
+	const if_blocks = [];
 
-	function chessboard_chessground_binding(value) {
-		/*chessboard_chessground_binding*/ ctx[11](value);
+	function select_block_type(ctx, dirty) {
+		if (/*currentPuzzleIds*/ ctx[3].length > 0) return 0;
+		return 1;
 	}
 
-	function chessboard_size_binding(value) {
-		/*chessboard_size_binding*/ ctx[12](value);
-	}
-
-	let chessboard_props = {
-		chessgroundConfig: /*chessgroundConfig*/ ctx[7],
-		orientation: /*orientation*/ ctx[1],
-		$$slots: { "below-board": [create_below_board_slot] },
-		$$scope: { ctx }
-	};
-
-	if (/*chessground*/ ctx[0] !== void 0) {
-		chessboard_props.chessground = /*chessground*/ ctx[0];
-	}
-
-	if (/*boardSize*/ ctx[2] !== void 0) {
-		chessboard_props.size = /*boardSize*/ ctx[2];
-	}
-
-	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
-	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
-	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
-	let if_block0 = /*successMessage*/ ctx[5] && create_if_block_1(ctx);
-	let if_block1 = /*failureMessage*/ ctx[6] && create_if_block(ctx);
+	current_block_type_index = select_block_type(ctx);
+	if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+	let if_block1 = /*successMessage*/ ctx[6] && create_if_block_2(ctx);
+	let if_block2 = /*failureMessage*/ ctx[7] && create_if_block_1(ctx);
+	let if_block3 = /*currentPuzzleIds*/ ctx[3] && create_if_block(ctx);
 
 	const block = {
 		c: function create() {
-			div5 = element("div");
+			div8 = element("div");
 			div1 = element("div");
 			div0 = element("div");
-			create_component(chessboard.$$.fragment);
+			if_block0.c();
 			t0 = space();
-			div4 = element("div");
+			div7 = element("div");
 			div3 = element("div");
 			div2 = element("div");
-			if (if_block0) if_block0.c();
-			t1 = space();
 			if (if_block1) if_block1.c();
+			t1 = space();
+			if (if_block2) if_block2.c();
+			t2 = space();
+			div6 = element("div");
+			div4 = element("div");
+			t3 = text(t3_value);
+			t4 = text(" total puzzles");
+			t5 = space();
+			if (if_block3) if_block3.c();
+			t6 = space();
+			div5 = element("div");
+			form = element("form");
+			label = element("label");
+			label.textContent = "New Puzzle ID(s):";
+			t8 = space();
+			input = element("input");
+			t9 = space();
+			button = element("button");
+			button.textContent = "Add";
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 193, 4, 4984);
+			add_location(div0, file, 270, 4, 6959);
 			attr_dev(div1, "class", "column is-6-desktop");
-			add_location(div1, file, 192, 2, 4946);
+			add_location(div1, file, 269, 2, 6921);
 			attr_dev(div2, "class", "block is-flex is-justify-content-center");
-			add_location(div2, file, 219, 6, 5669);
+			add_location(div2, file, 295, 6, 7733);
 			attr_dev(div3, "class", "box");
-			add_location(div3, file, 218, 4, 5645);
-			attr_dev(div4, "class", "column is-2-desktop");
-			add_location(div4, file, 217, 2, 5607);
-			attr_dev(div5, "class", "columns is-centered");
-			add_location(div5, file, 191, 0, 4910);
+			add_location(div3, file, 294, 4, 7709);
+			attr_dev(div4, "class", "block");
+			add_location(div4, file, 309, 6, 8134);
+			attr_dev(label, "for", "newPuzzleId");
+			add_location(label, file, 319, 10, 8464);
+			attr_dev(input, "type", "text");
+			attr_dev(input, "id", "newPuzzleId");
+			attr_dev(input, "placeholder", "");
+			add_location(input, file, 320, 10, 8525);
+			attr_dev(button, "class", "button is-primary");
+			attr_dev(button, "type", "submit");
+			add_location(button, file, 326, 10, 8673);
+			add_location(form, file, 318, 8, 8400);
+			attr_dev(div5, "class", "block");
+			add_location(div5, file, 317, 6, 8372);
+			attr_dev(div6, "class", "box");
+			add_location(div6, file, 308, 4, 8110);
+			attr_dev(div7, "class", "column is-2-desktop");
+			add_location(div7, file, 293, 2, 7671);
+			attr_dev(div8, "class", "columns is-centered");
+			add_location(div8, file, 268, 0, 6885);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, div5, anchor);
-			append_dev(div5, div1);
+			insert_dev(target, div8, anchor);
+			append_dev(div8, div1);
 			append_dev(div1, div0);
-			mount_component(chessboard, div0, null);
-			append_dev(div5, t0);
-			append_dev(div5, div4);
-			append_dev(div4, div3);
+			if_blocks[current_block_type_index].m(div0, null);
+			append_dev(div8, t0);
+			append_dev(div8, div7);
+			append_dev(div7, div3);
 			append_dev(div3, div2);
-			if (if_block0) if_block0.m(div2, null);
-			append_dev(div2, t1);
 			if (if_block1) if_block1.m(div2, null);
+			append_dev(div2, t1);
+			if (if_block2) if_block2.m(div2, null);
+			append_dev(div7, t2);
+			append_dev(div7, div6);
+			append_dev(div6, div4);
+			append_dev(div4, t3);
+			append_dev(div4, t4);
+			append_dev(div6, t5);
+			if (if_block3) if_block3.m(div6, null);
+			append_dev(div6, t6);
+			append_dev(div6, div5);
+			append_dev(div5, form);
+			append_dev(form, label);
+			append_dev(form, t8);
+			append_dev(form, input);
+			set_input_value(input, /*newPuzzleIds*/ ctx[2]);
+			append_dev(form, t9);
+			append_dev(form, button);
 			current = true;
+
+			if (!mounted) {
+				dispose = [
+					listen_dev(input, "input", /*input_input_handler*/ ctx[17]),
+					listen_dev(form, "submit", prevent_default(/*addPuzzleIdToWorkOn*/ ctx[11]), false, true, false, false)
+				];
+
+				mounted = true;
+			}
 		},
-		p: function update(ctx, [dirty]) {
-			const chessboard_changes = {};
-			if (dirty & /*orientation*/ 2) chessboard_changes.orientation = /*orientation*/ ctx[1];
+		p: function update(ctx, dirty) {
+			let previous_block_index = current_block_type_index;
+			current_block_type_index = select_block_type(ctx);
 
-			if (dirty & /*$$scope, nextButton, puzzleComplete*/ 536870936) {
-				chessboard_changes.$$scope = { dirty, ctx };
-			}
-
-			if (!updating_chessground && dirty & /*chessground*/ 1) {
-				updating_chessground = true;
-				chessboard_changes.chessground = /*chessground*/ ctx[0];
-				add_flush_callback(() => updating_chessground = false);
-			}
-
-			if (!updating_size && dirty & /*boardSize*/ 4) {
-				updating_size = true;
-				chessboard_changes.size = /*boardSize*/ ctx[2];
-				add_flush_callback(() => updating_size = false);
-			}
-
-			chessboard.$set(chessboard_changes);
-
-			if (/*successMessage*/ ctx[5]) {
-				if (if_block0) {
-					if_block0.p(ctx, dirty);
-
-					if (dirty & /*successMessage*/ 32) {
-						transition_in(if_block0, 1);
-					}
-				} else {
-					if_block0 = create_if_block_1(ctx);
-					if_block0.c();
-					transition_in(if_block0, 1);
-					if_block0.m(div2, t1);
-				}
-			} else if (if_block0) {
+			if (current_block_type_index === previous_block_index) {
+				if_blocks[current_block_type_index].p(ctx, dirty);
+			} else {
 				group_outros();
 
-				transition_out(if_block0, 1, 1, () => {
-					if_block0 = null;
+				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+					if_blocks[previous_block_index] = null;
 				});
 
 				check_outros();
+				if_block0 = if_blocks[current_block_type_index];
+
+				if (!if_block0) {
+					if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+					if_block0.c();
+				} else {
+					if_block0.p(ctx, dirty);
+				}
+
+				transition_in(if_block0, 1);
+				if_block0.m(div0, null);
 			}
 
-			if (/*failureMessage*/ ctx[6]) {
+			if (/*successMessage*/ ctx[6]) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 
-					if (dirty & /*failureMessage*/ 64) {
+					if (dirty[0] & /*successMessage*/ 64) {
 						transition_in(if_block1, 1);
 					}
 				} else {
-					if_block1 = create_if_block(ctx);
+					if_block1 = create_if_block_2(ctx);
 					if_block1.c();
 					transition_in(if_block1, 1);
-					if_block1.m(div2, null);
+					if_block1.m(div2, t1);
 				}
 			} else if (if_block1) {
-				group_outros();
+				if_block1.d(1);
+				if_block1 = null;
+			}
 
-				transition_out(if_block1, 1, 1, () => {
-					if_block1 = null;
-				});
+			if (/*failureMessage*/ ctx[7]) {
+				if (if_block2) {
+					if_block2.p(ctx, dirty);
 
-				check_outros();
+					if (dirty[0] & /*failureMessage*/ 128) {
+						transition_in(if_block2, 1);
+					}
+				} else {
+					if_block2 = create_if_block_1(ctx);
+					if_block2.c();
+					transition_in(if_block2, 1);
+					if_block2.m(div2, null);
+				}
+			} else if (if_block2) {
+				if_block2.d(1);
+				if_block2 = null;
+			}
+
+			if ((!current || dirty[0] & /*$puzzleIdsToWorkOn*/ 256) && t3_value !== (t3_value = /*$puzzleIdsToWorkOn*/ ctx[8].length + "")) set_data_dev(t3, t3_value);
+
+			if (/*currentPuzzleIds*/ ctx[3]) {
+				if (if_block3) {
+					if_block3.p(ctx, dirty);
+				} else {
+					if_block3 = create_if_block(ctx);
+					if_block3.c();
+					if_block3.m(div6, t6);
+				}
+			} else if (if_block3) {
+				if_block3.d(1);
+				if_block3 = null;
+			}
+
+			if (dirty[0] & /*newPuzzleIds*/ 4 && input.value !== /*newPuzzleIds*/ ctx[2]) {
+				set_input_value(input, /*newPuzzleIds*/ ctx[2]);
 			}
 		},
 		i: function intro(local) {
 			if (current) return;
-			transition_in(chessboard.$$.fragment, local);
 			transition_in(if_block0);
 			transition_in(if_block1);
+			transition_in(if_block2);
 			current = true;
 		},
 		o: function outro(local) {
-			transition_out(chessboard.$$.fragment, local);
 			transition_out(if_block0);
-			transition_out(if_block1);
 			current = false;
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(div5);
+				detach_dev(div8);
 			}
 
-			destroy_component(chessboard);
-			if (if_block0) if_block0.d();
+			if_blocks[current_block_type_index].d();
 			if (if_block1) if_block1.d();
+			if (if_block2) if_block2.d();
+			if (if_block3) if_block3.d();
+			mounted = false;
+			run_all(dispose);
 		}
 	};
 
@@ -7287,6 +7420,8 @@ function create_fragment(ctx) {
 }
 
 function instance($$self, $$props, $$invalidate) {
+	let $solveTimes;
+	let $puzzleIdsToWorkOn;
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('Puzzles', slots, []);
 	let fen;
@@ -7309,20 +7444,78 @@ function instance($$self, $$props, $$invalidate) {
 		orientation
 	};
 
-	let boardSize;
-	let puzzleIds = ["EUB6t", "RxzYi", "MX2SS", "UiyYS", "r8hk8"];
+	const puzzleIdsToWorkOn = persisted("puzzles.idsToWorkOn", ["EUB6t", "RxzYi", "MX2SS", "UiyYS", "r8hk8"]);
+	validate_store(puzzleIdsToWorkOn, 'puzzleIdsToWorkOn');
+	component_subscribe($$self, puzzleIdsToWorkOn, value => $$invalidate(8, $puzzleIdsToWorkOn = value));
+	let newPuzzleIds;
+
+	function addPuzzleIdToWorkOn() {
+		if (newPuzzleIds.length < 3) {
+			$$invalidate(2, newPuzzleIds = "");
+			return;
+		}
+
+		const idsToAdd = newPuzzleIds.split(",").map(id => id.trim());
+		const currentPuzzleIds = new Set($puzzleIdsToWorkOn);
+		idsToAdd.forEach(id => currentPuzzleIds.add(id));
+		puzzleIdsToWorkOn.set([...currentPuzzleIds]);
+		$$invalidate(2, newPuzzleIds = "");
+		setActivePuzzleIds();
+	}
+
+	function removePuzzleId(puzzleId) {
+		const currentPuzzleIds = new Set($puzzleIdsToWorkOn);
+		currentPuzzleIds.delete(puzzleId.trim());
+		puzzleIdsToWorkOn.set([...currentPuzzleIds]);
+	}
+
+	const solveTimes = persisted("puzzles.solveTimes", {});
+	validate_store(solveTimes, 'solveTimes');
+	component_subscribe($$self, solveTimes, value => $$invalidate(24, $solveTimes = value));
+	let currentPuzzleIds = [];
+	let currentPuzzleId;
 	let puzzleShownAt;
 	let puzzleIndex = 0;
+	let batchSize = 10;
+	let timeGoal = 15000;
+	let minimumSolves = 3;
+
+	function setActivePuzzleIds() {
+		const all = $puzzleIdsToWorkOn;
+		let selectedPuzzles = [];
+
+		for (let puzzleId of all) {
+			let times = $solveTimes[puzzleId] || [];
+
+			if (times.length < minimumSolves) {
+				selectedPuzzles.push(puzzleId);
+			} else {
+				let lastThreeSolves = times.slice(-3);
+				let averageTime = lastThreeSolves.reduce((a, b) => a + b, 0) / lastThreeSolves.length;
+
+				if (averageTime > timeGoal) {
+					selectedPuzzles.push(puzzleId);
+				}
+			}
+
+			if (selectedPuzzles.length >= batchSize) {
+				break;
+			}
+		}
+
+		$$invalidate(3, currentPuzzleIds = selectedPuzzles);
+	}
 
 	async function getNextPuzzle() {
-		const puzzleId = puzzleIds[puzzleIndex];
-		const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`);
-		const data = await response.json();
+		currentPuzzleId = Util.getRandomElement(currentPuzzleIds);
+		const response = await fetch(`https://lichess.org/api/puzzle/${currentPuzzleId}`);
 
-		// Loop
-		puzzleIndex = (puzzleIndex + 1) % puzzleIds.length;
+		if (response.status === 404) {
+			removePuzzleId(currentPuzzleId);
+			return getNextPuzzle();
+		}
 
-		return data;
+		return await response.json();
 	}
 
 	let moves;
@@ -7332,7 +7525,7 @@ function instance($$self, $$props, $$invalidate) {
 	let nextButton;
 
 	async function loadNextPuzzle() {
-		$$invalidate(3, puzzleComplete = false);
+		$$invalidate(4, puzzleComplete = false);
 		madeMistake = false;
 		const next = await getNextPuzzle();
 		$$invalidate(1, orientation = Util.whoseMoveIsIt(next.puzzle.initialPly + 1));
@@ -7422,19 +7615,33 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	function handlePuzzleComplete() {
-		$$invalidate(3, puzzleComplete = true);
-		Util.currentMicrotime() - puzzleShownAt;
+		$$invalidate(4, puzzleComplete = true);
+		const timeToSolve = Util.currentMicrotime() - puzzleShownAt;
+
+		if (!madeMistake) {
+			addSolveTime(currentPuzzleId, timeToSolve);
+		}
+
+		setActivePuzzleIds();
+	}
+
+	function addSolveTime(puzzleId, time) {
+		const times = $solveTimes;
+		const timesForPuzzle = times[puzzleId] || [];
+		timesForPuzzle.push(time);
+		times[puzzleId] = timesForPuzzle;
+		solveTimes.set(times);
 	}
 
 	let successMessage = null;
 
 	function showSuccess(message, duration = 2000) {
-		$$invalidate(6, failureMessage = null);
-		$$invalidate(5, successMessage = message);
+		$$invalidate(7, failureMessage = null);
+		$$invalidate(6, successMessage = message);
 
 		setTimeout(
 			() => {
-				$$invalidate(5, successMessage = null);
+				$$invalidate(6, successMessage = null);
 			},
 			duration
 		);
@@ -7443,18 +7650,20 @@ function instance($$self, $$props, $$invalidate) {
 	let failureMessage = null;
 
 	function showFailure(message, duration = 2000) {
-		$$invalidate(5, successMessage = null);
-		$$invalidate(6, failureMessage = message);
+		$$invalidate(6, successMessage = null);
+		$$invalidate(7, failureMessage = message);
 
 		setTimeout(
 			() => {
-				$$invalidate(6, failureMessage = null);
+				$$invalidate(7, failureMessage = null);
 			},
 			duration
 		);
 	}
 
 	onMount(async () => {
+		setActivePuzzleIds();
+
 		document.addEventListener("keydown", function (event) {
 			if (["Enter", " "].includes(event.key) && nextButton) {
 				nextButton.click();
@@ -7473,7 +7682,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			nextButton = $$value;
-			$$invalidate(4, nextButton);
+			$$invalidate(5, nextButton);
 		});
 	}
 
@@ -7486,9 +7695,9 @@ function instance($$self, $$props, $$invalidate) {
 		$$invalidate(0, chessground);
 	}
 
-	function chessboard_size_binding(value) {
-		boardSize = value;
-		$$invalidate(2, boardSize);
+	function input_input_handler() {
+		newPuzzleIds = this.value;
+		$$invalidate(2, newPuzzleIds);
 	}
 
 	$$self.$capture_state = () => ({
@@ -7507,14 +7716,24 @@ function instance($$self, $$props, $$invalidate) {
 		parseUci,
 		makeSquare,
 		parseSquare,
+		persisted,
 		fen,
 		chessground,
 		orientation,
 		chessgroundConfig,
-		boardSize,
-		puzzleIds,
+		puzzleIdsToWorkOn,
+		newPuzzleIds,
+		addPuzzleIdToWorkOn,
+		removePuzzleId,
+		solveTimes,
+		currentPuzzleIds,
+		currentPuzzleId,
 		puzzleShownAt,
 		puzzleIndex,
+		batchSize,
+		timeGoal,
+		minimumSolves,
+		setActivePuzzleIds,
 		getNextPuzzle,
 		moves,
 		position,
@@ -7528,28 +7747,35 @@ function instance($$self, $$props, $$invalidate) {
 		handleUserMove,
 		wouldBeCheckmate,
 		handlePuzzleComplete,
+		addSolveTime,
 		successMessage,
 		showSuccess,
 		failureMessage,
-		showFailure
+		showFailure,
+		$solveTimes,
+		$puzzleIdsToWorkOn
 	});
 
 	$$self.$inject_state = $$props => {
 		if ('fen' in $$props) fen = $$props.fen;
 		if ('chessground' in $$props) $$invalidate(0, chessground = $$props.chessground);
 		if ('orientation' in $$props) $$invalidate(1, orientation = $$props.orientation);
-		if ('chessgroundConfig' in $$props) $$invalidate(7, chessgroundConfig = $$props.chessgroundConfig);
-		if ('boardSize' in $$props) $$invalidate(2, boardSize = $$props.boardSize);
-		if ('puzzleIds' in $$props) puzzleIds = $$props.puzzleIds;
+		if ('chessgroundConfig' in $$props) $$invalidate(9, chessgroundConfig = $$props.chessgroundConfig);
+		if ('newPuzzleIds' in $$props) $$invalidate(2, newPuzzleIds = $$props.newPuzzleIds);
+		if ('currentPuzzleIds' in $$props) $$invalidate(3, currentPuzzleIds = $$props.currentPuzzleIds);
+		if ('currentPuzzleId' in $$props) currentPuzzleId = $$props.currentPuzzleId;
 		if ('puzzleShownAt' in $$props) puzzleShownAt = $$props.puzzleShownAt;
 		if ('puzzleIndex' in $$props) puzzleIndex = $$props.puzzleIndex;
+		if ('batchSize' in $$props) batchSize = $$props.batchSize;
+		if ('timeGoal' in $$props) timeGoal = $$props.timeGoal;
+		if ('minimumSolves' in $$props) minimumSolves = $$props.minimumSolves;
 		if ('moves' in $$props) moves = $$props.moves;
 		if ('position' in $$props) position = $$props.position;
 		if ('madeMistake' in $$props) madeMistake = $$props.madeMistake;
-		if ('puzzleComplete' in $$props) $$invalidate(3, puzzleComplete = $$props.puzzleComplete);
-		if ('nextButton' in $$props) $$invalidate(4, nextButton = $$props.nextButton);
-		if ('successMessage' in $$props) $$invalidate(5, successMessage = $$props.successMessage);
-		if ('failureMessage' in $$props) $$invalidate(6, failureMessage = $$props.failureMessage);
+		if ('puzzleComplete' in $$props) $$invalidate(4, puzzleComplete = $$props.puzzleComplete);
+		if ('nextButton' in $$props) $$invalidate(5, nextButton = $$props.nextButton);
+		if ('successMessage' in $$props) $$invalidate(6, successMessage = $$props.successMessage);
+		if ('failureMessage' in $$props) $$invalidate(7, failureMessage = $$props.failureMessage);
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -7559,24 +7785,29 @@ function instance($$self, $$props, $$invalidate) {
 	return [
 		chessground,
 		orientation,
-		boardSize,
+		newPuzzleIds,
+		currentPuzzleIds,
 		puzzleComplete,
 		nextButton,
 		successMessage,
 		failureMessage,
+		$puzzleIdsToWorkOn,
 		chessgroundConfig,
+		puzzleIdsToWorkOn,
+		addPuzzleIdToWorkOn,
+		solveTimes,
 		loadNextPuzzle,
 		button_binding,
 		click_handler,
 		chessboard_chessground_binding,
-		chessboard_size_binding
+		input_input_handler
 	];
 }
 
 class Puzzles extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance, create_fragment, safe_not_equal, {});
+		init(this, options, instance, create_fragment, safe_not_equal, {}, null, [-1, -1]);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
