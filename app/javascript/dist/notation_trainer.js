@@ -7948,7 +7948,7 @@ function instance($$self, $$props, $$invalidate) {
 		$$invalidate(10, maxTime = 30);
 		$$invalidate(0, correctCount = 0);
 		$$invalidate(1, incorrectCount = 0);
-		correctBonus = 1.33;
+		correctBonus = 2.75;
 		newPosition();
 	}
 

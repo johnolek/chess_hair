@@ -186,7 +186,7 @@
     maxTime = 30;
     correctCount = 0;
     incorrectCount = 0;
-    correctBonus = 1.33;
+    correctBonus = 2.75;
     newPosition();
   }
 
