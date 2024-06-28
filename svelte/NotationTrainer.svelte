@@ -1,6 +1,5 @@
 <script>
   import { onMount } from "svelte";
-  import { fade } from "svelte/transition";
   import Chessboard from "./components/Chessboard.svelte";
 
   import { parsePgn, startingPosition } from "chessops/pgn";
@@ -12,6 +11,7 @@
   import { persisted } from "svelte-persisted-store";
   import ProgressTimer from "./components/ProgressTimer.svelte";
   import { Chess } from "chessops";
+  import Counter from "./components/Counter.svelte";
 
   const orientation = persisted("notation.orientation", "white");
 
@@ -89,27 +89,6 @@
     handleAnswer(san, nextMove);
   }
 
-  let flashMessageTimeout = null;
-  let showFlashMessage = false;
-  let flashMessage;
-  let flashType;
-
-  function flash(message, type, duration = 2000) {
-    clearTimeout(flashMessageTimeout);
-    // Make sure we clear away any existing message
-    showFlashMessage = false;
-
-    flashMessage = message;
-    flashType = type;
-    showFlashMessage = true;
-
-    flashMessageTimeout = setTimeout(() => {
-      flashMessage = null;
-      flashType = null;
-      showFlashMessage = false;
-    }, duration);
-  }
-
   function newPosition() {
     const game = getRandomGame();
     const pgnGame = parsePgn(game.pgn)[0];
@@ -170,11 +149,9 @@
     ];
     if (isCorrect) {
       maxTime += correctBonus;
-      flash("Correct!", "success");
       correctCount++;
     } else {
       maxTime -= incorrectPenalty;
-      flash(`Not ${userSan} :(`, "danger");
       incorrectCount++;
     }
     newPosition();
@@ -233,15 +210,6 @@
         <span class="tag is-size-3 is-{colorToMove}">
           {nextMove}
         </span>
-        {#if showFlashMessage}
-          <span
-            transition:fade
-            style="position: absolute; right: 0"
-            class="tag is-size-3 is-{flashType}"
-          >
-            {flashMessage}
-          </span>
-        {/if}
       </div>
       <Chessboard
         {chessgroundConfig}
@@ -259,23 +227,14 @@
   <div class="column is-2-desktop">
     {#if !gameRunning}
       <div class="block">
-        {#if $orientation === "white"}
-          <button
-            class="button is-small"
-            on:click={() => {
-              orientation.set("black");
-            }}
-            >View as black
-          </button>
-        {:else}
-          <button
-            class="button is-small"
-            on:click={() => {
-              orientation.set("white");
-            }}
-            >View as white
-          </button>
-        {/if}
+        <button
+          class="button is-small change-orientation-button"
+          on:click={() => {
+            orientation.set(Util.otherColor($orientation));
+            newPosition();
+          }}
+          >Play {Util.otherColor($orientation)}
+        </button>
       </div>
     {/if}
     {#if !gameRunning}
@@ -284,10 +243,15 @@
       </div>
     {/if}
     <div class="block">
-      <p>Correct: {correctCount}</p>
-      <p>Incorrect: {incorrectCount}</p>
-      <p>High Score (white): {highScoreWhite}</p>
-      <p>High Score (black): {highScoreBlack}</p>
+      <Counter number={correctCount} title="Correct" />
+      <Counter number={incorrectCount} title="Incorrect" />
+      <Counter number={highScoreWhite} title="High Score (white)" />
+      <Counter number={highScoreBlack} title="High Score (black)" />
     </div>
   </div>
 </div>
+
+<style>
+  .change-orientation-button {
+  }
+</style>

@@ -83,6 +83,14 @@ function component_subscribe(component, store, callback) {
 	component.$$.on_destroy.push(subscribe(store, callback));
 }
 
+/** @param {number | string} value
+ * @returns {[number, string]}
+ */
+function split_css_unit(value) {
+	const split = typeof value === 'string' && value.match(/^\s*(-?[\d.]+)([^\s]*)\s*$/);
+	return split ? [parseFloat(split[1]), split[2] || 'px'] : [/** @type {number} */ (value), 'px'];
+}
+
 const is_client = typeof window !== 'undefined';
 
 /** @type {() => number} */
@@ -714,7 +722,7 @@ function wait() {
  * @returns {void}
  */
 function dispatch(node, direction, kind) {
-	node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
+	node.dispatchEvent(custom_event(`${'intro' }${kind}`));
 }
 
 const outroing = new Set();
@@ -788,58 +796,27 @@ const null_transition = { duration: 0 };
  * @param {Element & ElementCSSInlineStyle} node
  * @param {TransitionFn} fn
  * @param {any} params
- * @param {boolean} intro
- * @returns {{ run(b: 0 | 1): void; end(): void; }}
+ * @returns {{ start(): void; invalidate(): void; end(): void; }}
  */
-function create_bidirectional_transition(node, fn, params, intro) {
+function create_in_transition(node, fn, params) {
 	/**
 	 * @type {TransitionOptions} */
-	const options = { direction: 'both' };
+	const options = { direction: 'in' };
 	let config = fn(node, params, options);
-	let t = intro ? 0 : 1;
-
-	/**
-	 * @type {Program | null} */
-	let running_program = null;
-
-	/**
-	 * @type {PendingProgram | null} */
-	let pending_program = null;
-	let animation_name = null;
-
-	/** @type {boolean} */
-	let original_inert_value;
+	let running = false;
+	let animation_name;
+	let task;
+	let uid = 0;
 
 	/**
 	 * @returns {void} */
-	function clear_animation() {
+	function cleanup() {
 		if (animation_name) delete_rule(node, animation_name);
 	}
 
 	/**
-	 * @param {PendingProgram} program
-	 * @param {number} duration
-	 * @returns {Program}
-	 */
-	function init(program, duration) {
-		const d = /** @type {Program['d']} */ (program.b - t);
-		duration *= Math.abs(d);
-		return {
-			a: t,
-			b: program.b,
-			d,
-			duration,
-			start: program.start,
-			end: program.start + duration,
-			group: program.group
-		};
-	}
-
-	/**
-	 * @param {INTRO | OUTRO} b
-	 * @returns {void}
-	 */
-	function go(b) {
+	 * @returns {void} */
+	function go() {
 		const {
 			delay = 0,
 			duration = 300,
@@ -847,103 +824,50 @@ function create_bidirectional_transition(node, fn, params, intro) {
 			tick = noop,
 			css
 		} = config || null_transition;
-
-		/**
-		 * @type {PendingProgram} */
-		const program = {
-			start: now() + delay,
-			b
-		};
-
-		if (!b) {
-			// @ts-ignore todo: improve typings
-			program.group = outros;
-			outros.r += 1;
-		}
-
-		if ('inert' in node) {
-			if (b) {
-				if (original_inert_value !== undefined) {
-					// aborted/reversed outro — restore previous inert value
-					node.inert = original_inert_value;
+		if (css) animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+		tick(0, 1);
+		const start_time = now() + delay;
+		const end_time = start_time + duration;
+		if (task) task.abort();
+		running = true;
+		add_render_callback(() => dispatch(node, true, 'start'));
+		task = loop((now) => {
+			if (running) {
+				if (now >= end_time) {
+					tick(1, 0);
+					dispatch(node, true, 'end');
+					cleanup();
+					return (running = false);
 				}
-			} else {
-				original_inert_value = /** @type {HTMLElement} */ (node).inert;
-				node.inert = true;
+				if (now >= start_time) {
+					const t = easing((now - start_time) / duration);
+					tick(t, 1 - t);
+				}
 			}
-		}
-
-		if (running_program || pending_program) {
-			pending_program = program;
-		} else {
-			// if this is an intro, and there's a delay, we need to do
-			// an initial tick and/or apply CSS animation immediately
-			if (css) {
-				clear_animation();
-				animation_name = create_rule(node, t, b, duration, delay, easing, css);
-			}
-			if (b) tick(0, 1);
-			running_program = init(program, duration);
-			add_render_callback(() => dispatch(node, b, 'start'));
-			loop((now) => {
-				if (pending_program && now > pending_program.start) {
-					running_program = init(pending_program, duration);
-					pending_program = null;
-					dispatch(node, running_program.b, 'start');
-					if (css) {
-						clear_animation();
-						animation_name = create_rule(
-							node,
-							t,
-							running_program.b,
-							running_program.duration,
-							0,
-							easing,
-							config.css
-						);
-					}
-				}
-				if (running_program) {
-					if (now >= running_program.end) {
-						tick((t = running_program.b), 1 - t);
-						dispatch(node, running_program.b, 'end');
-						if (!pending_program) {
-							// we're done
-							if (running_program.b) {
-								// intro — we can tidy up immediately
-								clear_animation();
-							} else {
-								// outro — needs to be coordinated
-								if (!--running_program.group.r) run_all(running_program.group.c);
-							}
-						}
-						running_program = null;
-					} else if (now >= running_program.start) {
-						const p = now - running_program.start;
-						t = running_program.a + running_program.d * easing(p / running_program.duration);
-						tick(t, 1 - t);
-					}
-				}
-				return !!(running_program || pending_program);
-			});
-		}
+			return running;
+		});
 	}
+	let started = false;
 	return {
-		run(b) {
+		start() {
+			if (started) return;
+			started = true;
+			delete_rule(node);
 			if (is_function(config)) {
-				wait().then(() => {
-					const opts = { direction: b ? 'in' : 'out' };
-					// @ts-ignore
-					config = config(opts);
-					go(b);
-				});
+				config = config(options);
+				wait().then(go);
 			} else {
-				go(b);
+				go();
 			}
 		},
+		invalidate() {
+			started = false;
+		},
 		end() {
-			clear_animation();
-			running_program = pending_program = null;
+			if (running) {
+				cleanup();
+				running = false;
+			}
 		}
 	};
 }
@@ -1391,24 +1315,6 @@ class SvelteComponentDev extends SvelteComponent {
 if (typeof window !== 'undefined')
 	// @ts-ignore
 	(window.__svelte || (window.__svelte = { v: new Set() })).v.add(PUBLIC_VERSION);
-
-/**
- * Animates the opacity of an element from 0 to the current opacity for `in` transitions and from the current opacity to 0 for `out` transitions.
- *
- * https://svelte.dev/docs/svelte-transition#fade
- * @param {Element} node
- * @param {import('./public').FadeParams} [params]
- * @returns {import('./public').TransitionConfig}
- */
-function fade(node, { delay = 0, duration = 400, easing = identity } = {}) {
-	const o = +getComputedStyle(node).opacity;
-	return {
-		delay,
-		duration,
-		easing,
-		css: (t) => `opacity: ${t * o}`
-	};
-}
 
 const colors = ['white', 'black'];
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -3636,14 +3542,14 @@ boardStyle.subscribe((value) => {
 });
 
 /* svelte/components/Chessboard.svelte generated by Svelte v4.2.18 */
-const file$2 = "svelte/components/Chessboard.svelte";
+const file$3 = "svelte/components/Chessboard.svelte";
 
-function add_css$1(target) {
+function add_css$2(target) {
 	append_styles(target, "svelte-16y75xy", ".board-wrapper.svelte-16y75xy{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZCB7Ym9hcmRTdHlsZU92ZXJyaWRlID8gYm9hcmRTdHlsZU92ZXJyaWRlIDogJyd9XCJcbiAgICBiaW5kOnRoaXM9e2JvYXJkQ29udGFpbmVyfVxuICAgIHN0eWxlPVwicG9zaXRpb246IHJlbGF0aXZlO3dpZHRoOiB7c2l6ZX1weDsgaGVpZ2h0OiB7c2l6ZX1weFwiXG4gID48L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBaUVFLDZCQUFlLENBQ2IsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QifQ== */");
 }
 
 // (49:0) {:else}
-function create_else_block$1(ctx) {
+function create_else_block(ctx) {
 	let link;
 	let link_href_value;
 
@@ -3653,7 +3559,7 @@ function create_else_block$1(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[4] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$2, 49, 2, 931);
+			add_location(link, file$3, 49, 2, 931);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -3672,7 +3578,7 @@ function create_else_block$1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_else_block$1.name,
+		id: create_else_block.name,
 		type: "else",
 		source: "(49:0) {:else}",
 		ctx
@@ -3692,7 +3598,7 @@ function create_if_block$1(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSetOverride*/ ctx[1] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$2, 43, 2, 822);
+			add_location(link, file$3, 43, 2, 822);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -3720,7 +3626,7 @@ function create_if_block$1(ctx) {
 	return block;
 }
 
-function create_fragment$2(ctx) {
+function create_fragment$3(ctx) {
 	let t;
 	let div1;
 	let div0;
@@ -3729,7 +3635,7 @@ function create_fragment$2(ctx) {
 
 	function select_block_type(ctx, dirty) {
 		if (/*pieceSetOverride*/ ctx[1]) return create_if_block$1;
-		return create_else_block$1;
+		return create_else_block;
 	}
 
 	let current_block_type = select_block_type(ctx);
@@ -3749,11 +3655,11 @@ function create_fragment$2(ctx) {
 			set_style(div0, "position", "relative");
 			set_style(div0, "width", /*size*/ ctx[0] + "px");
 			set_style(div0, "height", /*size*/ ctx[0] + "px");
-			add_location(div0, file$2, 57, 2, 1107);
+			add_location(div0, file$3, 57, 2, 1107);
 			attr_dev(div1, "class", "board-wrapper svelte-16y75xy");
 			set_style(div1, "max-width", /*maxWidth*/ ctx[5]);
 			add_render_callback(() => /*div1_elementresize_handler*/ ctx[11].call(div1));
-			add_location(div1, file$2, 52, 0, 1016);
+			add_location(div1, file$3, 52, 0, 1016);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3809,7 +3715,7 @@ function create_fragment$2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_fragment$2.name,
+		id: create_fragment$3.name,
 		type: "component",
 		source: "",
 		ctx
@@ -3818,7 +3724,7 @@ function create_fragment$2(ctx) {
 	return block;
 }
 
-function instance$2($$self, $$props, $$invalidate) {
+function instance$3($$self, $$props, $$invalidate) {
 	let $pieceSet;
 	validate_store(pieceSet, 'pieceSet');
 	component_subscribe($$self, pieceSet, $$value => $$invalidate(4, $pieceSet = $$value));
@@ -3960,8 +3866,8 @@ class Chessboard extends SvelteComponentDev {
 		init(
 			this,
 			options,
-			instance$2,
-			create_fragment$2,
+			instance$3,
+			create_fragment$3,
 			safe_not_equal,
 			{
 				chessgroundConfig: 7,
@@ -3972,14 +3878,14 @@ class Chessboard extends SvelteComponentDev {
 				pieceSetOverride: 1,
 				boardStyleOverride: 2
 			},
-			add_css$1
+			add_css$2
 		);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
 			tagName: "Chessboard",
 			options,
-			id: create_fragment$2.name
+			id: create_fragment$3.name
 		});
 	}
 
@@ -6846,6 +6752,21 @@ function is_date(obj) {
 	return Object.prototype.toString.call(obj) === '[object Date]';
 }
 
+/*
+Adapted from https://github.com/mattdesl
+Distributed under MIT License https://github.com/mattdesl/eases/blob/master/LICENSE.md
+*/
+
+/**
+ * https://svelte.dev/docs/svelte-easing
+ * @param {number} t
+ * @returns {number}
+ */
+function cubicOut(t) {
+	const f = t - 1.0;
+	return f * f * f + 1.0;
+}
+
 /** @returns {(t: any) => any} */
 function get_interpolator(a, b) {
 	if (a === b || a !== a) return () => a;
@@ -6959,13 +6880,13 @@ function tweened(value, defaults = {}) {
 }
 
 /* svelte/components/ProgressTimer.svelte generated by Svelte v4.2.18 */
-const file$1 = "svelte/components/ProgressTimer.svelte";
+const file$2 = "svelte/components/ProgressTimer.svelte";
 
-function add_css(target) {
+function add_css$1(target) {
 	append_styles(target, "svelte-l2ukrv", "progress.svelte-l2ukrv{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHJvZ3Jlc3NUaW1lci5zdmVsdGUiLCJzb3VyY2VzIjpbIlByb2dyZXNzVGltZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQsIG9uRGVzdHJveSwgY3JlYXRlRXZlbnREaXNwYXRjaGVyIH0gZnJvbSBcInN2ZWx0ZVwiO1xuICBpbXBvcnQgeyB0d2VlbmVkIH0gZnJvbSBcInN2ZWx0ZS9tb3Rpb25cIjtcbiAgaW1wb3J0IHsgbGluZWFyIH0gZnJvbSBcInN2ZWx0ZS9lYXNpbmdcIjtcblxuICBjb25zdCBzZWNvbmRQcm9ncmVzcyA9IHR3ZWVuZWQoMCwge1xuICAgIGR1cmF0aW9uOiAxMDAwLFxuICAgIGVhc2luZzogbGluZWFyLFxuICB9KTtcblxuICBleHBvcnQgbGV0IG1heCA9IDYwO1xuICBleHBvcnQgbGV0IHdpZHRoO1xuXG4gIGxldCB0aW1lUmVtYWluaW5nO1xuXG4gIGNvbnN0IGRpc3BhdGNoID0gY3JlYXRlRXZlbnREaXNwYXRjaGVyKCk7XG5cbiAgJDoge1xuICAgIHRpbWVSZW1haW5pbmcgPSBtYXggLSAkc2Vjb25kUHJvZ3Jlc3M7XG4gIH1cblxuICAkOiB7XG4gICAgaWYgKHRpbWVSZW1haW5pbmcgPD0gMCkge1xuICAgICAgZGlzcGF0Y2goXCJjb21wbGV0ZVwiKTtcbiAgICAgIGNsZWFySW50ZXJ2YWwodXBkYXRlSW50ZXJ2YWwpO1xuICAgIH1cbiAgfVxuXG4gIGxldCB1cGRhdGVJbnRlcnZhbDtcblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBzZWNvbmRQcm9ncmVzcy51cGRhdGUoKHByZXZpb3VzKSA9PiBwcmV2aW91cyArIDEpO1xuICAgIHVwZGF0ZUludGVydmFsID0gc2V0SW50ZXJ2YWwoKCkgPT4ge1xuICAgICAgc2Vjb25kUHJvZ3Jlc3MudXBkYXRlKChwcmV2aW91cykgPT4gcHJldmlvdXMgKyAxKTtcbiAgICB9LCAxMDAwKTtcbiAgfSk7XG5cbiAgb25EZXN0cm95KCgpID0+IGNsZWFySW50ZXJ2YWwodXBkYXRlSW50ZXJ2YWwpKTtcbjwvc2NyaXB0PlxuXG48ZGl2IGNsYXNzPVwiZGl2XCIgc3R5bGU9XCJ3aWR0aDoge3dpZHRofXB4XCI+XG4gIDxwcm9ncmVzcyBjbGFzcz1cInByb2dyZXNzIGlzLXN1Y2Nlc3MgbWItMFwiIHZhbHVlPXskc2Vjb25kUHJvZ3Jlc3N9IHttYXh9XG4gID48L3Byb2dyZXNzPlxuICA8ZGl2IGNsYXNzPVwiaGFzLXRleHQtY2VudGVyZWQgaXMtc2l6ZS0zXCI+XG4gICAge3RpbWVSZW1haW5pbmcudG9GaXhlZCgyKX1cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICBwcm9ncmVzcyB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQWlERSxzQkFBUyxDQUNQLFFBQVEsQ0FBRSxRQUFRLENBQ2xCLEtBQUssQ0FBRSxJQUNUIn0= */");
 }
 
-function create_fragment$1(ctx) {
+function create_fragment$2(ctx) {
 	let div1;
 	let progress;
 	let t0;
@@ -6983,12 +6904,12 @@ function create_fragment$1(ctx) {
 			attr_dev(progress, "class", "progress is-success mb-0 svelte-l2ukrv");
 			progress.value = /*$secondProgress*/ ctx[3];
 			attr_dev(progress, "max", /*max*/ ctx[0]);
-			add_location(progress, file$1, 41, 2, 850);
+			add_location(progress, file$2, 41, 2, 850);
 			attr_dev(div0, "class", "has-text-centered is-size-3");
-			add_location(div0, file$1, 43, 2, 940);
+			add_location(div0, file$2, 43, 2, 940);
 			attr_dev(div1, "class", "div");
 			set_style(div1, "width", /*width*/ ctx[1] + "px");
-			add_location(div1, file$1, 40, 0, 805);
+			add_location(div1, file$2, 40, 0, 805);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7026,7 +6947,7 @@ function create_fragment$1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_fragment$1.name,
+		id: create_fragment$2.name,
 		type: "component",
 		source: "",
 		ctx
@@ -7035,7 +6956,7 @@ function create_fragment$1(ctx) {
 	return block;
 }
 
-function instance$1($$self, $$props, $$invalidate) {
+function instance$2($$self, $$props, $$invalidate) {
 	let $secondProgress;
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('ProgressTimer', slots, []);
@@ -7127,13 +7048,13 @@ function instance$1($$self, $$props, $$invalidate) {
 class ProgressTimer extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance$1, create_fragment$1, safe_not_equal, { max: 0, width: 1 }, add_css);
+		init(this, options, instance$2, create_fragment$2, safe_not_equal, { max: 0, width: 1 }, add_css$1);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
 			tagName: "ProgressTimer",
 			options,
-			id: create_fragment$1.name
+			id: create_fragment$2.name
 		});
 	}
 
@@ -7154,81 +7075,247 @@ class ProgressTimer extends SvelteComponentDev {
 	}
 }
 
-/* svelte/NotationTrainer.svelte generated by Svelte v4.2.18 */
-const file = "svelte/NotationTrainer.svelte";
+/**
+ * Animates the x and y positions and the opacity of an element. `in` transitions animate from the provided values, passed as parameters to the element's default values. `out` transitions animate from the element's default values to the provided values.
+ *
+ * https://svelte.dev/docs/svelte-transition#fly
+ * @param {Element} node
+ * @param {import('./public').FlyParams} [params]
+ * @returns {import('./public').TransitionConfig}
+ */
+function fly(
+	node,
+	{ delay = 0, duration = 400, easing = cubicOut, x = 0, y = 0, opacity = 0 } = {}
+) {
+	const style = getComputedStyle(node);
+	const target_opacity = +style.opacity;
+	const transform = style.transform === 'none' ? '' : style.transform;
+	const od = target_opacity * (1 - opacity);
+	const [xValue, xUnit] = split_css_unit(x);
+	const [yValue, yUnit] = split_css_unit(y);
+	return {
+		delay,
+		duration,
+		easing,
+		css: (t, u) => `
+			transform: ${transform} translate(${(1 - t) * xValue}${xUnit}, ${(1 - t) * yValue}${yUnit});
+			opacity: ${target_opacity - od * u}`
+	};
+}
 
-// (236:8) {#if showFlashMessage}
-function create_if_block_4(ctx) {
-	let span;
+/* svelte/components/Counter.svelte generated by Svelte v4.2.18 */
+const file$1 = "svelte/components/Counter.svelte";
+
+// (13:6) {#key number}
+function create_key_block(ctx) {
+	let div;
 	let t;
-	let span_class_value;
-	let span_transition;
-	let current;
+	let div_intro;
 
 	const block = {
 		c: function create() {
-			span = element("span");
-			t = text(/*flashMessage*/ ctx[12]);
-			set_style(span, "position", "absolute");
-			set_style(span, "right", "0");
-			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*flashType*/ ctx[13]);
-			add_location(span, file, 236, 10, 5976);
+			div = element("div");
+			t = text(/*number*/ ctx[0]);
+			attr_dev(div, "class", "is-size-3 number");
+			add_location(div, file$1, 13, 8, 329);
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, span, anchor);
-			append_dev(span, t);
-			current = true;
+			insert_dev(target, div, anchor);
+			append_dev(div, t);
 		},
 		p: function update(ctx, dirty) {
-			if (!current || dirty[0] & /*flashMessage*/ 4096) set_data_dev(t, /*flashMessage*/ ctx[12]);
-
-			if (!current || dirty[0] & /*flashType*/ 8192 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*flashType*/ ctx[13])) {
-				attr_dev(span, "class", span_class_value);
-			}
+			if (dirty & /*number*/ 1) set_data_dev(t, /*number*/ ctx[0]);
 		},
 		i: function intro(local) {
-			if (current) return;
-
 			if (local) {
-				add_render_callback(() => {
-					if (!current) return;
-					if (!span_transition) span_transition = create_bidirectional_transition(span, fade, {}, true);
-					span_transition.run(1);
-				});
+				if (!div_intro) {
+					add_render_callback(() => {
+						div_intro = create_in_transition(div, fly, { y: 15, duration: 500, easing: cubicOut });
+						div_intro.start();
+					});
+				}
 			}
-
-			current = true;
 		},
-		o: function outro(local) {
-			if (local) {
-				if (!span_transition) span_transition = create_bidirectional_transition(span, fade, {}, false);
-				span_transition.run(0);
-			}
-
-			current = false;
-		},
+		o: noop,
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(span);
+				detach_dev(div);
 			}
-
-			if (detaching && span_transition) span_transition.end();
 		}
 	};
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_4.name,
-		type: "if",
-		source: "(236:8) {#if showFlashMessage}",
+		id: create_key_block.name,
+		type: "key",
+		source: "(13:6) {#key number}",
 		ctx
 	});
 
 	return block;
 }
 
-// (254:4) {#if gameRunning}
-function create_if_block_3(ctx) {
+function create_fragment$1(ctx) {
+	let div2;
+	let div1;
+	let h2;
+	let t0;
+	let t1;
+	let div0;
+	let previous_key = /*number*/ ctx[0];
+	let key_block = create_key_block(ctx);
+
+	const block = {
+		c: function create() {
+			div2 = element("div");
+			div1 = element("div");
+			h2 = element("h2");
+			t0 = text(/*title*/ ctx[1]);
+			t1 = space();
+			div0 = element("div");
+			key_block.c();
+			attr_dev(h2, "class", "is-size-5");
+			add_location(h2, file$1, 10, 4, 231);
+			attr_dev(div0, "class", "number-container");
+			add_location(div0, file$1, 11, 4, 270);
+			attr_dev(div1, "class", "container has-text-centered");
+			add_location(div1, file$1, 9, 2, 185);
+			attr_dev(div2, "class", "box score-container");
+			add_location(div2, file$1, 8, 0, 149);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div2, anchor);
+			append_dev(div2, div1);
+			append_dev(div1, h2);
+			append_dev(h2, t0);
+			append_dev(div1, t1);
+			append_dev(div1, div0);
+			key_block.m(div0, null);
+		},
+		p: function update(ctx, [dirty]) {
+			if (dirty & /*title*/ 2) set_data_dev(t0, /*title*/ ctx[1]);
+
+			if (dirty & /*number*/ 1 && safe_not_equal(previous_key, previous_key = /*number*/ ctx[0])) {
+				group_outros();
+				transition_out(key_block, 1, 1, noop);
+				check_outros();
+				key_block = create_key_block(ctx);
+				key_block.c();
+				transition_in(key_block, 1);
+				key_block.m(div0, null);
+			} else {
+				key_block.p(ctx, dirty);
+			}
+		},
+		i: function intro(local) {
+			transition_in(key_block);
+		},
+		o: function outro(local) {
+			transition_out(key_block);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div2);
+			}
+
+			key_block.d(detaching);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$1.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$1($$self, $$props, $$invalidate) {
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('Counter', slots, []);
+	let { number } = $$props;
+	let { title } = $$props;
+
+	$$self.$$.on_mount.push(function () {
+		if (number === undefined && !('number' in $$props || $$self.$$.bound[$$self.$$.props['number']])) {
+			console.warn("<Counter> was created without expected prop 'number'");
+		}
+
+		if (title === undefined && !('title' in $$props || $$self.$$.bound[$$self.$$.props['title']])) {
+			console.warn("<Counter> was created without expected prop 'title'");
+		}
+	});
+
+	const writable_props = ['number', 'title'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Counter> was created with unknown prop '${key}'`);
+	});
+
+	$$self.$$set = $$props => {
+		if ('number' in $$props) $$invalidate(0, number = $$props.number);
+		if ('title' in $$props) $$invalidate(1, title = $$props.title);
+	};
+
+	$$self.$capture_state = () => ({ fly, cubicOut, number, title });
+
+	$$self.$inject_state = $$props => {
+		if ('number' in $$props) $$invalidate(0, number = $$props.number);
+		if ('title' in $$props) $$invalidate(1, title = $$props.title);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	return [number, title];
+}
+
+class Counter extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$1, create_fragment$1, safe_not_equal, { number: 0, title: 1 });
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "Counter",
+			options,
+			id: create_fragment$1.name
+		});
+	}
+
+	get number() {
+		throw new Error("<Counter>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set number(value) {
+		throw new Error("<Counter>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get title() {
+		throw new Error("<Counter>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set title(value) {
+		throw new Error("<Counter>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+}
+
+/* svelte/NotationTrainer.svelte generated by Svelte v4.2.18 */
+const file = "svelte/NotationTrainer.svelte";
+
+function add_css(target) {
+	append_styles(target, "svelte-1hogyil", ".change-orientation-button.svelte-1hogyil{}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSIsInNvdXJjZXMiOlsiTm90YXRpb25UcmFpbmVyLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSBcInN2ZWx0ZVwiO1xuICBpbXBvcnQgQ2hlc3Nib2FyZCBmcm9tIFwiLi9jb21wb25lbnRzL0NoZXNzYm9hcmQuc3ZlbHRlXCI7XG5cbiAgaW1wb3J0IHsgcGFyc2VQZ24sIHN0YXJ0aW5nUG9zaXRpb24gfSBmcm9tIFwiY2hlc3NvcHMvcGduXCI7XG4gIGltcG9ydCB7IFV0aWwgfSBmcm9tIFwic3JjL3V0aWxcIjtcbiAgaW1wb3J0IHsgZ2V0UmFuZG9tR2FtZSB9IGZyb20gXCJzcmMvcmFuZG9tX2dhbWVzXCI7XG4gIGltcG9ydCB7IG1ha2VTYW4sIHBhcnNlU2FuIH0gZnJvbSBcImNoZXNzb3BzL3NhblwiO1xuICBpbXBvcnQgeyBtYWtlRmVuLCBwYXJzZUZlbiB9IGZyb20gXCJjaGVzc29wcy9mZW5cIjtcbiAgaW1wb3J0IHsgbWFrZVNxdWFyZSwgcGFyc2VTcXVhcmUgfSBmcm9tIFwiY2hlc3NvcHMvdXRpbFwiO1xuICBpbXBvcnQgeyBwZXJzaXN0ZWQgfSBmcm9tIFwic3ZlbHRlLXBlcnNpc3RlZC1zdG9yZVwiO1xuICBpbXBvcnQgUHJvZ3Jlc3NUaW1lciBmcm9tIFwiLi9jb21wb25lbnRzL1Byb2dyZXNzVGltZXIuc3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzIH0gZnJvbSBcImNoZXNzb3BzXCI7XG4gIGltcG9ydCBDb3VudGVyIGZyb20gXCIuL2NvbXBvbmVudHMvQ291bnRlci5zdmVsdGVcIjtcblxuICBjb25zdCBvcmllbnRhdGlvbiA9IHBlcnNpc3RlZChcIm5vdGF0aW9uLm9yaWVudGF0aW9uXCIsIFwid2hpdGVcIik7XG5cbiAgbGV0IGNvcnJlY3RDb3VudCA9IDA7XG4gIGxldCBpbmNvcnJlY3RDb3VudCA9IDA7XG4gIGxldCBuZXh0TW92ZTtcbiAgbGV0IGNvbG9yVG9Nb3ZlO1xuXG4gIGxldCBwb3NpdGlvblNob3duQXQ7XG5cbiAgY2xhc3MgQW5zd2VyIHtcbiAgICBjb25zdHJ1Y3RvcihnaXZlbkFuc3dlciwgY29ycmVjdEFuc3dlciwgdGltZVRvQW5zd2VyLCBvcmllbnRhdGlvbikge1xuICAgICAgdGhpcy5naXZlbkFuc3dlciA9IGdpdmVuQW5zd2VyO1xuICAgICAgdGhpcy5jb3JyZWN0QW5zd2VyID0gY29ycmVjdEFuc3dlcjtcbiAgICAgIHRoaXMudGltZVRvQW5zd2VyID0gdGltZVRvQW5zd2VyO1xuICAgICAgdGhpcy5vcmllbnRhdGlvbiA9IG9yaWVudGF0aW9uO1xuICAgIH1cblxuICAgIGlzQ29ycmVjdCgpIHtcbiAgICAgIHJldHVybiB0aGlzLmdpdmVuQW5zd2VyID09PSB0aGlzLmNvcnJlY3RBbnN3ZXI7XG4gICAgfVxuICB9XG5cbiAgLyoqIEB0eXBlIHtBbnN3ZXJbXX0gKi9cbiAgbGV0IGFuc3dlcnMgPSBbXTtcblxuICBsZXQgY2hlc3Nncm91bmRDb25maWcgPSB7XG4gICAgZmVuOiBcIjgvOC84LzgvOC84LzgvOFwiLFxuICAgIGNvb3JkaW5hdGVzOiBmYWxzZSxcbiAgICBhbmltYXRpb246IHtcbiAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgfSxcbiAgICBoaWdobGlnaHQ6IHtcbiAgICAgIGxhc3RNb3ZlOiB0cnVlLFxuICAgICAgY2hlY2s6IHRydWUsXG4gICAgfSxcbiAgICBkcmFnZ2FibGU6IHtcbiAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgfSxcbiAgICBzZWxlY3RhYmxlOiB7XG4gICAgICBlbmFibGVkOiB0cnVlLFxuICAgIH0sXG4gICAgbW92YWJsZToge1xuICAgICAgZnJlZTogZmFsc2UsXG4gICAgICBjb2xvcjogXCJib3RoXCIsXG4gICAgICBkZXN0czogbmV3IE1hcCgpLFxuICAgICAgZXZlbnRzOiB7XG4gICAgICAgIGFmdGVyOiBoYW5kbGVVc2VyTW92ZSxcbiAgICAgIH0sXG4gICAgfSxcbiAgICBvcmllbnRhdGlvbjogJG9yaWVudGF0aW9uLFxuICB9O1xuICBsZXQgYm9hcmRTaXplO1xuICBsZXQgY2hlc3Nncm91bmQ7XG4gIGxldCBmZW47XG5cbiAgLy8gR2FtZSBzdHVmZlxuICBsZXQgZ2FtZVJ1bm5pbmcgPSBmYWxzZTtcbiAgbGV0IGhpZ2hTY29yZVdoaXRlID0gMDtcbiAgbGV0IGhpZ2hTY29yZUJsYWNrID0gMDtcbiAgbGV0IG1heFRpbWUgPSAwO1xuICBsZXQgY29ycmVjdEJvbnVzID0gMDtcbiAgbGV0IGluY29ycmVjdFBlbmFsdHkgPSAxMDtcblxuICBmdW5jdGlvbiBoYW5kbGVVc2VyTW92ZShvcmlnLCBkZXN0KSB7XG4gICAgY29uc3Qgc2V0dXAgPSBwYXJzZUZlbihmZW4pLnVud3JhcCgpO1xuICAgIGNvbnN0IGNoZXNzID0gQ2hlc3MuZnJvbVNldHVwKHNldHVwKS51bndyYXAoKTtcblxuICAgIGNvbnN0IG9yaWdTcXVhcmUgPSBwYXJzZVNxdWFyZShvcmlnKTtcbiAgICBjb25zdCBkZXN0U3F1YXJlID0gcGFyc2VTcXVhcmUoZGVzdCk7XG5cbiAgICBjb25zdCBtb3ZlID0geyBmcm9tOiBvcmlnU3F1YXJlLCB0bzogZGVzdFNxdWFyZSB9O1xuXG4gICAgY29uc3Qgc2FuID0gbWFrZVNhbihjaGVzcywgbW92ZSk7XG4gICAgaGFuZGxlQW5zd2VyKHNhbiwgbmV4dE1vdmUpO1xuICB9XG5cbiAgZnVuY3Rpb24gbmV3UG9zaXRpb24oKSB7XG4gICAgY29uc3QgZ2FtZSA9IGdldFJhbmRvbUdhbWUoKTtcbiAgICBjb25zdCBwZ25HYW1lID0gcGFyc2VQZ24oZ2FtZS5wZ24pWzBdO1xuICAgIGNvbnN0IHRvdGFsUGxpZXMgPSBbLi4ucGduR2FtZS5tb3Zlcy5tYWlubGluZSgpXS5sZW5ndGg7XG5cbiAgICBjb25zdCByYW5kb20gPSBVdGlsLmdldFJhbmRvbUludEJldHdlZW4oMSwgdG90YWxQbGllcyAtIDEpO1xuICAgIGNvbnN0IHBvc2l0aW9uUmVzdWx0ID0gc3RhcnRpbmdQb3NpdGlvbihwZ25HYW1lLmhlYWRlcnMpO1xuICAgIGNvbnN0IHBvc2l0aW9uID0gcG9zaXRpb25SZXN1bHQudW53cmFwKCk7XG4gICAgY29uc3QgYWxsTm9kZXMgPSBbLi4ucGduR2FtZS5tb3Zlcy5tYWlubGluZU5vZGVzKCldO1xuICAgIGNvbnN0IHByZXZpb3VzTW92ZSA9IG5leHRNb3ZlO1xuICAgIGNvbnN0IGNhbmRpZGF0ZU1vdmUgPSBhbGxOb2Rlc1tyYW5kb21dLmRhdGEuc2FuO1xuXG4gICAgaWYgKFxuICAgICAgY2FuZGlkYXRlTW92ZS5pbmNsdWRlcyhcIj1cIikgfHwgLy8gbm8gcHJvbW90aW9uc1xuICAgICAgY2FuZGlkYXRlTW92ZSA9PT0gcHJldmlvdXNNb3ZlIHx8IC8vIGRvIG5vdCByZXBlYXQgbW92ZXNcbiAgICAgIHdob3NlTW92ZUlzSXQocmFuZG9tKSAhPT0gJG9yaWVudGF0aW9uIHx8IC8vIG9ubHkgc2hvdyBtb3ZlcyBmb3IgY3VycmVudCB2aWV3XG4gICAgICBbXCJPLU9cIiwgXCJPLU8tT1wiXS5pbmNsdWRlcyhjYW5kaWRhdGVNb3ZlKSAvLyBubyBjYXN0bGVzXG4gICAgKSB7XG4gICAgICByZXR1cm4gbmV3UG9zaXRpb24oKTtcbiAgICB9XG5cbiAgICBuZXh0TW92ZSA9IGNhbmRpZGF0ZU1vdmU7XG5cbiAgICBjb2xvclRvTW92ZSA9IHdob3NlTW92ZUlzSXQocmFuZG9tKTtcblxuICAgIGxldCBpO1xuICAgIGxldCBtb3ZlO1xuXG4gICAgZm9yIChpID0gMDsgaSA8IHJhbmRvbTsgaSsrKSB7XG4gICAgICBjb25zdCBub2RlID0gYWxsTm9kZXNbaV07XG4gICAgICBtb3ZlID0gcGFyc2VTYW4ocG9zaXRpb24sIG5vZGUuZGF0YS5zYW4pO1xuICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICB9XG5cbiAgICAvLyBCb3VuZCB0byBDaGVzc2JvYXJkLCBhdXRvbWF0aWNhbGx5IHVwZGF0ZXNcbiAgICBmZW4gPSBtYWtlRmVuKHBvc2l0aW9uLnRvU2V0dXAoKSk7XG4gICAgY29uc3QgbGVnYWxNb3ZlcyA9IGdldExlZ2FsTW92ZXNGb3JGZW4oZmVuKTtcblxuICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICBtb3ZhYmxlOiB7XG4gICAgICAgIGRlc3RzOiBsZWdhbE1vdmVzLFxuICAgICAgfSxcbiAgICB9KTtcbiAgICBwb3NpdGlvblNob3duQXQgPSBuZXcgRGF0ZSgpLmdldFRpbWUoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIHdob3NlTW92ZUlzSXQocGx5KSB7XG4gICAgcmV0dXJuIHBseSAlIDIgPT09IDAgPyBcIndoaXRlXCIgOiBcImJsYWNrXCI7XG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVBbnN3ZXIodXNlclNhbiwgYW5zd2VyU2FuKSB7XG4gICAgY29uc3QgaXNDb3JyZWN0ID0gdXNlclNhbiA9PT0gYW5zd2VyU2FuO1xuICAgIGNvcnJlY3RCb251cyA9IGNvcnJlY3RCb251cyAqIDAuOTg7XG4gICAgbGV0IHRpbWVUb0Fuc3dlciA9IG5ldyBEYXRlKCkuZ2V0VGltZSgpIC0gcG9zaXRpb25TaG93bkF0O1xuICAgIGFuc3dlcnMgPSBbXG4gICAgICAuLi5hbnN3ZXJzLFxuICAgICAgbmV3IEFuc3dlcih1c2VyU2FuLCBhbnN3ZXJTYW4sIHRpbWVUb0Fuc3dlciwgJG9yaWVudGF0aW9uKSxcbiAgICBdO1xuICAgIGlmIChpc0NvcnJlY3QpIHtcbiAgICAgIG1heFRpbWUgKz0gY29ycmVjdEJvbnVzO1xuICAgICAgY29ycmVjdENvdW50Kys7XG4gICAgfSBlbHNlIHtcbiAgICAgIG1heFRpbWUgLT0gaW5jb3JyZWN0UGVuYWx0eTtcbiAgICAgIGluY29ycmVjdENvdW50Kys7XG4gICAgfVxuICAgIG5ld1Bvc2l0aW9uKCk7XG4gIH1cblxuICBmdW5jdGlvbiBzdGFydEdhbWUoKSB7XG4gICAgYW5zd2VycyA9IFtdO1xuICAgIGdhbWVSdW5uaW5nID0gdHJ1ZTtcbiAgICBtYXhUaW1lID0gMzA7XG4gICAgY29ycmVjdENvdW50ID0gMDtcbiAgICBpbmNvcnJlY3RDb3VudCA9IDA7XG4gICAgY29ycmVjdEJvbnVzID0gMi43NTtcbiAgICBuZXdQb3NpdGlvbigpO1xuICB9XG5cbiAgZnVuY3Rpb24gZW5kR2FtZSgpIHtcbiAgICBnYW1lUnVubmluZyA9IGZhbHNlO1xuICAgIGlmICgkb3JpZW50YXRpb24gPT09IFwid2hpdGVcIikge1xuICAgICAgaWYgKGNvcnJlY3RDb3VudCA+IGhpZ2hTY29yZVdoaXRlKSB7XG4gICAgICAgIGhpZ2hTY29yZVdoaXRlID0gY29ycmVjdENvdW50O1xuICAgICAgfVxuICAgIH0gZWxzZSB7XG4gICAgICBpZiAoY29ycmVjdENvdW50ID4gaGlnaFNjb3JlQmxhY2spIHtcbiAgICAgICAgaGlnaFNjb3JlQmxhY2sgPSBjb3JyZWN0Q291bnQ7XG4gICAgICB9XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gZ2V0TGVnYWxNb3Zlc0ZvckZlbihmZW4pIHtcbiAgICBjb25zdCBzZXR1cCA9IHBhcnNlRmVuKGZlbikudW53cmFwKCk7XG4gICAgY29uc3QgY2hlc3MgPSBDaGVzcy5mcm9tU2V0dXAoc2V0dXApLnVud3JhcCgpO1xuICAgIGNvbnN0IGRlc3RzTWFwID0gY2hlc3MuYWxsRGVzdHMoKTtcblxuICAgIGNvbnN0IGRlc3RzTWFwSW5TYW4gPSBuZXcgTWFwKCk7XG5cbiAgICBmb3IgKGNvbnN0IFtrZXksIHZhbHVlXSBvZiBkZXN0c01hcC5lbnRyaWVzKCkpIHtcbiAgICAgIGNvbnN0IGRlc3RzQXJyYXkgPSBBcnJheS5mcm9tKHZhbHVlKS5tYXAoKHNxKSA9PiBtYWtlU3F1YXJlKHNxKSk7XG4gICAgICBkZXN0c01hcEluU2FuLnNldChtYWtlU3F1YXJlKGtleSksIGRlc3RzQXJyYXkpO1xuICAgIH1cblxuICAgIHJldHVybiBkZXN0c01hcEluU2FuO1xuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfSk7XG48L3NjcmlwdD5cblxuPGRpdiBjbGFzcz1cImNvbHVtbnMgaXMtY2VudGVyZWRcIj5cbiAgPGRpdiBjbGFzcz1cImNvbHVtbiBpcy02LWRlc2t0b3BcIj5cbiAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgIDxkaXZcbiAgICAgICAgY2xhc3M9XCJibG9jayBpcy1mbGV4IGlzLWp1c3RpZnktY29udGVudC1jZW50ZXJcIlxuICAgICAgICBzdHlsZT1cIndpZHRoOiB7Ym9hcmRTaXplfXB4OyBwb3NpdGlvbjogcmVsYXRpdmU7XCJcbiAgICAgID5cbiAgICAgICAgPHNwYW4gY2xhc3M9XCJ0YWcgaXMtc2l6ZS0zIGlzLXtjb2xvclRvTW92ZX1cIj5cbiAgICAgICAgICB7bmV4dE1vdmV9XG4gICAgICAgIDwvc3Bhbj5cbiAgICAgIDwvZGl2PlxuICAgICAgPENoZXNzYm9hcmRcbiAgICAgICAge2NoZXNzZ3JvdW5kQ29uZmlnfVxuICAgICAgICBiaW5kOmZlblxuICAgICAgICBiaW5kOmNoZXNzZ3JvdW5kXG4gICAgICAgIG9yaWVudGF0aW9uPXskb3JpZW50YXRpb259XG4gICAgICAgIGJpbmQ6c2l6ZT17Ym9hcmRTaXplfVxuICAgICAgLz5cbiAgICA8L2Rpdj5cbiAgICB7I2lmIGdhbWVSdW5uaW5nfVxuICAgICAgPFByb2dyZXNzVGltZXIgbWF4PXttYXhUaW1lfSB3aWR0aD17Ym9hcmRTaXplfSBvbjpjb21wbGV0ZT17ZW5kR2FtZX1cbiAgICAgID48L1Byb2dyZXNzVGltZXI+XG4gICAgey9pZn1cbiAgPC9kaXY+XG4gIDxkaXYgY2xhc3M9XCJjb2x1bW4gaXMtMi1kZXNrdG9wXCI+XG4gICAgeyNpZiAhZ2FtZVJ1bm5pbmd9XG4gICAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgICAgPGJ1dHRvblxuICAgICAgICAgIGNsYXNzPVwiYnV0dG9uIGlzLXNtYWxsIGNoYW5nZS1vcmllbnRhdGlvbi1idXR0b25cIlxuICAgICAgICAgIG9uOmNsaWNrPXsoKSA9PiB7XG4gICAgICAgICAgICBvcmllbnRhdGlvbi5zZXQoVXRpbC5vdGhlckNvbG9yKCRvcmllbnRhdGlvbikpO1xuICAgICAgICAgICAgbmV3UG9zaXRpb24oKTtcbiAgICAgICAgICB9fVxuICAgICAgICAgID5QbGF5IHtVdGlsLm90aGVyQ29sb3IoJG9yaWVudGF0aW9uKX1cbiAgICAgICAgPC9idXR0b24+XG4gICAgICA8L2Rpdj5cbiAgICB7L2lmfVxuICAgIHsjaWYgIWdhbWVSdW5uaW5nfVxuICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtc21hbGxcIiBvbjpjbGljaz17c3RhcnRHYW1lfT5TdGFydCBHYW1lPC9idXR0b24+XG4gICAgICA8L2Rpdj5cbiAgICB7L2lmfVxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgPENvdW50ZXIgbnVtYmVyPXtjb3JyZWN0Q291bnR9IHRpdGxlPVwiQ29ycmVjdFwiIC8+XG4gICAgICA8Q291bnRlciBudW1iZXI9e2luY29ycmVjdENvdW50fSB0aXRsZT1cIkluY29ycmVjdFwiIC8+XG4gICAgICA8Q291bnRlciBudW1iZXI9e2hpZ2hTY29yZVdoaXRlfSB0aXRsZT1cIkhpZ2ggU2NvcmUgKHdoaXRlKVwiIC8+XG4gICAgICA8Q291bnRlciBudW1iZXI9e2hpZ2hTY29yZUJsYWNrfSB0aXRsZT1cIkhpZ2ggU2NvcmUgKGJsYWNrKVwiIC8+XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLmNoYW5nZS1vcmllbnRhdGlvbi1idXR0b24ge1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQThQRSx5Q0FBMkIsQ0FDM0IifQ== */");
+}
+
+// (222:4) {#if gameRunning}
+function create_if_block_2(ctx) {
 	let progresstimer;
 	let current;
 
@@ -7240,7 +7327,7 @@ function create_if_block_3(ctx) {
 			$$inline: true
 		});
 
-	progresstimer.$on("complete", /*endGame*/ ctx[18]);
+	progresstimer.$on("complete", /*endGame*/ ctx[16]);
 
 	const block = {
 		c: function create() {
@@ -7252,8 +7339,8 @@ function create_if_block_3(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const progresstimer_changes = {};
-			if (dirty[0] & /*maxTime*/ 1024) progresstimer_changes.max = /*maxTime*/ ctx[10];
-			if (dirty[0] & /*boardSize*/ 16) progresstimer_changes.width = /*boardSize*/ ctx[4];
+			if (dirty & /*maxTime*/ 1024) progresstimer_changes.max = /*maxTime*/ ctx[10];
+			if (dirty & /*boardSize*/ 16) progresstimer_changes.width = /*boardSize*/ ctx[4];
 			progresstimer.$set(progresstimer_changes);
 		},
 		i: function intro(local) {
@@ -7272,57 +7359,57 @@ function create_if_block_3(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_3.name,
+		id: create_if_block_2.name,
 		type: "if",
-		source: "(254:4) {#if gameRunning}",
+		source: "(222:4) {#if gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (260:4) {#if !gameRunning}
+// (228:4) {#if !gameRunning}
 function create_if_block_1(ctx) {
 	let div;
-
-	function select_block_type(ctx, dirty) {
-		if (/*$orientation*/ ctx[14] === "white") return create_if_block_2;
-		return create_else_block;
-	}
-
-	let current_block_type = select_block_type(ctx);
-	let if_block = current_block_type(ctx);
+	let button;
+	let t0;
+	let t1_value = Util.otherColor(/*$orientation*/ ctx[11]) + "";
+	let t1;
+	let mounted;
+	let dispose;
 
 	const block = {
 		c: function create() {
 			div = element("div");
-			if_block.c();
+			button = element("button");
+			t0 = text("Play ");
+			t1 = text(t1_value);
+			attr_dev(button, "class", "button is-small change-orientation-button svelte-1hogyil");
+			add_location(button, file, 229, 8, 5775);
 			attr_dev(div, "class", "block");
-			add_location(div, file, 260, 6, 6570);
+			add_location(div, file, 228, 6, 5747);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
-			if_block.m(div, null);
+			append_dev(div, button);
+			append_dev(button, t0);
+			append_dev(button, t1);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[20], false);
+				mounted = true;
+			}
 		},
 		p: function update(ctx, dirty) {
-			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
-				if_block.p(ctx, dirty);
-			} else {
-				if_block.d(1);
-				if_block = current_block_type(ctx);
-
-				if (if_block) {
-					if_block.c();
-					if_block.m(div, null);
-				}
-			}
+			if (dirty & /*$orientation*/ 2048 && t1_value !== (t1_value = Util.otherColor(/*$orientation*/ ctx[11]) + "")) set_data_dev(t1, t1_value);
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
 				detach_dev(div);
 			}
 
-			if_block.d();
+			mounted = false;
+			dispose();
 		}
 	};
 
@@ -7330,100 +7417,14 @@ function create_if_block_1(ctx) {
 		block,
 		id: create_if_block_1.name,
 		type: "if",
-		source: "(260:4) {#if !gameRunning}",
+		source: "(228:4) {#if !gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (270:8) {:else}
-function create_else_block(ctx) {
-	let button;
-	let mounted;
-	let dispose;
-
-	const block = {
-		c: function create() {
-			button = element("button");
-			button.textContent = "View as white";
-			attr_dev(button, "class", "button is-small");
-			add_location(button, file, 270, 10, 6841);
-		},
-		m: function mount(target, anchor) {
-			insert_dev(target, button, anchor);
-
-			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler_1*/ ctx[23], false);
-				mounted = true;
-			}
-		},
-		p: noop,
-		d: function destroy(detaching) {
-			if (detaching) {
-				detach_dev(button);
-			}
-
-			mounted = false;
-			dispose();
-		}
-	};
-
-	dispatch_dev("SvelteRegisterBlock", {
-		block,
-		id: create_else_block.name,
-		type: "else",
-		source: "(270:8) {:else}",
-		ctx
-	});
-
-	return block;
-}
-
-// (262:8) {#if $orientation === "white"}
-function create_if_block_2(ctx) {
-	let button;
-	let mounted;
-	let dispose;
-
-	const block = {
-		c: function create() {
-			button = element("button");
-			button.textContent = "View as black";
-			attr_dev(button, "class", "button is-small");
-			add_location(button, file, 262, 10, 6639);
-		},
-		m: function mount(target, anchor) {
-			insert_dev(target, button, anchor);
-
-			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler*/ ctx[22], false);
-				mounted = true;
-			}
-		},
-		p: noop,
-		d: function destroy(detaching) {
-			if (detaching) {
-				detach_dev(button);
-			}
-
-			mounted = false;
-			dispose();
-		}
-	};
-
-	dispatch_dev("SvelteRegisterBlock", {
-		block,
-		id: create_if_block_2.name,
-		type: "if",
-		source: "(262:8) {#if $orientation === \\\"white\\\"}",
-		ctx
-	});
-
-	return block;
-}
-
-// (281:4) {#if !gameRunning}
+// (240:4) {#if !gameRunning}
 function create_if_block(ctx) {
 	let div;
 	let button;
@@ -7436,16 +7437,16 @@ function create_if_block(ctx) {
 			button = element("button");
 			button.textContent = "Start Game";
 			attr_dev(button, "class", "button is-small");
-			add_location(button, file, 282, 8, 7111);
+			add_location(button, file, 241, 8, 6117);
 			attr_dev(div, "class", "block");
-			add_location(div, file, 281, 6, 7083);
+			add_location(div, file, 240, 6, 6089);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
 			append_dev(div, button);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*startGame*/ ctx[17], false);
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[15], false);
 				mounted = true;
 			}
 		},
@@ -7464,7 +7465,7 @@ function create_if_block(ctx) {
 		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(281:4) {#if !gameRunning}",
+		source: "(240:4) {#if !gameRunning}",
 		ctx
 	});
 
@@ -7480,50 +7481,40 @@ function create_fragment(ctx) {
 	let t0;
 	let span_class_value;
 	let t1;
-	let t2;
 	let chessboard;
 	let updating_fen;
 	let updating_chessground;
 	let updating_size;
+	let t2;
 	let t3;
-	let t4;
 	let div4;
+	let t4;
 	let t5;
-	let t6;
 	let div3;
-	let p0;
+	let counter0;
+	let t6;
+	let counter1;
 	let t7;
+	let counter2;
 	let t8;
-	let t9;
-	let p1;
-	let t10;
-	let t11;
-	let t12;
-	let p2;
-	let t13;
-	let t14;
-	let t15;
-	let p3;
-	let t16;
-	let t17;
+	let counter3;
 	let current;
-	let if_block0 = /*showFlashMessage*/ ctx[11] && create_if_block_4(ctx);
 
 	function chessboard_fen_binding(value) {
-		/*chessboard_fen_binding*/ ctx[19](value);
+		/*chessboard_fen_binding*/ ctx[17](value);
 	}
 
 	function chessboard_chessground_binding(value) {
-		/*chessboard_chessground_binding*/ ctx[20](value);
+		/*chessboard_chessground_binding*/ ctx[18](value);
 	}
 
 	function chessboard_size_binding(value) {
-		/*chessboard_size_binding*/ ctx[21](value);
+		/*chessboard_size_binding*/ ctx[19](value);
 	}
 
 	let chessboard_props = {
-		chessgroundConfig: /*chessgroundConfig*/ ctx[16],
-		orientation: /*$orientation*/ ctx[14]
+		chessgroundConfig: /*chessgroundConfig*/ ctx[13],
+		orientation: /*$orientation*/ ctx[11]
 	};
 
 	if (/*fen*/ ctx[6] !== void 0) {
@@ -7542,9 +7533,41 @@ function create_fragment(ctx) {
 	binding_callbacks.push(() => bind(chessboard, 'fen', chessboard_fen_binding));
 	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
 	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
-	let if_block1 = /*gameRunning*/ ctx[7] && create_if_block_3(ctx);
-	let if_block2 = !/*gameRunning*/ ctx[7] && create_if_block_1(ctx);
-	let if_block3 = !/*gameRunning*/ ctx[7] && create_if_block(ctx);
+	let if_block0 = /*gameRunning*/ ctx[7] && create_if_block_2(ctx);
+	let if_block1 = !/*gameRunning*/ ctx[7] && create_if_block_1(ctx);
+	let if_block2 = !/*gameRunning*/ ctx[7] && create_if_block(ctx);
+
+	counter0 = new Counter({
+			props: {
+				number: /*correctCount*/ ctx[0],
+				title: "Correct"
+			},
+			$$inline: true
+		});
+
+	counter1 = new Counter({
+			props: {
+				number: /*incorrectCount*/ ctx[1],
+				title: "Incorrect"
+			},
+			$$inline: true
+		});
+
+	counter2 = new Counter({
+			props: {
+				number: /*highScoreWhite*/ ctx[8],
+				title: "High Score (white)"
+			},
+			$$inline: true
+		});
+
+	counter3 = new Counter({
+			props: {
+				number: /*highScoreBlack*/ ctx[9],
+				title: "High Score (black)"
+			},
+			$$inline: true
+		});
 
 	const block = {
 		c: function create() {
@@ -7555,53 +7578,39 @@ function create_fragment(ctx) {
 			span = element("span");
 			t0 = text(/*nextMove*/ ctx[2]);
 			t1 = space();
-			if (if_block0) if_block0.c();
-			t2 = space();
 			create_component(chessboard.$$.fragment);
+			t2 = space();
+			if (if_block0) if_block0.c();
 			t3 = space();
+			div4 = element("div");
 			if (if_block1) if_block1.c();
 			t4 = space();
-			div4 = element("div");
 			if (if_block2) if_block2.c();
 			t5 = space();
-			if (if_block3) if_block3.c();
-			t6 = space();
 			div3 = element("div");
-			p0 = element("p");
-			t7 = text("Correct: ");
-			t8 = text(/*correctCount*/ ctx[0]);
-			t9 = space();
-			p1 = element("p");
-			t10 = text("Incorrect: ");
-			t11 = text(/*incorrectCount*/ ctx[1]);
-			t12 = space();
-			p2 = element("p");
-			t13 = text("High Score (white): ");
-			t14 = text(/*highScoreWhite*/ ctx[8]);
-			t15 = space();
-			p3 = element("p");
-			t16 = text("High Score (black): ");
-			t17 = text(/*highScoreBlack*/ ctx[9]);
-			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[3]);
-			add_location(span, file, 232, 8, 5852);
+			create_component(counter0.$$.fragment);
+			t6 = space();
+			create_component(counter1.$$.fragment);
+			t7 = space();
+			create_component(counter2.$$.fragment);
+			t8 = space();
+			create_component(counter3.$$.fragment);
+			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[3] + " svelte-1hogyil");
+			add_location(span, file, 209, 8, 5273);
 			attr_dev(div0, "class", "block is-flex is-justify-content-center");
 			set_style(div0, "width", /*boardSize*/ ctx[4] + "px");
 			set_style(div0, "position", "relative");
-			add_location(div0, file, 228, 6, 5717);
+			add_location(div0, file, 205, 6, 5138);
 			attr_dev(div1, "class", "block");
-			add_location(div1, file, 227, 4, 5691);
+			add_location(div1, file, 204, 4, 5112);
 			attr_dev(div2, "class", "column is-6-desktop");
-			add_location(div2, file, 226, 2, 5653);
-			add_location(p0, file, 286, 6, 7237);
-			add_location(p1, file, 287, 6, 7274);
-			add_location(p2, file, 288, 6, 7315);
-			add_location(p3, file, 289, 6, 7365);
+			add_location(div2, file, 203, 2, 5074);
 			attr_dev(div3, "class", "block");
-			add_location(div3, file, 285, 4, 7211);
+			add_location(div3, file, 244, 4, 6217);
 			attr_dev(div4, "class", "column is-2-desktop");
-			add_location(div4, file, 258, 2, 6507);
+			add_location(div4, file, 226, 2, 5684);
 			attr_dev(div5, "class", "columns is-centered");
-			add_location(div5, file, 225, 0, 5617);
+			add_location(div5, file, 202, 0, 5038);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7613,55 +7622,72 @@ function create_fragment(ctx) {
 			append_dev(div1, div0);
 			append_dev(div0, span);
 			append_dev(span, t0);
-			append_dev(div0, t1);
-			if (if_block0) if_block0.m(div0, null);
-			append_dev(div1, t2);
+			append_dev(div1, t1);
 			mount_component(chessboard, div1, null);
-			append_dev(div2, t3);
-			if (if_block1) if_block1.m(div2, null);
-			append_dev(div5, t4);
+			append_dev(div2, t2);
+			if (if_block0) if_block0.m(div2, null);
+			append_dev(div5, t3);
 			append_dev(div5, div4);
+			if (if_block1) if_block1.m(div4, null);
+			append_dev(div4, t4);
 			if (if_block2) if_block2.m(div4, null);
 			append_dev(div4, t5);
-			if (if_block3) if_block3.m(div4, null);
-			append_dev(div4, t6);
 			append_dev(div4, div3);
-			append_dev(div3, p0);
-			append_dev(p0, t7);
-			append_dev(p0, t8);
-			append_dev(div3, t9);
-			append_dev(div3, p1);
-			append_dev(p1, t10);
-			append_dev(p1, t11);
-			append_dev(div3, t12);
-			append_dev(div3, p2);
-			append_dev(p2, t13);
-			append_dev(p2, t14);
-			append_dev(div3, t15);
-			append_dev(div3, p3);
-			append_dev(p3, t16);
-			append_dev(p3, t17);
+			mount_component(counter0, div3, null);
+			append_dev(div3, t6);
+			mount_component(counter1, div3, null);
+			append_dev(div3, t7);
+			mount_component(counter2, div3, null);
+			append_dev(div3, t8);
+			mount_component(counter3, div3, null);
 			current = true;
 		},
-		p: function update(ctx, dirty) {
-			if (!current || dirty[0] & /*nextMove*/ 4) set_data_dev(t0, /*nextMove*/ ctx[2]);
+		p: function update(ctx, [dirty]) {
+			if (!current || dirty & /*nextMove*/ 4) set_data_dev(t0, /*nextMove*/ ctx[2]);
 
-			if (!current || dirty[0] & /*colorToMove*/ 8 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[3])) {
+			if (!current || dirty & /*colorToMove*/ 8 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[3] + " svelte-1hogyil")) {
 				attr_dev(span, "class", span_class_value);
 			}
 
-			if (/*showFlashMessage*/ ctx[11]) {
+			if (!current || dirty & /*boardSize*/ 16) {
+				set_style(div0, "width", /*boardSize*/ ctx[4] + "px");
+			}
+
+			const chessboard_changes = {};
+			if (dirty & /*$orientation*/ 2048) chessboard_changes.orientation = /*$orientation*/ ctx[11];
+
+			if (!updating_fen && dirty & /*fen*/ 64) {
+				updating_fen = true;
+				chessboard_changes.fen = /*fen*/ ctx[6];
+				add_flush_callback(() => updating_fen = false);
+			}
+
+			if (!updating_chessground && dirty & /*chessground*/ 32) {
+				updating_chessground = true;
+				chessboard_changes.chessground = /*chessground*/ ctx[5];
+				add_flush_callback(() => updating_chessground = false);
+			}
+
+			if (!updating_size && dirty & /*boardSize*/ 16) {
+				updating_size = true;
+				chessboard_changes.size = /*boardSize*/ ctx[4];
+				add_flush_callback(() => updating_size = false);
+			}
+
+			chessboard.$set(chessboard_changes);
+
+			if (/*gameRunning*/ ctx[7]) {
 				if (if_block0) {
 					if_block0.p(ctx, dirty);
 
-					if (dirty[0] & /*showFlashMessage*/ 2048) {
+					if (dirty & /*gameRunning*/ 128) {
 						transition_in(if_block0, 1);
 					}
 				} else {
-					if_block0 = create_if_block_4(ctx);
+					if_block0 = create_if_block_2(ctx);
 					if_block0.c();
 					transition_in(if_block0, 1);
-					if_block0.m(div0, null);
+					if_block0.m(div2, null);
 				}
 			} else if (if_block0) {
 				group_outros();
@@ -7673,61 +7699,24 @@ function create_fragment(ctx) {
 				check_outros();
 			}
 
-			if (!current || dirty[0] & /*boardSize*/ 16) {
-				set_style(div0, "width", /*boardSize*/ ctx[4] + "px");
-			}
-
-			const chessboard_changes = {};
-			if (dirty[0] & /*$orientation*/ 16384) chessboard_changes.orientation = /*$orientation*/ ctx[14];
-
-			if (!updating_fen && dirty[0] & /*fen*/ 64) {
-				updating_fen = true;
-				chessboard_changes.fen = /*fen*/ ctx[6];
-				add_flush_callback(() => updating_fen = false);
-			}
-
-			if (!updating_chessground && dirty[0] & /*chessground*/ 32) {
-				updating_chessground = true;
-				chessboard_changes.chessground = /*chessground*/ ctx[5];
-				add_flush_callback(() => updating_chessground = false);
-			}
-
-			if (!updating_size && dirty[0] & /*boardSize*/ 16) {
-				updating_size = true;
-				chessboard_changes.size = /*boardSize*/ ctx[4];
-				add_flush_callback(() => updating_size = false);
-			}
-
-			chessboard.$set(chessboard_changes);
-
-			if (/*gameRunning*/ ctx[7]) {
+			if (!/*gameRunning*/ ctx[7]) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
-
-					if (dirty[0] & /*gameRunning*/ 128) {
-						transition_in(if_block1, 1);
-					}
 				} else {
-					if_block1 = create_if_block_3(ctx);
+					if_block1 = create_if_block_1(ctx);
 					if_block1.c();
-					transition_in(if_block1, 1);
-					if_block1.m(div2, null);
+					if_block1.m(div4, t4);
 				}
 			} else if (if_block1) {
-				group_outros();
-
-				transition_out(if_block1, 1, 1, () => {
-					if_block1 = null;
-				});
-
-				check_outros();
+				if_block1.d(1);
+				if_block1 = null;
 			}
 
 			if (!/*gameRunning*/ ctx[7]) {
 				if (if_block2) {
 					if_block2.p(ctx, dirty);
 				} else {
-					if_block2 = create_if_block_1(ctx);
+					if_block2 = create_if_block(ctx);
 					if_block2.c();
 					if_block2.m(div4, t5);
 				}
@@ -7736,35 +7725,36 @@ function create_fragment(ctx) {
 				if_block2 = null;
 			}
 
-			if (!/*gameRunning*/ ctx[7]) {
-				if (if_block3) {
-					if_block3.p(ctx, dirty);
-				} else {
-					if_block3 = create_if_block(ctx);
-					if_block3.c();
-					if_block3.m(div4, t6);
-				}
-			} else if (if_block3) {
-				if_block3.d(1);
-				if_block3 = null;
-			}
-
-			if (!current || dirty[0] & /*correctCount*/ 1) set_data_dev(t8, /*correctCount*/ ctx[0]);
-			if (!current || dirty[0] & /*incorrectCount*/ 2) set_data_dev(t11, /*incorrectCount*/ ctx[1]);
-			if (!current || dirty[0] & /*highScoreWhite*/ 256) set_data_dev(t14, /*highScoreWhite*/ ctx[8]);
-			if (!current || dirty[0] & /*highScoreBlack*/ 512) set_data_dev(t17, /*highScoreBlack*/ ctx[9]);
+			const counter0_changes = {};
+			if (dirty & /*correctCount*/ 1) counter0_changes.number = /*correctCount*/ ctx[0];
+			counter0.$set(counter0_changes);
+			const counter1_changes = {};
+			if (dirty & /*incorrectCount*/ 2) counter1_changes.number = /*incorrectCount*/ ctx[1];
+			counter1.$set(counter1_changes);
+			const counter2_changes = {};
+			if (dirty & /*highScoreWhite*/ 256) counter2_changes.number = /*highScoreWhite*/ ctx[8];
+			counter2.$set(counter2_changes);
+			const counter3_changes = {};
+			if (dirty & /*highScoreBlack*/ 512) counter3_changes.number = /*highScoreBlack*/ ctx[9];
+			counter3.$set(counter3_changes);
 		},
 		i: function intro(local) {
 			if (current) return;
-			transition_in(if_block0);
 			transition_in(chessboard.$$.fragment, local);
-			transition_in(if_block1);
+			transition_in(if_block0);
+			transition_in(counter0.$$.fragment, local);
+			transition_in(counter1.$$.fragment, local);
+			transition_in(counter2.$$.fragment, local);
+			transition_in(counter3.$$.fragment, local);
 			current = true;
 		},
 		o: function outro(local) {
-			transition_out(if_block0);
 			transition_out(chessboard.$$.fragment, local);
-			transition_out(if_block1);
+			transition_out(if_block0);
+			transition_out(counter0.$$.fragment, local);
+			transition_out(counter1.$$.fragment, local);
+			transition_out(counter2.$$.fragment, local);
+			transition_out(counter3.$$.fragment, local);
 			current = false;
 		},
 		d: function destroy(detaching) {
@@ -7772,11 +7762,14 @@ function create_fragment(ctx) {
 				detach_dev(div5);
 			}
 
-			if (if_block0) if_block0.d();
 			destroy_component(chessboard);
+			if (if_block0) if_block0.d();
 			if (if_block1) if_block1.d();
 			if (if_block2) if_block2.d();
-			if (if_block3) if_block3.d();
+			destroy_component(counter0);
+			destroy_component(counter1);
+			destroy_component(counter2);
+			destroy_component(counter3);
 		}
 	};
 
@@ -7801,7 +7794,7 @@ function instance($$self, $$props, $$invalidate) {
 	validate_slots('NotationTrainer', slots, []);
 	const orientation = persisted("notation.orientation", "white");
 	validate_store(orientation, 'orientation');
-	component_subscribe($$self, orientation, value => $$invalidate(14, $orientation = value));
+	component_subscribe($$self, orientation, value => $$invalidate(11, $orientation = value));
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let nextMove;
@@ -7863,31 +7856,6 @@ function instance($$self, $$props, $$invalidate) {
 		handleAnswer(san, nextMove);
 	}
 
-	let flashMessageTimeout = null;
-	let showFlashMessage = false;
-	let flashMessage;
-	let flashType;
-
-	function flash(message, type, duration = 2000) {
-		clearTimeout(flashMessageTimeout);
-
-		// Make sure we clear away any existing message
-		$$invalidate(11, showFlashMessage = false);
-
-		$$invalidate(12, flashMessage = message);
-		$$invalidate(13, flashType = type);
-		$$invalidate(11, showFlashMessage = true);
-
-		flashMessageTimeout = setTimeout(
-			() => {
-				$$invalidate(12, flashMessage = null);
-				$$invalidate(13, flashType = null);
-				$$invalidate(11, showFlashMessage = false);
-			},
-			duration
-		);
-	}
-
 	function newPosition() {
 		const game = getRandomGame();
 		const pgnGame = parsePgn(game.pgn)[0];
@@ -7933,11 +7901,9 @@ function instance($$self, $$props, $$invalidate) {
 
 		if (isCorrect) {
 			$$invalidate(10, maxTime += correctBonus);
-			flash("Correct!", "success");
 			$$invalidate(0, correctCount++, correctCount);
 		} else {
 			$$invalidate(10, maxTime -= incorrectPenalty);
-			flash(`Not ${userSan} :(`, "danger");
 			$$invalidate(1, incorrectCount++, incorrectCount);
 		}
 
@@ -8008,16 +7974,12 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	const click_handler = () => {
-		orientation.set("black");
-	};
-
-	const click_handler_1 = () => {
-		orientation.set("white");
+		orientation.set(Util.otherColor($orientation));
+		newPosition();
 	};
 
 	$$self.$capture_state = () => ({
 		onMount,
-		fade,
 		Chessboard,
 		parsePgn,
 		startingPosition,
@@ -8032,6 +7994,7 @@ function instance($$self, $$props, $$invalidate) {
 		persisted,
 		ProgressTimer,
 		Chess,
+		Counter,
 		orientation,
 		correctCount,
 		incorrectCount,
@@ -8051,11 +8014,6 @@ function instance($$self, $$props, $$invalidate) {
 		correctBonus,
 		incorrectPenalty,
 		handleUserMove,
-		flashMessageTimeout,
-		showFlashMessage,
-		flashMessage,
-		flashType,
-		flash,
 		newPosition,
 		whoseMoveIsIt,
 		handleAnswer,
@@ -8072,7 +8030,7 @@ function instance($$self, $$props, $$invalidate) {
 		if ('colorToMove' in $$props) $$invalidate(3, colorToMove = $$props.colorToMove);
 		if ('positionShownAt' in $$props) positionShownAt = $$props.positionShownAt;
 		if ('answers' in $$props) answers = $$props.answers;
-		if ('chessgroundConfig' in $$props) $$invalidate(16, chessgroundConfig = $$props.chessgroundConfig);
+		if ('chessgroundConfig' in $$props) $$invalidate(13, chessgroundConfig = $$props.chessgroundConfig);
 		if ('boardSize' in $$props) $$invalidate(4, boardSize = $$props.boardSize);
 		if ('chessground' in $$props) $$invalidate(5, chessground = $$props.chessground);
 		if ('fen' in $$props) $$invalidate(6, fen = $$props.fen);
@@ -8082,10 +8040,6 @@ function instance($$self, $$props, $$invalidate) {
 		if ('maxTime' in $$props) $$invalidate(10, maxTime = $$props.maxTime);
 		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
 		if ('incorrectPenalty' in $$props) incorrectPenalty = $$props.incorrectPenalty;
-		if ('flashMessageTimeout' in $$props) flashMessageTimeout = $$props.flashMessageTimeout;
-		if ('showFlashMessage' in $$props) $$invalidate(11, showFlashMessage = $$props.showFlashMessage);
-		if ('flashMessage' in $$props) $$invalidate(12, flashMessage = $$props.flashMessage);
-		if ('flashType' in $$props) $$invalidate(13, flashType = $$props.flashType);
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -8104,26 +8058,23 @@ function instance($$self, $$props, $$invalidate) {
 		highScoreWhite,
 		highScoreBlack,
 		maxTime,
-		showFlashMessage,
-		flashMessage,
-		flashType,
 		$orientation,
 		orientation,
 		chessgroundConfig,
+		newPosition,
 		startGame,
 		endGame,
 		chessboard_fen_binding,
 		chessboard_chessground_binding,
 		chessboard_size_binding,
-		click_handler,
-		click_handler_1
+		click_handler
 	];
 }
 
 class NotationTrainer extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance, create_fragment, safe_not_equal, {}, null, [-1, -1]);
+		init(this, options, instance, create_fragment, safe_not_equal, {}, add_css);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,

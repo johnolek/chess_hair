@@ -17,6 +17,13 @@ class Util {
     const index = Util.getRandomIndex(array.length);
     return array[index];
   }
+
+  static otherColor(color) {
+    if (color === "white") {
+      return "black";
+    }
+    return "white";
+  }
 }
 
 export { Util };
