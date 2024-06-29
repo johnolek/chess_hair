@@ -143,13 +143,22 @@
     position = startingPosition(pgn.headers).unwrap();
     const allNodes = [...pgn.moves.mainlineNodes()];
 
-    allNodes.forEach((node) => {
+    for (let i = 0; i < allNodes.length - 1; i++) {
+      const node = allNodes[i];
       const move = parseSan(position, node.data.san);
       position.play(move);
-    });
+    }
+
+    const lastMove = parseSan(position, allNodes[allNodes.length - 1].data.san);
 
     setChessgroundFromPosition();
-    puzzleShownAt = Util.currentMicrotime();
+
+    setTimeout(() => {
+      position.play(lastMove);
+      chessground.move(makeSquare(lastMove.from), makeSquare(lastMove.to));
+      updateLegalMoves();
+      puzzleShownAt = Util.currentMicrotime();
+    }, 300);
   }
 
   function setChessgroundFromPosition() {
