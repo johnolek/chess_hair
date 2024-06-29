@@ -41,6 +41,8 @@
     orientation: orientation,
   };
 
+  const puzzleDataStore = persisted("puzzles.data", {});
+
   function averageOfLastThree(times) {
     if (times.length === 0) {
       return 0;
@@ -156,6 +158,9 @@
     if (currentPuzzleIds.length > 1 && currentPuzzleId === previous) {
       return getNextPuzzle();
     }
+    if ($puzzleDataStore[currentPuzzleId]) {
+      return $puzzleDataStore[currentPuzzleId];
+    }
     const response = await fetch(
       `https://lichess.org/api/puzzle/${currentPuzzleId}`,
     );
@@ -163,7 +168,11 @@
       removePuzzleId(currentPuzzleId);
       return getNextPuzzle();
     }
-    return await response.json();
+    const puzzleData = await response.json();
+    const data = $puzzleDataStore;
+    data[currentPuzzleId] = puzzleData;
+    puzzleDataStore.set(data);
+    return puzzleData;
   }
 
   let moves;
@@ -178,7 +187,8 @@
 
     const next = await getNextPuzzle();
     orientation = Util.whoseMoveIsIt(next.puzzle.initialPly + 1);
-    moves = next.puzzle.solution;
+    // Clone so we don't cache a value that gets shifted later
+    moves = [...next.puzzle.solution];
 
     const pgn = parsePgn(next.game.pgn)[0];
 
@@ -236,7 +246,7 @@
     return destsMapInSan;
   }
 
-  function handleUserMove(orig, dest, meta) {
+  function handleUserMove(orig, dest) {
     const correctMove = moves[0];
     const origSquare = parseSquare(orig);
     const destSquare = parseSquare(dest);
@@ -263,13 +273,12 @@
         position.play(move);
         chessground.move(makeSquare(move.from), makeSquare(move.to));
         updateLegalMoves();
-        showSuccess("Correct!");
       } else {
         return handlePuzzleComplete();
       }
     } else {
       madeMistake = true;
-      showFailure("Not the move!");
+      showFailure("Nope!");
       setTimeout(() => {
         setChessgroundFromPosition();
       }, 200);
@@ -290,6 +299,7 @@
     if (!madeMistake) {
       addSolveTime(currentPuzzleId, timeToSolve);
     }
+    showSuccess("Correct!");
     setActivePuzzleIds();
     setCompletedPuzzles();
   }
@@ -305,7 +315,7 @@
 
   let successMessage = null;
 
-  function showSuccess(message, duration = 2000) {
+  function showSuccess(message, duration = 1500) {
     failureMessage = null;
     successMessage = message;
     setTimeout(() => {
@@ -315,7 +325,7 @@
 
   let failureMessage = null;
 
-  function showFailure(message, duration = 2000) {
+  function showFailure(message, duration = 1000) {
     successMessage = null;
     failureMessage = message;
     setTimeout(() => {
@@ -340,6 +350,18 @@
     <div class="block">
       {#if currentPuzzleIds.length > 0 && currentPuzzleId}
         <Chessboard {chessgroundConfig} {orientation} bind:chessground>
+          <div slot="centered-content">
+            {#if successMessage}
+              <span transition:fade class="tag is-success is-size-4">
+                {successMessage}
+              </span>
+            {/if}
+            {#if failureMessage}
+              <span transition:fade class="tag is-danger is-size-4">
+                {failureMessage}
+              </span>
+            {/if}
+          </div>
           <div slot="below-board">
             {#if puzzleComplete}
               <div class="block is-flex is-justify-content-center">
@@ -351,11 +373,6 @@
                   }}
                   >Next
                 </button>
-                <a
-                  class="button is-link ml-3"
-                  href={`https://lichess.org/training/${currentPuzzleId}`}
-                  target="_blank">View on lichess</a
-                >
               </div>
             {/if}
             {#if !puzzleComplete}
@@ -374,18 +391,16 @@
   </div>
   <div class="column is-2-desktop">
     <div class="box">
-      <div class="block is-flex is-justify-content-center">
-        {#if successMessage}
-          <span in:fade class="tag is-success is-size-4">
-            {successMessage}
-          </span>
-        {/if}
-        {#if failureMessage}
-          <span in:fade class="tag is-danger is-size-4">
-            {failureMessage}
-          </span>
-        {/if}
+      <div class="block">
+        <a
+          class="button is-link ml-3"
+          href={`https://lichess.org/training/${currentPuzzleId}`}
+          target="_blank"
+        >
+          View on lichess
+        </a>
       </div>
+      <div class="block is-flex is-justify-content-center"></div>
     </div>
     <div class="box">
       <div class="block">
@@ -414,8 +429,8 @@
         </form>
       </div>
     </div>
-    <div class="box">
-      {#if sortedPuzzleIds.length >= 1}
+    {#if sortedPuzzleIds.length >= 1}
+      <div class="box">
         <ul>
           {#each sortedPuzzleIds as puzzleId (puzzleId)}
             <li
@@ -433,8 +448,8 @@
             </li>
           {/each}
         </ul>
-      {/if}
-    </div>
+      </div>
+    {/if}
   </div>
 </div>
 
