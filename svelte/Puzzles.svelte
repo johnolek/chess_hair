@@ -181,6 +181,10 @@
   let puzzleComplete = false;
   let nextButton;
 
+  async function skip() {
+    await loadNextPuzzle();
+  }
+
   async function loadNextPuzzle() {
     puzzleComplete = false;
     madeMistake = false;
@@ -380,6 +384,7 @@
                 <span class="tag is-{orientation} is-size-4"
                   >{orientation} to play</span
                 >
+                <button class="button is-primary" on:click={skip}>Skip</button>
               </div>
             {/if}
           </div>
