@@ -183,6 +183,15 @@ function loop(callback) {
 	};
 }
 
+/** @type {typeof globalThis} */
+const globals =
+	typeof window !== 'undefined'
+		? window
+		: typeof globalThis !== 'undefined'
+		? globalThis
+		: // @ts-ignore Node typings have this
+		  global;
+
 /**
  * @param {Node} target
  * @param {Node} node
@@ -288,6 +297,12 @@ function text(data) {
  * @returns {Text} */
 function space() {
 	return text(' ');
+}
+
+/**
+ * @returns {Text} */
+function empty() {
+	return text('');
 }
 
 /**
@@ -423,6 +438,13 @@ function add_iframe_resize_listener(node, fn) {
 }
 
 /**
+ * @returns {void} */
+function toggle_class(element, name, toggle) {
+	// The `!!` is required because an `undefined` flag means flipping the current state.
+	element.classList.toggle(name, !!toggle);
+}
+
+/**
  * @template T
  * @param {string} type
  * @param {T} [detail]
@@ -550,6 +572,102 @@ function clear_rules() {
 		});
 		managed_styles.clear();
 	});
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {import('./private.js').PositionRect} from
+ * @param {import('./private.js').AnimationFn} fn
+ */
+function create_animation(node, from, fn, params) {
+	if (!from) return noop;
+	const to = node.getBoundingClientRect();
+	if (
+		from.left === to.left &&
+		from.right === to.right &&
+		from.top === to.top &&
+		from.bottom === to.bottom
+	)
+		return noop;
+	const {
+		delay = 0,
+		duration = 300,
+		easing = identity,
+		// @ts-ignore todo: should this be separated from destructuring? Or start/end added to public api and documentation?
+		start: start_time = now() + delay,
+		// @ts-ignore todo:
+		end = start_time + duration,
+		tick = noop,
+		css
+	} = fn(node, { from, to }, params);
+	let running = true;
+	let started = false;
+	let name;
+	/** @returns {void} */
+	function start() {
+		if (css) {
+			name = create_rule(node, 0, 1, duration, delay, easing, css);
+		}
+		if (!delay) {
+			started = true;
+		}
+	}
+	/** @returns {void} */
+	function stop() {
+		if (css) delete_rule(node, name);
+		running = false;
+	}
+	loop((now) => {
+		if (!started && now >= start_time) {
+			started = true;
+		}
+		if (started && now >= end) {
+			tick(1, 0);
+			stop();
+		}
+		if (!running) {
+			return false;
+		}
+		if (started) {
+			const p = now - start_time;
+			const t = 0 + 1 * easing(p / duration);
+			tick(t, 1 - t);
+		}
+		return true;
+	});
+	start();
+	tick(0, 1);
+	return stop;
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @returns {void}
+ */
+function fix_position(node) {
+	const style = getComputedStyle(node);
+	if (style.position !== 'absolute' && style.position !== 'fixed') {
+		const { width, height } = style;
+		const a = node.getBoundingClientRect();
+		node.style.position = 'absolute';
+		node.style.width = width;
+		node.style.height = height;
+		add_transform(node, a);
+	}
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {import('./private.js').PositionRect} a
+ * @returns {void}
+ */
+function add_transform(node, a) {
+	const b = node.getBoundingClientRect();
+	if (a.left !== b.left || a.top !== b.top) {
+		const style = getComputedStyle(node);
+		const transform = style.transform === 'none' ? '' : style.transform;
+		node.style.transform = `${transform} translate(${a.left - b.left}px, ${a.top - b.top}px)`;
+	}
 }
 
 let current_component;
@@ -913,6 +1031,134 @@ function create_in_transition(node, fn, params) {
  * @property {Outro} [group]
  */
 
+// general each functions:
+
+function ensure_array_like(array_like_or_iterator) {
+	return array_like_or_iterator?.length !== undefined
+		? array_like_or_iterator
+		: Array.from(array_like_or_iterator);
+}
+
+// keyed each functions:
+
+/** @returns {void} */
+function destroy_block(block, lookup) {
+	block.d(1);
+	lookup.delete(block.key);
+}
+
+/** @returns {void} */
+function fix_and_destroy_block(block, lookup) {
+	block.f();
+	destroy_block(block, lookup);
+}
+
+/** @returns {any[]} */
+function update_keyed_each(
+	old_blocks,
+	dirty,
+	get_key,
+	dynamic,
+	ctx,
+	list,
+	lookup,
+	node,
+	destroy,
+	create_each_block,
+	next,
+	get_context
+) {
+	let o = old_blocks.length;
+	let n = list.length;
+	let i = o;
+	const old_indexes = {};
+	while (i--) old_indexes[old_blocks[i].key] = i;
+	const new_blocks = [];
+	const new_lookup = new Map();
+	const deltas = new Map();
+	const updates = [];
+	i = n;
+	while (i--) {
+		const child_ctx = get_context(ctx, list, i);
+		const key = get_key(child_ctx);
+		let block = lookup.get(key);
+		if (!block) {
+			block = create_each_block(key, child_ctx);
+			block.c();
+		} else {
+			// defer updates until all the DOM shuffling is done
+			updates.push(() => block.p(child_ctx, dirty));
+		}
+		new_lookup.set(key, (new_blocks[i] = block));
+		if (key in old_indexes) deltas.set(key, Math.abs(i - old_indexes[key]));
+	}
+	const will_move = new Set();
+	const did_move = new Set();
+	/** @returns {void} */
+	function insert(block) {
+		transition_in(block, 1);
+		block.m(node, next);
+		lookup.set(block.key, block);
+		next = block.first;
+		n--;
+	}
+	while (o && n) {
+		const new_block = new_blocks[n - 1];
+		const old_block = old_blocks[o - 1];
+		const new_key = new_block.key;
+		const old_key = old_block.key;
+		if (new_block === old_block) {
+			// do nothing
+			next = new_block.first;
+			o--;
+			n--;
+		} else if (!new_lookup.has(old_key)) {
+			// remove old block
+			destroy(old_block, lookup);
+			o--;
+		} else if (!lookup.has(new_key) || will_move.has(new_key)) {
+			insert(new_block);
+		} else if (did_move.has(old_key)) {
+			o--;
+		} else if (deltas.get(new_key) > deltas.get(old_key)) {
+			did_move.add(new_key);
+			insert(new_block);
+		} else {
+			will_move.add(old_key);
+			o--;
+		}
+	}
+	while (o--) {
+		const old_block = old_blocks[o];
+		if (!new_lookup.has(old_block.key)) destroy(old_block, lookup);
+	}
+	while (n) insert(new_blocks[n - 1]);
+	run_all(updates);
+	return new_blocks;
+}
+
+/** @returns {void} */
+function validate_each_keys(ctx, list, get_context, get_key) {
+	const keys = new Map();
+	for (let i = 0; i < list.length; i++) {
+		const key = get_key(get_context(ctx, list, i));
+		if (keys.has(key)) {
+			let value = '';
+			try {
+				value = `with value '${String(key)}' `;
+			} catch (e) {
+				// can't stringify
+			}
+			throw new Error(
+				`Cannot have duplicate keys in a keyed each: Keys at index ${keys.get(
+					key
+				)} and ${i} ${value}are duplicates`
+			);
+		}
+		keys.set(key, i);
+	}
+}
+
 /** @returns {void} */
 function bind(component, name, callback) {
 	const index = component.$$.props[name];
@@ -1226,6 +1472,17 @@ function set_data_dev(text, data) {
 	if (text.data === data) return;
 	dispatch_dev('SvelteDOMSetData', { node: text, data });
 	text.data = /** @type {string} */ (data);
+}
+
+function ensure_array_like_dev(arg) {
+	if (
+		typeof arg !== 'string' &&
+		!(arg && typeof arg === 'object' && 'length' in arg) &&
+		!(typeof Symbol === 'function' && arg && Symbol.iterator in arg)
+	) {
+		throw new Error('{#each} only works with iterable values.');
+	}
+	return ensure_array_like(arg);
 }
 
 /**
@@ -3547,7 +3804,7 @@ boardStyle.subscribe((value) => {
 /* svelte/components/Chessboard.svelte generated by Svelte v4.2.18 */
 const file$1 = "svelte/components/Chessboard.svelte";
 
-function add_css(target) {
+function add_css$1(target) {
 	append_styles(target, "svelte-iagpad", ".board-wrapper.svelte-iagpad{position:relative;width:100%}.centered-content.svelte-iagpad{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdiBjbGFzcz1cImNlbnRlcmVkLWNvbnRlbnRcIj5cbiAgICA8c2xvdCBuYW1lPVwiY2VudGVyZWQtY29udGVudFwiPjwvc2xvdD5cbiAgPC9kaXY+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIlxuICA+PC9kaXY+XG4gIDxkaXYgY2xhc3M9XCJibG9jayBtdC0yXCI+XG4gICAgPHNsb3QgbmFtZT1cImJlbG93LWJvYXJkXCI+PC9zbG90PlxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbiAgLmNlbnRlcmVkLWNvbnRlbnQge1xuICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTtcbiAgICB0b3A6IDUwJTtcbiAgICBsZWZ0OiA1MCU7XG4gICAgdHJhbnNmb3JtOiB0cmFuc2xhdGUoLTUwJSwgLTUwJSk7XG4gICAgei1pbmRleDogMzsgLyogcmVxdWlyZWQgdG8gYXBwZWFyIGluIGZyb250IG9mIHBpZWNlcyAqL1xuICAgIG9wYWNpdHk6IDAuODtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUF1RUUsNEJBQWUsQ0FDYixRQUFRLENBQUUsUUFBUSxDQUNsQixLQUFLLENBQUUsSUFDVCxDQUNBLCtCQUFrQixDQUNoQixRQUFRLENBQUUsUUFBUSxDQUNsQixHQUFHLENBQUUsR0FBRyxDQUNSLElBQUksQ0FBRSxHQUFHLENBQ1QsU0FBUyxDQUFFLFVBQVUsSUFBSSxDQUFDLENBQUMsSUFBSSxDQUFDLENBQ2hDLE9BQU8sQ0FBRSxDQUFDLENBQ1YsT0FBTyxDQUFFLEdBQ1gifQ== */");
 }
 
@@ -3964,7 +4221,7 @@ class Chessboard extends SvelteComponentDev {
 				pieceSetOverride: 1,
 				boardStyleOverride: 2
 			},
-			add_css
+			add_css$1
 		);
 
 		dispatch_dev("SvelteRegisterComponent", {
@@ -4829,6 +5086,21 @@ const makeFen = (setup, opts) => [
     ...((opts === null || opts === void 0 ? void 0 : opts.epd) ? [] : [Math.max(0, Math.min(setup.halfmoves, 9999)), Math.max(1, Math.min(setup.fullmoves, 9999))]),
 ].join(' ');
 
+/*
+Adapted from https://github.com/mattdesl
+Distributed under MIT License https://github.com/mattdesl/eases/blob/master/LICENSE.md
+*/
+
+/**
+ * https://svelte.dev/docs/svelte-easing
+ * @param {number} t
+ * @returns {number}
+ */
+function cubicOut(t) {
+	const f = t - 1.0;
+	return f * f * f + 1.0;
+}
+
 /**
  * Animates the opacity of an element from 0 to the current opacity for `in` transitions and from the current opacity to 0 for `out` transitions.
  *
@@ -4844,6 +5116,37 @@ function fade(node, { delay = 0, duration = 400, easing = identity } = {}) {
 		duration,
 		easing,
 		css: (t) => `opacity: ${t * o}`
+	};
+}
+
+/**
+ * The flip function calculates the start and end position of an element and animates between them, translating the x and y values.
+ * `flip` stands for [First, Last, Invert, Play](https://aerotwist.com/blog/flip-your-animations/).
+ *
+ * https://svelte.dev/docs/svelte-animate#flip
+ * @param {Element} node
+ * @param {{ from: DOMRect; to: DOMRect }} fromTo
+ * @param {import('./public.js').FlipParams} params
+ * @returns {import('./public.js').AnimationConfig}
+ */
+function flip(node, { from, to }, params = {}) {
+	const style = getComputedStyle(node);
+	const transform = style.transform === 'none' ? '' : style.transform;
+	const [ox, oy] = style.transformOrigin.split(' ').map(parseFloat);
+	const dx = from.left + (from.width * ox) / to.width - (to.left + ox);
+	const dy = from.top + (from.height * oy) / to.height - (to.top + oy);
+	const { delay = 0, duration = (d) => Math.sqrt(d) * 120, easing = cubicOut } = params;
+	return {
+		delay,
+		duration: is_function(duration) ? duration(Math.sqrt(dx * dx + dy * dy)) : duration,
+		easing,
+		css: (t, u) => {
+			const x = u * dx;
+			const y = u * dy;
+			const sx = t + (u * from.width) / to.width;
+			const sy = t + (u * from.height) / to.height;
+			return `transform: ${transform} translate(${x}px, ${y}px) scale(${sx}, ${sy});`;
+		}
 	};
 }
 
@@ -6806,9 +7109,21 @@ const parseSan = (pos, san) => {
 };
 
 /* svelte/Puzzles.svelte generated by Svelte v4.2.18 */
+
+const { Map: Map_1 } = globals;
 const file = "svelte/Puzzles.svelte";
 
-// (289:6) {:else}
+function add_css(target) {
+	append_styles(target, "svelte-e1qomc", ".puzzle-id.svelte-e1qomc{font-family:monospace}.current.svelte-e1qomc{font-weight:bold}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHV6emxlcy5zdmVsdGUiLCJzb3VyY2VzIjpbIlB1enpsZXMuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDaGVzc2JvYXJkIGZyb20gXCIuL2NvbXBvbmVudHMvQ2hlc3Nib2FyZC5zdmVsdGVcIjtcbiAgaW1wb3J0IHsgSU5JVElBTF9GRU4sIG1ha2VGZW4sIHBhcnNlRmVuIH0gZnJvbSBcImNoZXNzb3BzL2ZlblwiO1xuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSBcInN2ZWx0ZVwiO1xuICBpbXBvcnQgeyBmYWRlIH0gZnJvbSBcInN2ZWx0ZS90cmFuc2l0aW9uXCI7XG4gIGltcG9ydCB7IGZsaXAgfSBmcm9tIFwic3ZlbHRlL2FuaW1hdGVcIjtcbiAgaW1wb3J0IHsgVXRpbCB9IGZyb20gXCJzcmMvdXRpbFwiO1xuICBpbXBvcnQgeyBwYXJzZVBnbiwgc3RhcnRpbmdQb3NpdGlvbiB9IGZyb20gXCJjaGVzc29wcy9wZ25cIjtcbiAgaW1wb3J0IHsgcGFyc2VTYW4gfSBmcm9tIFwiY2hlc3NvcHMvc2FuXCI7XG4gIGltcG9ydCB7IENoZXNzLCBtYWtlVWNpLCBwYXJzZVVjaSB9IGZyb20gXCJjaGVzc29wc1wiO1xuICBpbXBvcnQgeyBtYWtlU3F1YXJlLCBwYXJzZVNxdWFyZSB9IGZyb20gXCJjaGVzc29wcy91dGlsXCI7XG4gIGltcG9ydCB7IHBlcnNpc3RlZCB9IGZyb20gXCJzdmVsdGUtcGVyc2lzdGVkLXN0b3JlXCI7XG5cbiAgbGV0IGZlbjtcbiAgbGV0IGNoZXNzZ3JvdW5kO1xuICBsZXQgb3JpZW50YXRpb24gPSBcIndoaXRlXCI7XG4gIGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHtcbiAgICBmZW46IElOSVRJQUxfRkVOLFxuICAgIGNvb3JkaW5hdGVzOiB0cnVlLFxuICAgIGFuaW1hdGlvbjoge1xuICAgICAgZW5hYmxlZDogdHJ1ZSxcbiAgICB9LFxuICAgIGhpZ2hsaWdodDoge1xuICAgICAgbGFzdE1vdmU6IHRydWUsXG4gICAgICBjaGVjazogdHJ1ZSxcbiAgICB9LFxuICAgIGRyYWdnYWJsZToge1xuICAgICAgZW5hYmxlZDogdHJ1ZSxcbiAgICB9LFxuICAgIHNlbGVjdGFibGU6IHtcbiAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgfSxcbiAgICBtb3ZhYmxlOiB7XG4gICAgICBmcmVlOiBmYWxzZSxcbiAgICAgIGNvbG9yOiBcImJvdGhcIixcbiAgICAgIGRlc3RzOiBuZXcgTWFwKCksXG4gICAgICBldmVudHM6IHtcbiAgICAgICAgYWZ0ZXI6IGhhbmRsZVVzZXJNb3ZlLFxuICAgICAgfSxcbiAgICB9LFxuICAgIG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbixcbiAgfTtcblxuICBjb25zdCBwdXp6bGVJZHNUb1dvcmtPbiA9IHBlcnNpc3RlZChcInB1enpsZXMuaWRzVG9Xb3JrT25cIiwgW1xuICAgIFwiRVVCNnRcIixcbiAgICBcIlJ4ellpXCIsXG4gICAgXCJNWDJTU1wiLFxuICAgIFwiVWl5WVNcIixcbiAgICBcInI4aGs4XCIsXG4gIF0pO1xuXG4gIGxldCBuZXdQdXp6bGVJZHM7XG5cbiAgZnVuY3Rpb24gYWRkUHV6emxlSWRUb1dvcmtPbigpIHtcbiAgICBpZiAobmV3UHV6emxlSWRzLmxlbmd0aCA8IDMpIHtcbiAgICAgIG5ld1B1enpsZUlkcyA9IFwiXCI7XG4gICAgICByZXR1cm47XG4gICAgfVxuICAgIGNvbnN0IGlkc1RvQWRkID0gbmV3UHV6emxlSWRzLnNwbGl0KFwiLFwiKS5tYXAoKGlkKSA9PiBpZC50cmltKCkpO1xuICAgIGNvbnN0IGN1cnJlbnRQdXp6bGVJZHMgPSBuZXcgU2V0KCRwdXp6bGVJZHNUb1dvcmtPbik7XG4gICAgaWRzVG9BZGQuZm9yRWFjaCgoaWQpID0+IGN1cnJlbnRQdXp6bGVJZHMuYWRkKGlkKSk7XG4gICAgcHV6emxlSWRzVG9Xb3JrT24uc2V0KFsuLi5jdXJyZW50UHV6emxlSWRzXSk7XG4gICAgbmV3UHV6emxlSWRzID0gXCJcIjtcbiAgICBzZXRBY3RpdmVQdXp6bGVJZHMoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIHJlbW92ZVB1enpsZUlkKHB1enpsZUlkKSB7XG4gICAgY29uc3QgY3VycmVudFB1enpsZUlkcyA9IG5ldyBTZXQoJHB1enpsZUlkc1RvV29ya09uKTtcbiAgICBjdXJyZW50UHV6emxlSWRzLmRlbGV0ZShwdXp6bGVJZC50cmltKCkpO1xuICAgIHB1enpsZUlkc1RvV29ya09uLnNldChbLi4uY3VycmVudFB1enpsZUlkc10pO1xuICB9XG5cbiAgY29uc3Qgc29sdmVUaW1lcyA9IHBlcnNpc3RlZChcInB1enpsZXMuc29sdmVUaW1lc1wiLCB7fSk7XG5cbiAgbGV0IGN1cnJlbnRQdXp6bGVJZHMgPSBbXTtcbiAgbGV0IGN1cnJlbnRQdXp6bGVJZDtcbiAgbGV0IHB1enpsZVNob3duQXQ7XG4gIGxldCBwdXp6bGVJbmRleCA9IDA7XG5cbiAgbGV0IGJhdGNoU2l6ZSA9IDEwO1xuICBsZXQgdGltZUdvYWwgPSAxNTAwMDtcbiAgbGV0IG1pbmltdW1Tb2x2ZXMgPSAzO1xuXG4gIGZ1bmN0aW9uIHNldEFjdGl2ZVB1enpsZUlkcygpIHtcbiAgICBjb25zdCBhbGwgPSAkcHV6emxlSWRzVG9Xb3JrT247XG4gICAgbGV0IHNlbGVjdGVkUHV6emxlcyA9IFtdO1xuXG4gICAgZm9yIChsZXQgcHV6emxlSWQgb2YgYWxsKSB7XG4gICAgICBsZXQgdGltZXMgPSAkc29sdmVUaW1lc1twdXp6bGVJZF0gfHwgW107XG5cbiAgICAgIGlmICh0aW1lcy5sZW5ndGggPCBtaW5pbXVtU29sdmVzKSB7XG4gICAgICAgIHNlbGVjdGVkUHV6emxlcy5wdXNoKHB1enpsZUlkKTtcbiAgICAgIH0gZWxzZSB7XG4gICAgICAgIGxldCBsYXN0VGhyZWVTb2x2ZXMgPSB0aW1lcy5zbGljZSgtMyk7XG4gICAgICAgIGxldCBhdmVyYWdlVGltZSA9XG4gICAgICAgICAgbGFzdFRocmVlU29sdmVzLnJlZHVjZSgoYSwgYikgPT4gYSArIGIsIDApIC8gbGFzdFRocmVlU29sdmVzLmxlbmd0aDtcblxuICAgICAgICBpZiAoYXZlcmFnZVRpbWUgPiB0aW1lR29hbCkge1xuICAgICAgICAgIHNlbGVjdGVkUHV6emxlcy5wdXNoKHB1enpsZUlkKTtcbiAgICAgICAgfVxuICAgICAgfVxuXG4gICAgICBpZiAoc2VsZWN0ZWRQdXp6bGVzLmxlbmd0aCA+PSBiYXRjaFNpemUpIHtcbiAgICAgICAgYnJlYWs7XG4gICAgICB9XG4gICAgfVxuXG4gICAgY3VycmVudFB1enpsZUlkcyA9IHNlbGVjdGVkUHV6emxlcztcbiAgfVxuXG4gIGFzeW5jIGZ1bmN0aW9uIGdldE5leHRQdXp6bGUoKSB7XG4gICAgY29uc3QgcHJldmlvdXMgPSBjdXJyZW50UHV6emxlSWQ7XG4gICAgY3VycmVudFB1enpsZUlkID0gVXRpbC5nZXRSYW5kb21FbGVtZW50KGN1cnJlbnRQdXp6bGVJZHMpO1xuICAgIGlmIChjdXJyZW50UHV6emxlSWRzLmxlbmd0aCA+IDEgJiYgY3VycmVudFB1enpsZUlkID09PSBwcmV2aW91cykge1xuICAgICAgcmV0dXJuIGdldE5leHRQdXp6bGUoKTtcbiAgICB9XG4gICAgY29uc3QgcmVzcG9uc2UgPSBhd2FpdCBmZXRjaChcbiAgICAgIGBodHRwczovL2xpY2hlc3Mub3JnL2FwaS9wdXp6bGUvJHtjdXJyZW50UHV6emxlSWR9YCxcbiAgICApO1xuICAgIGlmIChyZXNwb25zZS5zdGF0dXMgPT09IDQwNCkge1xuICAgICAgcmVtb3ZlUHV6emxlSWQoY3VycmVudFB1enpsZUlkKTtcbiAgICAgIHJldHVybiBnZXROZXh0UHV6emxlKCk7XG4gICAgfVxuICAgIHJldHVybiBhd2FpdCByZXNwb25zZS5qc29uKCk7XG4gIH1cblxuICBsZXQgbW92ZXM7XG4gIGxldCBwb3NpdGlvbjtcbiAgbGV0IG1hZGVNaXN0YWtlID0gZmFsc2U7XG4gIGxldCBwdXp6bGVDb21wbGV0ZSA9IGZhbHNlO1xuICBsZXQgbmV4dEJ1dHRvbjtcblxuICBhc3luYyBmdW5jdGlvbiBsb2FkTmV4dFB1enpsZSgpIHtcbiAgICBwdXp6bGVDb21wbGV0ZSA9IGZhbHNlO1xuICAgIG1hZGVNaXN0YWtlID0gZmFsc2U7XG5cbiAgICBjb25zdCBuZXh0ID0gYXdhaXQgZ2V0TmV4dFB1enpsZSgpO1xuICAgIG9yaWVudGF0aW9uID0gVXRpbC53aG9zZU1vdmVJc0l0KG5leHQucHV6emxlLmluaXRpYWxQbHkgKyAxKTtcbiAgICBtb3ZlcyA9IG5leHQucHV6emxlLnNvbHV0aW9uO1xuXG4gICAgY29uc3QgcGduID0gcGFyc2VQZ24obmV4dC5nYW1lLnBnbilbMF07XG5cbiAgICBwb3NpdGlvbiA9IHN0YXJ0aW5nUG9zaXRpb24ocGduLmhlYWRlcnMpLnVud3JhcCgpO1xuICAgIGNvbnN0IGFsbE5vZGVzID0gWy4uLnBnbi5tb3Zlcy5tYWlubGluZU5vZGVzKCldO1xuXG4gICAgYWxsTm9kZXMuZm9yRWFjaCgobm9kZSkgPT4ge1xuICAgICAgY29uc3QgbW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBub2RlLmRhdGEuc2FuKTtcbiAgICAgIHBvc2l0aW9uLnBsYXkobW92ZSk7XG4gICAgfSk7XG5cbiAgICBzZXRDaGVzc2dyb3VuZEZyb21Qb3NpdGlvbigpO1xuICAgIHB1enpsZVNob3duQXQgPSBVdGlsLmN1cnJlbnRNaWNyb3RpbWUoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIHNldENoZXNzZ3JvdW5kRnJvbVBvc2l0aW9uKCkge1xuICAgIGZlbiA9IG1ha2VGZW4ocG9zaXRpb24udG9TZXR1cCgpKTtcbiAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgZmVuOiBmZW4sXG4gICAgfSk7XG4gICAgdXBkYXRlTGVnYWxNb3ZlcygpO1xuICB9XG5cbiAgZnVuY3Rpb24gdXBkYXRlTGVnYWxNb3ZlcygpIHtcbiAgICBmZW4gPSBtYWtlRmVuKHBvc2l0aW9uLnRvU2V0dXAoKSk7XG4gICAgY29uc3QgbGVnYWxNb3ZlcyA9IGdldExlZ2FsTW92ZXNGb3JGZW4oZmVuKTtcbiAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgbW92YWJsZToge1xuICAgICAgICBkZXN0czogbGVnYWxNb3ZlcyxcbiAgICAgIH0sXG4gICAgfSk7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRMZWdhbE1vdmVzRm9yRmVuKGZlbikge1xuICAgIGNvbnN0IHNldHVwID0gcGFyc2VGZW4oZmVuKS51bndyYXAoKTtcbiAgICBjb25zdCBjaGVzcyA9IENoZXNzLmZyb21TZXR1cChzZXR1cCkudW53cmFwKCk7XG4gICAgY29uc3QgZGVzdHNNYXAgPSBjaGVzcy5hbGxEZXN0cygpO1xuXG4gICAgY29uc3QgZGVzdHNNYXBJblNhbiA9IG5ldyBNYXAoKTtcblxuICAgIGZvciAoY29uc3QgW2tleSwgdmFsdWVdIG9mIGRlc3RzTWFwLmVudHJpZXMoKSkge1xuICAgICAgY29uc3QgZGVzdHNBcnJheSA9IEFycmF5LmZyb20odmFsdWUpLm1hcCgoc3EpID0+IG1ha2VTcXVhcmUoc3EpKTtcbiAgICAgIGRlc3RzTWFwSW5TYW4uc2V0KG1ha2VTcXVhcmUoa2V5KSwgZGVzdHNBcnJheSk7XG4gICAgfVxuXG4gICAgcmV0dXJuIGRlc3RzTWFwSW5TYW47XG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVVc2VyTW92ZShvcmlnLCBkZXN0KSB7XG4gICAgY29uc3QgY29ycmVjdE1vdmUgPSBtb3Zlc1swXTtcbiAgICBjb25zdCBvcmlnU3F1YXJlID0gcGFyc2VTcXVhcmUob3JpZyk7XG4gICAgY29uc3QgZGVzdFNxdWFyZSA9IHBhcnNlU3F1YXJlKGRlc3QpO1xuICAgIGNvbnN0IHVjaU1vdmUgPSBtYWtlVWNpKHsgZnJvbTogb3JpZ1NxdWFyZSwgdG86IGRlc3RTcXVhcmUgfSk7XG4gICAgaWYgKHdvdWxkQmVDaGVja21hdGUob3JpZywgZGVzdCkpIHtcbiAgICAgIHJldHVybiBoYW5kbGVQdXp6bGVDb21wbGV0ZSgpO1xuICAgIH1cbiAgICBpZiAodWNpTW92ZSA9PT0gY29ycmVjdE1vdmUpIHtcbiAgICAgIHBvc2l0aW9uLnBsYXkoeyBmcm9tOiBvcmlnU3F1YXJlLCB0bzogZGVzdFNxdWFyZSB9KTtcbiAgICAgIG1vdmVzLnNoaWZ0KCk7IC8vIHJlbW92ZSB0aGUgdXNlciBtb3ZlIGZpcnN0XG4gICAgICBjb25zdCBjb21wdXRlck1vdmUgPSBtb3Zlcy5zaGlmdCgpO1xuICAgICAgaWYgKGNvbXB1dGVyTW92ZSkge1xuICAgICAgICBjb25zdCBtb3ZlID0gcGFyc2VVY2koY29tcHV0ZXJNb3ZlKTtcbiAgICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICAgICAgY2hlc3Nncm91bmQubW92ZShtYWtlU3F1YXJlKG1vdmUuZnJvbSksIG1ha2VTcXVhcmUobW92ZS50bykpO1xuICAgICAgICB1cGRhdGVMZWdhbE1vdmVzKCk7XG4gICAgICAgIHNob3dTdWNjZXNzKFwiQ29ycmVjdCFcIik7XG4gICAgICB9IGVsc2Uge1xuICAgICAgICByZXR1cm4gaGFuZGxlUHV6emxlQ29tcGxldGUoKTtcbiAgICAgIH1cbiAgICB9IGVsc2Uge1xuICAgICAgbWFkZU1pc3Rha2UgPSB0cnVlO1xuICAgICAgc2hvd0ZhaWx1cmUoXCJOb3QgdGhlIG1vdmUhXCIpO1xuICAgICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICAgIHNldENoZXNzZ3JvdW5kRnJvbVBvc2l0aW9uKCk7XG4gICAgICB9LCAyMDApO1xuICAgIH1cbiAgfVxuXG4gIGZ1bmN0aW9uIHdvdWxkQmVDaGVja21hdGUob3JpZywgZGVzdCkge1xuICAgIGNvbnN0IG9yaWdTcXVhcmUgPSBwYXJzZVNxdWFyZShvcmlnKTtcbiAgICBjb25zdCBkZXN0U3F1YXJlID0gcGFyc2VTcXVhcmUoZGVzdCk7XG4gICAgY29uc3QgY2xvbmVkUG9zaXRpb24gPSBwb3NpdGlvbi5jbG9uZSgpO1xuICAgIGNsb25lZFBvc2l0aW9uLnBsYXkoeyBmcm9tOiBvcmlnU3F1YXJlLCB0bzogZGVzdFNxdWFyZSB9KTtcbiAgICByZXR1cm4gY2xvbmVkUG9zaXRpb24uaXNDaGVja21hdGUoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGhhbmRsZVB1enpsZUNvbXBsZXRlKCkge1xuICAgIHB1enpsZUNvbXBsZXRlID0gdHJ1ZTtcbiAgICBjb25zdCB0aW1lVG9Tb2x2ZSA9IFV0aWwuY3VycmVudE1pY3JvdGltZSgpIC0gcHV6emxlU2hvd25BdDtcbiAgICBpZiAoIW1hZGVNaXN0YWtlKSB7XG4gICAgICBhZGRTb2x2ZVRpbWUoY3VycmVudFB1enpsZUlkLCB0aW1lVG9Tb2x2ZSk7XG4gICAgfVxuICAgIHNldEFjdGl2ZVB1enpsZUlkcygpO1xuICB9XG5cbiAgZnVuY3Rpb24gYWRkU29sdmVUaW1lKHB1enpsZUlkLCB0aW1lKSB7XG4gICAgY29uc3QgdGltZXMgPSAkc29sdmVUaW1lcztcbiAgICBjb25zdCB0aW1lc0ZvclB1enpsZSA9IHRpbWVzW3B1enpsZUlkXSB8fCBbXTtcblxuICAgIHRpbWVzRm9yUHV6emxlLnB1c2godGltZSk7XG4gICAgdGltZXNbcHV6emxlSWRdID0gdGltZXNGb3JQdXp6bGU7XG4gICAgc29sdmVUaW1lcy5zZXQodGltZXMpO1xuICB9XG5cbiAgbGV0IHN1Y2Nlc3NNZXNzYWdlID0gbnVsbDtcblxuICBmdW5jdGlvbiBzaG93U3VjY2VzcyhtZXNzYWdlLCBkdXJhdGlvbiA9IDIwMDApIHtcbiAgICBmYWlsdXJlTWVzc2FnZSA9IG51bGw7XG4gICAgc3VjY2Vzc01lc3NhZ2UgPSBtZXNzYWdlO1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgc3VjY2Vzc01lc3NhZ2UgPSBudWxsO1xuICAgIH0sIGR1cmF0aW9uKTtcbiAgfVxuXG4gIGxldCBmYWlsdXJlTWVzc2FnZSA9IG51bGw7XG5cbiAgZnVuY3Rpb24gc2hvd0ZhaWx1cmUobWVzc2FnZSwgZHVyYXRpb24gPSAyMDAwKSB7XG4gICAgc3VjY2Vzc01lc3NhZ2UgPSBudWxsO1xuICAgIGZhaWx1cmVNZXNzYWdlID0gbWVzc2FnZTtcbiAgICBzZXRUaW1lb3V0KCgpID0+IHtcbiAgICAgIGZhaWx1cmVNZXNzYWdlID0gbnVsbDtcbiAgICB9LCBkdXJhdGlvbik7XG4gIH1cblxuICBvbk1vdW50KGFzeW5jICgpID0+IHtcbiAgICBzZXRBY3RpdmVQdXp6bGVJZHMoKTtcbiAgICBkb2N1bWVudC5hZGRFdmVudExpc3RlbmVyKFwia2V5ZG93blwiLCBmdW5jdGlvbiAoZXZlbnQpIHtcbiAgICAgIGlmIChbXCJFbnRlclwiLCBcIiBcIl0uaW5jbHVkZXMoZXZlbnQua2V5KSAmJiBuZXh0QnV0dG9uKSB7XG4gICAgICAgIG5leHRCdXR0b24uY2xpY2soKTtcbiAgICAgIH1cbiAgICB9KTtcbiAgICBhd2FpdCBsb2FkTmV4dFB1enpsZSgpO1xuICB9KTtcbjwvc2NyaXB0PlxuXG48ZGl2IGNsYXNzPVwiY29sdW1ucyBpcy1jZW50ZXJlZFwiPlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGlzLTYtZGVza3RvcFwiPlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgeyNpZiBjdXJyZW50UHV6emxlSWRzLmxlbmd0aCA+IDAgJiYgY3VycmVudFB1enpsZUlkfVxuICAgICAgICA8Q2hlc3Nib2FyZCB7Y2hlc3Nncm91bmRDb25maWd9IHtvcmllbnRhdGlvbn0gYmluZDpjaGVzc2dyb3VuZD5cbiAgICAgICAgICA8ZGl2IHNsb3Q9XCJiZWxvdy1ib2FyZFwiPlxuICAgICAgICAgICAgeyNpZiBwdXp6bGVDb21wbGV0ZX1cbiAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrIGlzLWZsZXggaXMtanVzdGlmeS1jb250ZW50LWNlbnRlclwiPlxuICAgICAgICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgICAgICAgIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIlxuICAgICAgICAgICAgICAgICAgYmluZDp0aGlzPXtuZXh0QnV0dG9ufVxuICAgICAgICAgICAgICAgICAgb246Y2xpY2s9e2FzeW5jICgpID0+IHtcbiAgICAgICAgICAgICAgICAgICAgYXdhaXQgbG9hZE5leHRQdXp6bGUoKTtcbiAgICAgICAgICAgICAgICAgIH19XG4gICAgICAgICAgICAgICAgICA+TmV4dFxuICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgICAgICAgIDxhXG4gICAgICAgICAgICAgICAgICBjbGFzcz1cImJ1dHRvbiBpcy1saW5rIG1sLTNcIlxuICAgICAgICAgICAgICAgICAgaHJlZj17YGh0dHBzOi8vbGljaGVzcy5vcmcvdHJhaW5pbmcvJHtjdXJyZW50UHV6emxlSWR9YH1cbiAgICAgICAgICAgICAgICAgIHRhcmdldD1cIl9ibGFua1wiPlZpZXcgb24gbGljaGVzczwvYVxuICAgICAgICAgICAgICAgID5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICB7L2lmfVxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L0NoZXNzYm9hcmQ+XG4gICAgICAgIHsjaWYgIXB1enpsZUNvbXBsZXRlfVxuICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9jayBpcy1mbGV4IGlzLWp1c3RpZnktY29udGVudC1jZW50ZXJcIj5cbiAgICAgICAgICAgIDxzcGFuIGNsYXNzPVwidGFnIGlzLXtvcmllbnRhdGlvbn0gaXMtc2l6ZS00XCJcbiAgICAgICAgICAgICAgPntvcmllbnRhdGlvbn0gdG8gcGxheTwvc3BhblxuICAgICAgICAgICAgPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICB7L2lmfVxuICAgICAgezplbHNlfVxuICAgICAgICA8cD5BbGwgcHV6emxlcyBjb21wbGV0ZSwgYWRkIHNvbWUgbW9yZSE8L3A+XG4gICAgICB7L2lmfVxuICAgIDwvZGl2PlxuICA8L2Rpdj5cbiAgPGRpdiBjbGFzcz1cImNvbHVtbiBpcy0yLWRlc2t0b3BcIj5cbiAgICA8ZGl2IGNsYXNzPVwiYm94XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiYmxvY2sgaXMtZmxleCBpcy1qdXN0aWZ5LWNvbnRlbnQtY2VudGVyXCI+XG4gICAgICAgIHsjaWYgc3VjY2Vzc01lc3NhZ2V9XG4gICAgICAgICAgPHNwYW4gaW46ZmFkZSBjbGFzcz1cInRhZyBpcy1zdWNjZXNzIGlzLXNpemUtNFwiPlxuICAgICAgICAgICAge3N1Y2Nlc3NNZXNzYWdlfVxuICAgICAgICAgIDwvc3Bhbj5cbiAgICAgICAgey9pZn1cbiAgICAgICAgeyNpZiBmYWlsdXJlTWVzc2FnZX1cbiAgICAgICAgICA8c3BhbiBpbjpmYWRlIGNsYXNzPVwidGFnIGlzLWRhbmdlciBpcy1zaXplLTRcIj5cbiAgICAgICAgICAgIHtmYWlsdXJlTWVzc2FnZX1cbiAgICAgICAgICA8L3NwYW4+XG4gICAgICAgIHsvaWZ9XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgICA8ZGl2IGNsYXNzPVwiYm94XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgICAgeyRwdXp6bGVJZHNUb1dvcmtPbi5sZW5ndGh9IHRvdGFsIHB1enpsZXNcbiAgICAgIDwvZGl2PlxuICAgICAgeyNpZiBjdXJyZW50UHV6emxlSWRzfVxuICAgICAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgICAgICBDdXJyZW50bHkgd29ya2luZyBvbiB7Y3VycmVudFB1enpsZUlkcy5sZW5ndGh9IHB1enpsZXNcbiAgICAgICAgPC9kaXY+XG4gICAgICB7L2lmfVxuICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgIDxmb3JtIG9uOnN1Ym1pdHxwcmV2ZW50RGVmYXVsdD17YWRkUHV6emxlSWRUb1dvcmtPbn0+XG4gICAgICAgICAgPGxhYmVsIGZvcj1cIm5ld1B1enpsZUlkXCI+TmV3IFB1enpsZSBJRChzKTo8L2xhYmVsPlxuICAgICAgICAgIDxpbnB1dFxuICAgICAgICAgICAgdHlwZT1cInRleHRcIlxuICAgICAgICAgICAgaWQ9XCJuZXdQdXp6bGVJZFwiXG4gICAgICAgICAgICBiaW5kOnZhbHVlPXtuZXdQdXp6bGVJZHN9XG4gICAgICAgICAgICBwbGFjZWhvbGRlcj1cIlwiXG4gICAgICAgICAgLz5cbiAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIiB0eXBlPVwic3VibWl0XCI+QWRkPC9idXR0b24+XG4gICAgICAgIDwvZm9ybT5cbiAgICAgIDwvZGl2PlxuICAgIDwvZGl2PlxuICAgIDxkaXYgY2xhc3M9XCJib3hcIj5cbiAgICAgIHsjaWYgY3VycmVudFB1enpsZUlkcy5sZW5ndGggPj0gMX1cbiAgICAgICAgPHVsPlxuICAgICAgICAgIHsjZWFjaCBjdXJyZW50UHV6emxlSWRzIGFzIHB1enpsZUlkIChwdXp6bGVJZCl9XG4gICAgICAgICAgICA8bGkgYW5pbWF0ZTpmbGlwIGNsYXNzOmN1cnJlbnQ9e2N1cnJlbnRQdXp6bGVJZCA9PT0gcHV6emxlSWR9PlxuICAgICAgICAgICAgICA8c3BhbiBjbGFzcz1cInB1enpsZS1pZFwiPntwdXp6bGVJZH08L3NwYW4+XG4gICAgICAgICAgICAgIHsjaWYgJHNvbHZlVGltZXNbcHV6emxlSWRdfVxuICAgICAgICAgICAgICAgIC0geyhcbiAgICAgICAgICAgICAgICAgICRzb2x2ZVRpbWVzW3B1enpsZUlkXS5zbGljZSgtMykucmVkdWNlKChhLCBiKSA9PiBhICsgYiwgMCkgL1xuICAgICAgICAgICAgICAgICAgJHNvbHZlVGltZXNbcHV6emxlSWRdLnNsaWNlKC0zKS5sZW5ndGggL1xuICAgICAgICAgICAgICAgICAgMTAwMFxuICAgICAgICAgICAgICAgICkudG9GaXhlZCgyKX1zIC0geyRzb2x2ZVRpbWVzW3B1enpsZUlkXS5sZW5ndGh9XG4gICAgICAgICAgICAgIHsvaWZ9XG4gICAgICAgICAgICA8L2xpPlxuICAgICAgICAgIHsvZWFjaH1cbiAgICAgICAgPC91bD5cbiAgICAgIHsvaWZ9XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLnB1enpsZS1pZCB7XG4gICAgZm9udC1mYW1pbHk6IG1vbm9zcGFjZTtcbiAgfVxuXG4gIC5jdXJyZW50IHtcbiAgICBmb250LXdlaWdodDogYm9sZDtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFrWEUsd0JBQVcsQ0FDVCxXQUFXLENBQUUsU0FDZixDQUVBLHNCQUFTLENBQ1AsV0FBVyxDQUFFLElBQ2YifQ== */");
+}
+
+function get_each_context(ctx, list, i) {
+	const child_ctx = ctx.slice();
+	child_ctx[41] = list[i];
+	return child_ctx;
+}
+
+// (307:6) {:else}
 function create_else_block(ctx) {
 	let p;
 
@@ -6816,7 +7131,7 @@ function create_else_block(ctx) {
 		c: function create() {
 			p = element("p");
 			p.textContent = "All puzzles complete, add some more!";
-			add_location(p, file, 289, 8, 7593);
+			add_location(p, file, 307, 8, 8249);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, p, anchor);
@@ -6835,25 +7150,27 @@ function create_else_block(ctx) {
 		block,
 		id: create_else_block.name,
 		type: "else",
-		source: "(289:6) {:else}",
+		source: "(307:6) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (272:6) {#if currentPuzzleIds.length > 0}
-function create_if_block_3(ctx) {
+// (278:6) {#if currentPuzzleIds.length > 0 && currentPuzzleId}
+function create_if_block_5(ctx) {
 	let chessboard;
 	let updating_chessground;
+	let t;
+	let if_block_anchor;
 	let current;
 
 	function chessboard_chessground_binding(value) {
-		/*chessboard_chessground_binding*/ ctx[16](value);
+		/*chessboard_chessground_binding*/ ctx[18](value);
 	}
 
 	let chessboard_props = {
-		chessgroundConfig: /*chessgroundConfig*/ ctx[9],
+		chessgroundConfig: /*chessgroundConfig*/ ctx[11],
 		orientation: /*orientation*/ ctx[1],
 		$$slots: { "below-board": [create_below_board_slot] },
 		$$scope: { ctx }
@@ -6865,20 +7182,27 @@ function create_if_block_3(ctx) {
 
 	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
 	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
+	let if_block = !/*puzzleComplete*/ ctx[5] && create_if_block_6(ctx);
 
 	const block = {
 		c: function create() {
 			create_component(chessboard.$$.fragment);
+			t = space();
+			if (if_block) if_block.c();
+			if_block_anchor = empty();
 		},
 		m: function mount(target, anchor) {
 			mount_component(chessboard, target, anchor);
+			insert_dev(target, t, anchor);
+			if (if_block) if_block.m(target, anchor);
+			insert_dev(target, if_block_anchor, anchor);
 			current = true;
 		},
 		p: function update(ctx, dirty) {
 			const chessboard_changes = {};
 			if (dirty[0] & /*orientation*/ 2) chessboard_changes.orientation = /*orientation*/ ctx[1];
 
-			if (dirty[0] & /*nextButton, puzzleComplete*/ 48 | dirty[1] & /*$$scope*/ 1024) {
+			if (dirty[0] & /*currentPuzzleId, nextButton, puzzleComplete*/ 112 | dirty[1] & /*$$scope*/ 8192) {
 				chessboard_changes.$$scope = { dirty, ctx };
 			}
 
@@ -6889,6 +7213,19 @@ function create_if_block_3(ctx) {
 			}
 
 			chessboard.$set(chessboard_changes);
+
+			if (!/*puzzleComplete*/ ctx[5]) {
+				if (if_block) {
+					if_block.p(ctx, dirty);
+				} else {
+					if_block = create_if_block_6(ctx);
+					if_block.c();
+					if_block.m(if_block_anchor.parentNode, if_block_anchor);
+				}
+			} else if (if_block) {
+				if_block.d(1);
+				if_block = null;
+			}
 		},
 		i: function intro(local) {
 			if (current) return;
@@ -6900,25 +7237,35 @@ function create_if_block_3(ctx) {
 			current = false;
 		},
 		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(t);
+				detach_dev(if_block_anchor);
+			}
+
 			destroy_component(chessboard, detaching);
+			if (if_block) if_block.d(detaching);
 		}
 	};
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_3.name,
+		id: create_if_block_5.name,
 		type: "if",
-		source: "(272:6) {#if currentPuzzleIds.length > 0}",
+		source: "(278:6) {#if currentPuzzleIds.length > 0 && currentPuzzleId}",
 		ctx
 	});
 
 	return block;
 }
 
-// (275:12) {#if puzzleComplete}
-function create_if_block_4(ctx) {
+// (281:12) {#if puzzleComplete}
+function create_if_block_7(ctx) {
 	let div;
 	let button;
+	let t1;
+	let a;
+	let t2;
+	let a_href_value;
 	let mounted;
 	let dispose;
 
@@ -6927,28 +7274,42 @@ function create_if_block_4(ctx) {
 			div = element("div");
 			button = element("button");
 			button.textContent = "Next";
+			t1 = space();
+			a = element("a");
+			t2 = text("View on lichess");
 			attr_dev(button, "class", "button is-primary");
-			add_location(button, file, 276, 16, 7243);
+			add_location(button, file, 282, 16, 7449);
+			attr_dev(a, "class", "button is-link ml-3");
+			attr_dev(a, "href", a_href_value = `https://lichess.org/training/${/*currentPuzzleId*/ ctx[4]}`);
+			attr_dev(a, "target", "_blank");
+			add_location(a, file, 290, 16, 7715);
 			attr_dev(div, "class", "block is-flex is-justify-content-center");
-			add_location(div, file, 275, 14, 7173);
+			add_location(div, file, 281, 14, 7379);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
 			append_dev(div, button);
-			/*button_binding*/ ctx[14](button);
+			/*button_binding*/ ctx[16](button);
+			append_dev(div, t1);
+			append_dev(div, a);
+			append_dev(a, t2);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler*/ ctx[15], false, false, false, false);
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[17], false, false, false, false);
 				mounted = true;
 			}
 		},
-		p: noop,
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*currentPuzzleId*/ 16 && a_href_value !== (a_href_value = `https://lichess.org/training/${/*currentPuzzleId*/ ctx[4]}`)) {
+				attr_dev(a, "href", a_href_value);
+			}
+		},
 		d: function destroy(detaching) {
 			if (detaching) {
 				detach_dev(div);
 			}
 
-			/*button_binding*/ ctx[14](null);
+			/*button_binding*/ ctx[16](null);
 			mounted = false;
 			dispose();
 		}
@@ -6956,37 +7317,37 @@ function create_if_block_4(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_4.name,
+		id: create_if_block_7.name,
 		type: "if",
-		source: "(275:12) {#if puzzleComplete}",
+		source: "(281:12) {#if puzzleComplete}",
 		ctx
 	});
 
 	return block;
 }
 
-// (274:10) 
+// (280:10) 
 function create_below_board_slot(ctx) {
 	let div;
-	let if_block = /*puzzleComplete*/ ctx[4] && create_if_block_4(ctx);
+	let if_block = /*puzzleComplete*/ ctx[5] && create_if_block_7(ctx);
 
 	const block = {
 		c: function create() {
 			div = element("div");
 			if (if_block) if_block.c();
 			attr_dev(div, "slot", "below-board");
-			add_location(div, file, 273, 10, 7101);
+			add_location(div, file, 279, 10, 7307);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
 			if (if_block) if_block.m(div, null);
 		},
 		p: function update(ctx, dirty) {
-			if (/*puzzleComplete*/ ctx[4]) {
+			if (/*puzzleComplete*/ ctx[5]) {
 				if (if_block) {
 					if_block.p(ctx, dirty);
 				} else {
-					if_block = create_if_block_4(ctx);
+					if_block = create_if_block_7(ctx);
 					if_block.c();
 					if_block.m(div, null);
 				}
@@ -7008,15 +7369,65 @@ function create_below_board_slot(ctx) {
 		block,
 		id: create_below_board_slot.name,
 		type: "slot",
-		source: "(274:10) ",
+		source: "(280:10) ",
 		ctx
 	});
 
 	return block;
 }
 
-// (297:8) {#if successMessage}
-function create_if_block_2(ctx) {
+// (300:8) {#if !puzzleComplete}
+function create_if_block_6(ctx) {
+	let div;
+	let span;
+	let t0;
+	let t1;
+	let span_class_value;
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			span = element("span");
+			t0 = text(/*orientation*/ ctx[1]);
+			t1 = text(" to play");
+			attr_dev(span, "class", span_class_value = "tag is-" + /*orientation*/ ctx[1] + " is-size-4" + " svelte-e1qomc");
+			add_location(span, file, 301, 12, 8094);
+			attr_dev(div, "class", "block is-flex is-justify-content-center");
+			add_location(div, file, 300, 10, 8028);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, span);
+			append_dev(span, t0);
+			append_dev(span, t1);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*orientation*/ 2) set_data_dev(t0, /*orientation*/ ctx[1]);
+
+			if (dirty[0] & /*orientation*/ 2 && span_class_value !== (span_class_value = "tag is-" + /*orientation*/ ctx[1] + " is-size-4" + " svelte-e1qomc")) {
+				attr_dev(span, "class", span_class_value);
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_6.name,
+		type: "if",
+		source: "(300:8) {#if !puzzleComplete}",
+		ctx
+	});
+
+	return block;
+}
+
+// (315:8) {#if successMessage}
+function create_if_block_4(ctx) {
 	let span;
 	let t;
 	let span_intro;
@@ -7024,16 +7435,16 @@ function create_if_block_2(ctx) {
 	const block = {
 		c: function create() {
 			span = element("span");
-			t = text(/*successMessage*/ ctx[6]);
+			t = text(/*successMessage*/ ctx[7]);
 			attr_dev(span, "class", "tag is-success is-size-4");
-			add_location(span, file, 297, 10, 7826);
+			add_location(span, file, 315, 10, 8482);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, span, anchor);
 			append_dev(span, t);
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*successMessage*/ 64) set_data_dev(t, /*successMessage*/ ctx[6]);
+			if (dirty[0] & /*successMessage*/ 128) set_data_dev(t, /*successMessage*/ ctx[7]);
 		},
 		i: function intro(local) {
 			if (local) {
@@ -7055,17 +7466,17 @@ function create_if_block_2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_2.name,
+		id: create_if_block_4.name,
 		type: "if",
-		source: "(297:8) {#if successMessage}",
+		source: "(315:8) {#if successMessage}",
 		ctx
 	});
 
 	return block;
 }
 
-// (302:8) {#if failureMessage}
-function create_if_block_1(ctx) {
+// (320:8) {#if failureMessage}
+function create_if_block_3(ctx) {
 	let span;
 	let t;
 	let span_intro;
@@ -7073,16 +7484,16 @@ function create_if_block_1(ctx) {
 	const block = {
 		c: function create() {
 			span = element("span");
-			t = text(/*failureMessage*/ ctx[7]);
+			t = text(/*failureMessage*/ ctx[8]);
 			attr_dev(span, "class", "tag is-danger is-size-4");
-			add_location(span, file, 302, 10, 7974);
+			add_location(span, file, 320, 10, 8630);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, span, anchor);
 			append_dev(span, t);
 		},
 		p: function update(ctx, dirty) {
-			if (dirty[0] & /*failureMessage*/ 128) set_data_dev(t, /*failureMessage*/ ctx[7]);
+			if (dirty[0] & /*failureMessage*/ 256) set_data_dev(t, /*failureMessage*/ ctx[8]);
 		},
 		i: function intro(local) {
 			if (local) {
@@ -7104,17 +7515,17 @@ function create_if_block_1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_1.name,
+		id: create_if_block_3.name,
 		type: "if",
-		source: "(302:8) {#if failureMessage}",
+		source: "(320:8) {#if failureMessage}",
 		ctx
 	});
 
 	return block;
 }
 
-// (313:6) {#if currentPuzzleIds}
-function create_if_block(ctx) {
+// (331:6) {#if currentPuzzleIds}
+function create_if_block_2(ctx) {
 	let div;
 	let t0;
 	let t1_value = /*currentPuzzleIds*/ ctx[3].length + "";
@@ -7128,7 +7539,7 @@ function create_if_block(ctx) {
 			t1 = text(t1_value);
 			t2 = text(" puzzles");
 			attr_dev(div, "class", "block");
-			add_location(div, file, 313, 8, 8254);
+			add_location(div, file, 331, 8, 8910);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -7148,9 +7559,210 @@ function create_if_block(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
+		id: create_if_block_2.name,
+		type: "if",
+		source: "(331:6) {#if currentPuzzleIds}",
+		ctx
+	});
+
+	return block;
+}
+
+// (350:6) {#if currentPuzzleIds.length >= 1}
+function create_if_block(ctx) {
+	let ul;
+	let each_blocks = [];
+	let each_1_lookup = new Map_1();
+	let each_value = ensure_array_like_dev(/*currentPuzzleIds*/ ctx[3]);
+	const get_key = ctx => /*puzzleId*/ ctx[41];
+	validate_each_keys(ctx, each_value, get_each_context, get_key);
+
+	for (let i = 0; i < each_value.length; i += 1) {
+		let child_ctx = get_each_context(ctx, each_value, i);
+		let key = get_key(child_ctx);
+		each_1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
+	}
+
+	const block = {
+		c: function create() {
+			ul = element("ul");
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].c();
+			}
+
+			add_location(ul, file, 350, 8, 9501);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, ul, anchor);
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				if (each_blocks[i]) {
+					each_blocks[i].m(ul, null);
+				}
+			}
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*currentPuzzleId, currentPuzzleIds, $solveTimes*/ 536) {
+				each_value = ensure_array_like_dev(/*currentPuzzleIds*/ ctx[3]);
+				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].r();
+				validate_each_keys(ctx, each_value, get_each_context, get_key);
+				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, ul, fix_and_destroy_block, create_each_block, null, get_each_context);
+				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].a();
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(ul);
+			}
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].d();
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
 		id: create_if_block.name,
 		type: "if",
-		source: "(313:6) {#if currentPuzzleIds}",
+		source: "(350:6) {#if currentPuzzleIds.length >= 1}",
+		ctx
+	});
+
+	return block;
+}
+
+// (355:14) {#if $solveTimes[puzzleId]}
+function create_if_block_1(ctx) {
+	let t0;
+	let t1_value = (/*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]].slice(-3).reduce(func, 0) / /*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]].slice(-3).length / 1000).toFixed(2) + "";
+	let t1;
+	let t2;
+	let t3_value = /*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]].length + "";
+	let t3;
+
+	const block = {
+		c: function create() {
+			t0 = text("- ");
+			t1 = text(t1_value);
+			t2 = text("s - ");
+			t3 = text(t3_value);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, t0, anchor);
+			insert_dev(target, t1, anchor);
+			insert_dev(target, t2, anchor);
+			insert_dev(target, t3, anchor);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*$solveTimes, currentPuzzleIds*/ 520 && t1_value !== (t1_value = (/*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]].slice(-3).reduce(func, 0) / /*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]].slice(-3).length / 1000).toFixed(2) + "")) set_data_dev(t1, t1_value);
+			if (dirty[0] & /*$solveTimes, currentPuzzleIds*/ 520 && t3_value !== (t3_value = /*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]].length + "")) set_data_dev(t3, t3_value);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(t0);
+				detach_dev(t1);
+				detach_dev(t2);
+				detach_dev(t3);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_1.name,
+		type: "if",
+		source: "(355:14) {#if $solveTimes[puzzleId]}",
+		ctx
+	});
+
+	return block;
+}
+
+// (352:10) {#each currentPuzzleIds as puzzleId (puzzleId)}
+function create_each_block(key_1, ctx) {
+	let li;
+	let span;
+	let t0_value = /*puzzleId*/ ctx[41] + "";
+	let t0;
+	let t1;
+	let t2;
+	let rect;
+	let stop_animation = noop;
+	let if_block = /*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]] && create_if_block_1(ctx);
+
+	const block = {
+		key: key_1,
+		first: null,
+		c: function create() {
+			li = element("li");
+			span = element("span");
+			t0 = text(t0_value);
+			t1 = space();
+			if (if_block) if_block.c();
+			t2 = space();
+			attr_dev(span, "class", "puzzle-id svelte-e1qomc");
+			add_location(span, file, 353, 14, 9653);
+			attr_dev(li, "class", "svelte-e1qomc");
+			toggle_class(li, "current", /*currentPuzzleId*/ ctx[4] === /*puzzleId*/ ctx[41]);
+			add_location(li, file, 352, 12, 9576);
+			this.first = li;
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, li, anchor);
+			append_dev(li, span);
+			append_dev(span, t0);
+			append_dev(li, t1);
+			if (if_block) if_block.m(li, null);
+			append_dev(li, t2);
+		},
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
+			if (dirty[0] & /*currentPuzzleIds*/ 8 && t0_value !== (t0_value = /*puzzleId*/ ctx[41] + "")) set_data_dev(t0, t0_value);
+
+			if (/*$solveTimes*/ ctx[9][/*puzzleId*/ ctx[41]]) {
+				if (if_block) {
+					if_block.p(ctx, dirty);
+				} else {
+					if_block = create_if_block_1(ctx);
+					if_block.c();
+					if_block.m(li, t2);
+				}
+			} else if (if_block) {
+				if_block.d(1);
+				if_block = null;
+			}
+
+			if (dirty[0] & /*currentPuzzleId, currentPuzzleIds*/ 24) {
+				toggle_class(li, "current", /*currentPuzzleId*/ ctx[4] === /*puzzleId*/ ctx[41]);
+			}
+		},
+		r: function measure() {
+			rect = li.getBoundingClientRect();
+		},
+		f: function fix() {
+			fix_position(li);
+			stop_animation();
+		},
+		a: function animate() {
+			stop_animation();
+			stop_animation = create_animation(li, rect, flip, {});
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(li);
+			}
+
+			if (if_block) if_block.d();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_each_block.name,
+		type: "each",
+		source: "(352:10) {#each currentPuzzleIds as puzzleId (puzzleId)}",
 		ctx
 	});
 
@@ -7158,20 +7770,20 @@ function create_if_block(ctx) {
 }
 
 function create_fragment(ctx) {
-	let div8;
+	let div9;
 	let div1;
 	let div0;
 	let current_block_type_index;
 	let if_block0;
 	let t0;
-	let div7;
+	let div8;
 	let div3;
 	let div2;
 	let t1;
 	let t2;
 	let div6;
 	let div4;
-	let t3_value = /*$puzzleIdsToWorkOn*/ ctx[8].length + "";
+	let t3_value = /*$puzzleIdsToWorkOn*/ ctx[10].length + "";
 	let t3;
 	let t4;
 	let t5;
@@ -7183,31 +7795,34 @@ function create_fragment(ctx) {
 	let input;
 	let t9;
 	let button;
+	let t11;
+	let div7;
 	let current;
 	let mounted;
 	let dispose;
-	const if_block_creators = [create_if_block_3, create_else_block];
+	const if_block_creators = [create_if_block_5, create_else_block];
 	const if_blocks = [];
 
 	function select_block_type(ctx, dirty) {
-		if (/*currentPuzzleIds*/ ctx[3].length > 0) return 0;
+		if (/*currentPuzzleIds*/ ctx[3].length > 0 && /*currentPuzzleId*/ ctx[4]) return 0;
 		return 1;
 	}
 
 	current_block_type_index = select_block_type(ctx);
 	if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
-	let if_block1 = /*successMessage*/ ctx[6] && create_if_block_2(ctx);
-	let if_block2 = /*failureMessage*/ ctx[7] && create_if_block_1(ctx);
-	let if_block3 = /*currentPuzzleIds*/ ctx[3] && create_if_block(ctx);
+	let if_block1 = /*successMessage*/ ctx[7] && create_if_block_4(ctx);
+	let if_block2 = /*failureMessage*/ ctx[8] && create_if_block_3(ctx);
+	let if_block3 = /*currentPuzzleIds*/ ctx[3] && create_if_block_2(ctx);
+	let if_block4 = /*currentPuzzleIds*/ ctx[3].length >= 1 && create_if_block(ctx);
 
 	const block = {
 		c: function create() {
-			div8 = element("div");
+			div9 = element("div");
 			div1 = element("div");
 			div0 = element("div");
 			if_block0.c();
 			t0 = space();
-			div7 = element("div");
+			div8 = element("div");
 			div3 = element("div");
 			div2 = element("div");
 			if (if_block1) if_block1.c();
@@ -7230,52 +7845,57 @@ function create_fragment(ctx) {
 			t9 = space();
 			button = element("button");
 			button.textContent = "Add";
+			t11 = space();
+			div7 = element("div");
+			if (if_block4) if_block4.c();
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 270, 4, 6959);
+			add_location(div0, file, 276, 4, 7146);
 			attr_dev(div1, "class", "column is-6-desktop");
-			add_location(div1, file, 269, 2, 6921);
+			add_location(div1, file, 275, 2, 7108);
 			attr_dev(div2, "class", "block is-flex is-justify-content-center");
-			add_location(div2, file, 295, 6, 7733);
+			add_location(div2, file, 313, 6, 8389);
 			attr_dev(div3, "class", "box");
-			add_location(div3, file, 294, 4, 7709);
+			add_location(div3, file, 312, 4, 8365);
 			attr_dev(div4, "class", "block");
-			add_location(div4, file, 309, 6, 8134);
+			add_location(div4, file, 327, 6, 8790);
 			attr_dev(label, "for", "newPuzzleId");
-			add_location(label, file, 319, 10, 8464);
+			add_location(label, file, 337, 10, 9120);
 			attr_dev(input, "type", "text");
 			attr_dev(input, "id", "newPuzzleId");
 			attr_dev(input, "placeholder", "");
-			add_location(input, file, 320, 10, 8525);
+			add_location(input, file, 338, 10, 9181);
 			attr_dev(button, "class", "button is-primary");
 			attr_dev(button, "type", "submit");
-			add_location(button, file, 326, 10, 8673);
-			add_location(form, file, 318, 8, 8400);
+			add_location(button, file, 344, 10, 9329);
+			add_location(form, file, 336, 8, 9056);
 			attr_dev(div5, "class", "block");
-			add_location(div5, file, 317, 6, 8372);
+			add_location(div5, file, 335, 6, 9028);
 			attr_dev(div6, "class", "box");
-			add_location(div6, file, 308, 4, 8110);
-			attr_dev(div7, "class", "column is-2-desktop");
-			add_location(div7, file, 293, 2, 7671);
-			attr_dev(div8, "class", "columns is-centered");
-			add_location(div8, file, 268, 0, 6885);
+			add_location(div6, file, 326, 4, 8766);
+			attr_dev(div7, "class", "box");
+			add_location(div7, file, 348, 4, 9434);
+			attr_dev(div8, "class", "column is-2-desktop");
+			add_location(div8, file, 311, 2, 8327);
+			attr_dev(div9, "class", "columns is-centered");
+			add_location(div9, file, 274, 0, 7072);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
 		},
 		m: function mount(target, anchor) {
-			insert_dev(target, div8, anchor);
-			append_dev(div8, div1);
+			insert_dev(target, div9, anchor);
+			append_dev(div9, div1);
 			append_dev(div1, div0);
 			if_blocks[current_block_type_index].m(div0, null);
-			append_dev(div8, t0);
-			append_dev(div8, div7);
-			append_dev(div7, div3);
+			append_dev(div9, t0);
+			append_dev(div9, div8);
+			append_dev(div8, div3);
 			append_dev(div3, div2);
 			if (if_block1) if_block1.m(div2, null);
 			append_dev(div2, t1);
 			if (if_block2) if_block2.m(div2, null);
-			append_dev(div7, t2);
-			append_dev(div7, div6);
+			append_dev(div8, t2);
+			append_dev(div8, div6);
 			append_dev(div6, div4);
 			append_dev(div4, t3);
 			append_dev(div4, t4);
@@ -7290,12 +7910,15 @@ function create_fragment(ctx) {
 			set_input_value(input, /*newPuzzleIds*/ ctx[2]);
 			append_dev(form, t9);
 			append_dev(form, button);
+			append_dev(div8, t11);
+			append_dev(div8, div7);
+			if (if_block4) if_block4.m(div7, null);
 			current = true;
 
 			if (!mounted) {
 				dispose = [
-					listen_dev(input, "input", /*input_input_handler*/ ctx[17]),
-					listen_dev(form, "submit", prevent_default(/*addPuzzleIdToWorkOn*/ ctx[11]), false, true, false, false)
+					listen_dev(input, "input", /*input_input_handler*/ ctx[19]),
+					listen_dev(form, "submit", prevent_default(/*addPuzzleIdToWorkOn*/ ctx[13]), false, true, false, false)
 				];
 
 				mounted = true;
@@ -7328,15 +7951,15 @@ function create_fragment(ctx) {
 				if_block0.m(div0, null);
 			}
 
-			if (/*successMessage*/ ctx[6]) {
+			if (/*successMessage*/ ctx[7]) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 
-					if (dirty[0] & /*successMessage*/ 64) {
+					if (dirty[0] & /*successMessage*/ 128) {
 						transition_in(if_block1, 1);
 					}
 				} else {
-					if_block1 = create_if_block_2(ctx);
+					if_block1 = create_if_block_4(ctx);
 					if_block1.c();
 					transition_in(if_block1, 1);
 					if_block1.m(div2, t1);
@@ -7346,15 +7969,15 @@ function create_fragment(ctx) {
 				if_block1 = null;
 			}
 
-			if (/*failureMessage*/ ctx[7]) {
+			if (/*failureMessage*/ ctx[8]) {
 				if (if_block2) {
 					if_block2.p(ctx, dirty);
 
-					if (dirty[0] & /*failureMessage*/ 128) {
+					if (dirty[0] & /*failureMessage*/ 256) {
 						transition_in(if_block2, 1);
 					}
 				} else {
-					if_block2 = create_if_block_1(ctx);
+					if_block2 = create_if_block_3(ctx);
 					if_block2.c();
 					transition_in(if_block2, 1);
 					if_block2.m(div2, null);
@@ -7364,13 +7987,13 @@ function create_fragment(ctx) {
 				if_block2 = null;
 			}
 
-			if ((!current || dirty[0] & /*$puzzleIdsToWorkOn*/ 256) && t3_value !== (t3_value = /*$puzzleIdsToWorkOn*/ ctx[8].length + "")) set_data_dev(t3, t3_value);
+			if ((!current || dirty[0] & /*$puzzleIdsToWorkOn*/ 1024) && t3_value !== (t3_value = /*$puzzleIdsToWorkOn*/ ctx[10].length + "")) set_data_dev(t3, t3_value);
 
 			if (/*currentPuzzleIds*/ ctx[3]) {
 				if (if_block3) {
 					if_block3.p(ctx, dirty);
 				} else {
-					if_block3 = create_if_block(ctx);
+					if_block3 = create_if_block_2(ctx);
 					if_block3.c();
 					if_block3.m(div6, t6);
 				}
@@ -7381,6 +8004,19 @@ function create_fragment(ctx) {
 
 			if (dirty[0] & /*newPuzzleIds*/ 4 && input.value !== /*newPuzzleIds*/ ctx[2]) {
 				set_input_value(input, /*newPuzzleIds*/ ctx[2]);
+			}
+
+			if (/*currentPuzzleIds*/ ctx[3].length >= 1) {
+				if (if_block4) {
+					if_block4.p(ctx, dirty);
+				} else {
+					if_block4 = create_if_block(ctx);
+					if_block4.c();
+					if_block4.m(div7, null);
+				}
+			} else if (if_block4) {
+				if_block4.d(1);
+				if_block4 = null;
 			}
 		},
 		i: function intro(local) {
@@ -7396,13 +8032,14 @@ function create_fragment(ctx) {
 		},
 		d: function destroy(detaching) {
 			if (detaching) {
-				detach_dev(div8);
+				detach_dev(div9);
 			}
 
 			if_blocks[current_block_type_index].d();
 			if (if_block1) if_block1.d();
 			if (if_block2) if_block2.d();
 			if (if_block3) if_block3.d();
+			if (if_block4) if_block4.d();
 			mounted = false;
 			run_all(dispose);
 		}
@@ -7418,6 +8055,8 @@ function create_fragment(ctx) {
 
 	return block;
 }
+
+const func = (a, b) => a + b;
 
 function instance($$self, $$props, $$invalidate) {
 	let $solveTimes;
@@ -7446,7 +8085,7 @@ function instance($$self, $$props, $$invalidate) {
 
 	const puzzleIdsToWorkOn = persisted("puzzles.idsToWorkOn", ["EUB6t", "RxzYi", "MX2SS", "UiyYS", "r8hk8"]);
 	validate_store(puzzleIdsToWorkOn, 'puzzleIdsToWorkOn');
-	component_subscribe($$self, puzzleIdsToWorkOn, value => $$invalidate(8, $puzzleIdsToWorkOn = value));
+	component_subscribe($$self, puzzleIdsToWorkOn, value => $$invalidate(10, $puzzleIdsToWorkOn = value));
 	let newPuzzleIds;
 
 	function addPuzzleIdToWorkOn() {
@@ -7471,7 +8110,7 @@ function instance($$self, $$props, $$invalidate) {
 
 	const solveTimes = persisted("puzzles.solveTimes", {});
 	validate_store(solveTimes, 'solveTimes');
-	component_subscribe($$self, solveTimes, value => $$invalidate(24, $solveTimes = value));
+	component_subscribe($$self, solveTimes, value => $$invalidate(9, $solveTimes = value));
 	let currentPuzzleIds = [];
 	let currentPuzzleId;
 	let puzzleShownAt;
@@ -7507,7 +8146,13 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	async function getNextPuzzle() {
-		currentPuzzleId = Util.getRandomElement(currentPuzzleIds);
+		const previous = currentPuzzleId;
+		$$invalidate(4, currentPuzzleId = Util.getRandomElement(currentPuzzleIds));
+
+		if (currentPuzzleIds.length > 1 && currentPuzzleId === previous) {
+			return getNextPuzzle();
+		}
+
 		const response = await fetch(`https://lichess.org/api/puzzle/${currentPuzzleId}`);
 
 		if (response.status === 404) {
@@ -7525,7 +8170,7 @@ function instance($$self, $$props, $$invalidate) {
 	let nextButton;
 
 	async function loadNextPuzzle() {
-		$$invalidate(4, puzzleComplete = false);
+		$$invalidate(5, puzzleComplete = false);
 		madeMistake = false;
 		const next = await getNextPuzzle();
 		$$invalidate(1, orientation = Util.whoseMoveIsIt(next.puzzle.initialPly + 1));
@@ -7615,7 +8260,7 @@ function instance($$self, $$props, $$invalidate) {
 	}
 
 	function handlePuzzleComplete() {
-		$$invalidate(4, puzzleComplete = true);
+		$$invalidate(5, puzzleComplete = true);
 		const timeToSolve = Util.currentMicrotime() - puzzleShownAt;
 
 		if (!madeMistake) {
@@ -7636,12 +8281,12 @@ function instance($$self, $$props, $$invalidate) {
 	let successMessage = null;
 
 	function showSuccess(message, duration = 2000) {
-		$$invalidate(7, failureMessage = null);
-		$$invalidate(6, successMessage = message);
+		$$invalidate(8, failureMessage = null);
+		$$invalidate(7, successMessage = message);
 
 		setTimeout(
 			() => {
-				$$invalidate(6, successMessage = null);
+				$$invalidate(7, successMessage = null);
 			},
 			duration
 		);
@@ -7650,12 +8295,12 @@ function instance($$self, $$props, $$invalidate) {
 	let failureMessage = null;
 
 	function showFailure(message, duration = 2000) {
-		$$invalidate(6, successMessage = null);
-		$$invalidate(7, failureMessage = message);
+		$$invalidate(7, successMessage = null);
+		$$invalidate(8, failureMessage = message);
 
 		setTimeout(
 			() => {
-				$$invalidate(7, failureMessage = null);
+				$$invalidate(8, failureMessage = null);
 			},
 			duration
 		);
@@ -7682,7 +8327,7 @@ function instance($$self, $$props, $$invalidate) {
 	function button_binding($$value) {
 		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
 			nextButton = $$value;
-			$$invalidate(5, nextButton);
+			$$invalidate(6, nextButton);
 		});
 	}
 
@@ -7707,6 +8352,7 @@ function instance($$self, $$props, $$invalidate) {
 		parseFen,
 		onMount,
 		fade,
+		flip,
 		Util,
 		parsePgn,
 		startingPosition,
@@ -7760,10 +8406,10 @@ function instance($$self, $$props, $$invalidate) {
 		if ('fen' in $$props) fen = $$props.fen;
 		if ('chessground' in $$props) $$invalidate(0, chessground = $$props.chessground);
 		if ('orientation' in $$props) $$invalidate(1, orientation = $$props.orientation);
-		if ('chessgroundConfig' in $$props) $$invalidate(9, chessgroundConfig = $$props.chessgroundConfig);
+		if ('chessgroundConfig' in $$props) $$invalidate(11, chessgroundConfig = $$props.chessgroundConfig);
 		if ('newPuzzleIds' in $$props) $$invalidate(2, newPuzzleIds = $$props.newPuzzleIds);
 		if ('currentPuzzleIds' in $$props) $$invalidate(3, currentPuzzleIds = $$props.currentPuzzleIds);
-		if ('currentPuzzleId' in $$props) currentPuzzleId = $$props.currentPuzzleId;
+		if ('currentPuzzleId' in $$props) $$invalidate(4, currentPuzzleId = $$props.currentPuzzleId);
 		if ('puzzleShownAt' in $$props) puzzleShownAt = $$props.puzzleShownAt;
 		if ('puzzleIndex' in $$props) puzzleIndex = $$props.puzzleIndex;
 		if ('batchSize' in $$props) batchSize = $$props.batchSize;
@@ -7772,10 +8418,10 @@ function instance($$self, $$props, $$invalidate) {
 		if ('moves' in $$props) moves = $$props.moves;
 		if ('position' in $$props) position = $$props.position;
 		if ('madeMistake' in $$props) madeMistake = $$props.madeMistake;
-		if ('puzzleComplete' in $$props) $$invalidate(4, puzzleComplete = $$props.puzzleComplete);
-		if ('nextButton' in $$props) $$invalidate(5, nextButton = $$props.nextButton);
-		if ('successMessage' in $$props) $$invalidate(6, successMessage = $$props.successMessage);
-		if ('failureMessage' in $$props) $$invalidate(7, failureMessage = $$props.failureMessage);
+		if ('puzzleComplete' in $$props) $$invalidate(5, puzzleComplete = $$props.puzzleComplete);
+		if ('nextButton' in $$props) $$invalidate(6, nextButton = $$props.nextButton);
+		if ('successMessage' in $$props) $$invalidate(7, successMessage = $$props.successMessage);
+		if ('failureMessage' in $$props) $$invalidate(8, failureMessage = $$props.failureMessage);
 	};
 
 	if ($$props && "$$inject" in $$props) {
@@ -7787,10 +8433,12 @@ function instance($$self, $$props, $$invalidate) {
 		orientation,
 		newPuzzleIds,
 		currentPuzzleIds,
+		currentPuzzleId,
 		puzzleComplete,
 		nextButton,
 		successMessage,
 		failureMessage,
+		$solveTimes,
 		$puzzleIdsToWorkOn,
 		chessgroundConfig,
 		puzzleIdsToWorkOn,
@@ -7807,7 +8455,7 @@ function instance($$self, $$props, $$invalidate) {
 class Puzzles extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance, create_fragment, safe_not_equal, {}, null, [-1, -1]);
+		init(this, options, instance, create_fragment, safe_not_equal, {}, add_css, [-1, -1]);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,

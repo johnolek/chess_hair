@@ -3,6 +3,7 @@
   import { INITIAL_FEN, makeFen, parseFen } from "chessops/fen";
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
+  import { flip } from "svelte/animate";
   import { Util } from "src/util";
   import { parsePgn, startingPosition } from "chessops/pgn";
   import { parseSan } from "chessops/san";
@@ -49,6 +50,7 @@
   ]);
 
   let newPuzzleIds;
+
   function addPuzzleIdToWorkOn() {
     if (newPuzzleIds.length < 3) {
       newPuzzleIds = "";
@@ -107,7 +109,11 @@
   }
 
   async function getNextPuzzle() {
+    const previous = currentPuzzleId;
     currentPuzzleId = Util.getRandomElement(currentPuzzleIds);
+    if (currentPuzzleIds.length > 1 && currentPuzzleId === previous) {
+      return getNextPuzzle();
+    }
     const response = await fetch(
       `https://lichess.org/api/puzzle/${currentPuzzleId}`,
     );
@@ -269,7 +275,7 @@
 <div class="columns is-centered">
   <div class="column is-6-desktop">
     <div class="block">
-      {#if currentPuzzleIds.length > 0}
+      {#if currentPuzzleIds.length > 0 && currentPuzzleId}
         <Chessboard {chessgroundConfig} {orientation} bind:chessground>
           <div slot="below-board">
             {#if puzzleComplete}
@@ -282,10 +288,22 @@
                   }}
                   >Next
                 </button>
+                <a
+                  class="button is-link ml-3"
+                  href={`https://lichess.org/training/${currentPuzzleId}`}
+                  target="_blank">View on lichess</a
+                >
               </div>
             {/if}
           </div>
         </Chessboard>
+        {#if !puzzleComplete}
+          <div class="block is-flex is-justify-content-center">
+            <span class="tag is-{orientation} is-size-4"
+              >{orientation} to play</span
+            >
+          </div>
+        {/if}
       {:else}
         <p>All puzzles complete, add some more!</p>
       {/if}
@@ -328,5 +346,33 @@
         </form>
       </div>
     </div>
+    <div class="box">
+      {#if currentPuzzleIds.length >= 1}
+        <ul>
+          {#each currentPuzzleIds as puzzleId (puzzleId)}
+            <li animate:flip class:current={currentPuzzleId === puzzleId}>
+              <span class="puzzle-id">{puzzleId}</span>
+              {#if $solveTimes[puzzleId]}
+                - {(
+                  $solveTimes[puzzleId].slice(-3).reduce((a, b) => a + b, 0) /
+                  $solveTimes[puzzleId].slice(-3).length /
+                  1000
+                ).toFixed(2)}s - {$solveTimes[puzzleId].length}
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
   </div>
 </div>
+
+<style>
+  .puzzle-id {
+    font-family: monospace;
+  }
+
+  .current {
+    font-weight: bold;
+  }
+</style>
