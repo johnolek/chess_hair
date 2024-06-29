@@ -41,6 +41,32 @@
     orientation: orientation,
   };
 
+  function averageOfLastThree(times) {
+    if (times.length === 0) {
+      return 0;
+    }
+    const lastThree = times.slice(-3);
+    const sum = lastThree.reduce((a, b) => a + b, 0);
+    return sum / (lastThree.length || 1);
+  }
+
+  let sortedPuzzleIds;
+  $: {
+    sortedPuzzleIds = [...currentPuzzleIds].sort((a, b) => {
+      const timesA = $solveTimes[a] || [];
+      const timesB = $solveTimes[b] || [];
+
+      // If puzzle A has no times, it should come after puzzle B
+      if (timesA.length === 0) return 1;
+      // If puzzle B has no times, it should come after puzzle A
+      if (timesB.length === 0) return -1;
+
+      const avgTimeA = averageOfLastThree(timesA);
+      const avgTimeB = averageOfLastThree(timesB);
+      return avgTimeA - avgTimeB;
+    });
+  }
+
   const puzzleIdsToWorkOn = persisted("puzzles.idsToWorkOn", [
     "EUB6t",
     "RxzYi",
@@ -106,6 +132,7 @@
     }
 
     currentPuzzleIds = selectedPuzzles;
+    currentPuzzleIds = ["jLVTH"];
   }
 
   async function getNextPuzzle() {
@@ -194,16 +221,26 @@
     return destsMapInSan;
   }
 
-  function handleUserMove(orig, dest) {
+  function handleUserMove(orig, dest, meta) {
     const correctMove = moves[0];
     const origSquare = parseSquare(orig);
     const destSquare = parseSquare(dest);
-    const uciMove = makeUci({ from: origSquare, to: destSquare });
+    let move = { from: origSquare, to: destSquare };
+    if (
+      chessground.state.pieces.get(dest)?.role === "pawn" &&
+      (dest[1] === "1" || dest[1] === "8")
+    ) {
+      move = { ...move, promotion: "queen" };
+      chessground.setPieces(
+        new Map([[dest, { color: orientation, role: "queen" }]]),
+      );
+    }
+    const uciMove = makeUci(move);
     if (wouldBeCheckmate(orig, dest)) {
       return handlePuzzleComplete();
     }
     if (uciMove === correctMove) {
-      position.play({ from: origSquare, to: destSquare });
+      position.play(move);
       moves.shift(); // remove the user move first
       const computerMove = moves.shift();
       if (computerMove) {
@@ -356,10 +393,13 @@
       </div>
     </div>
     <div class="box">
-      {#if currentPuzzleIds.length >= 1}
+      {#if sortedPuzzleIds.length >= 1}
         <ul>
-          {#each currentPuzzleIds as puzzleId (puzzleId)}
-            <li animate:flip class:current={currentPuzzleId === puzzleId}>
+          {#each sortedPuzzleIds as puzzleId (puzzleId)}
+            <li
+              animate:flip={{ duration: 400 }}
+              class:current={currentPuzzleId === puzzleId}
+            >
               <span class="puzzle-id">{puzzleId}</span>
               {#if $solveTimes[puzzleId]}
                 - {(
