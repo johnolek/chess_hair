@@ -78,7 +78,6 @@
   ]);
 
   let newPuzzleIds;
-
   function addPuzzleIdToWorkOn() {
     if (newPuzzleIds.length < 3) {
       newPuzzleIds = "";
@@ -104,7 +103,6 @@
   let completedPuzzleIds = [];
   let currentPuzzleId;
   let puzzleShownAt;
-  let puzzleIndex = 0;
 
   let batchSize = 10;
   let timeGoal = 15000;
@@ -436,23 +434,42 @@
     </div>
     {#if sortedPuzzleIds.length >= 1}
       <div class="box">
-        <ul>
-          {#each sortedPuzzleIds as puzzleId (puzzleId)}
-            <li
-              animate:flip={{ duration: 400 }}
-              class:current={currentPuzzleId === puzzleId}
-            >
-              <span class="puzzle-id">{puzzleId}</span>
-              {#if $solveTimes[puzzleId]}
-                - {(
-                  $solveTimes[puzzleId].slice(-3).reduce((a, b) => a + b, 0) /
-                  $solveTimes[puzzleId].slice(-3).length /
-                  1000
-                ).toFixed(2)}s - {$solveTimes[puzzleId].length}
-              {/if}
-            </li>
-          {/each}
-        </ul>
+        <table class="table is-fullwidth">
+          <thead>
+            <tr>
+              <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
+              <th><abbr title="Average solve time">Avg</abbr></th>
+              <th><abbr title="Total Solves">Solves</abbr></th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each sortedPuzzleIds as puzzleId (puzzleId)}
+              <tr
+                animate:flip={{ duration: 400 }}
+                class:is-selected={currentPuzzleId === puzzleId}
+              >
+                <td class="puzzle-id">{puzzleId}</td>
+                {#if $solveTimes[puzzleId]}
+                  <td>
+                    {(
+                      $solveTimes[puzzleId]
+                        .slice(-3)
+                        .reduce((a, b) => a + b, 0) /
+                      $solveTimes[puzzleId].slice(-3).length /
+                      1000
+                    ).toFixed(2)}s
+                  </td>
+                  <td>
+                    {$solveTimes[puzzleId].length}
+                  </td>
+                {:else}
+                  <td>?</td>
+                  <td>?</td>
+                {/if}
+              </tr>
+            {/each}
+          </tbody>
+        </table>
       </div>
     {/if}
   </div>
@@ -461,9 +478,5 @@
 <style>
   .puzzle-id {
     font-family: monospace;
-  }
-
-  .current {
-    font-weight: bold;
   }
 </style>
