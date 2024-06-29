@@ -99,6 +99,7 @@
   const solveTimes = persisted("puzzles.solveTimes", {});
 
   let currentPuzzleIds = [];
+  let completedPuzzleIds = [];
   let currentPuzzleId;
   let puzzleShownAt;
   let puzzleIndex = 0;
@@ -106,6 +107,21 @@
   let batchSize = 10;
   let timeGoal = 15000;
   let minimumSolves = 3;
+
+  function setCompletedPuzzles() {
+    const all = $puzzleIdsToWorkOn;
+    completedPuzzleIds = all.filter((id) => {
+      const times = $solveTimes[id] || [];
+      if (times.length < 3) {
+        return false;
+      }
+      const lastThreeSolves = times.slice(-3);
+      let averageTime =
+        lastThreeSolves.reduce((a, b) => a + b, 0) / lastThreeSolves.length;
+
+      return averageTime <= timeGoal;
+    });
+  }
 
   function setActivePuzzleIds() {
     const all = $puzzleIdsToWorkOn;
@@ -132,7 +148,6 @@
     }
 
     currentPuzzleIds = selectedPuzzles;
-    currentPuzzleIds = ["jLVTH"];
   }
 
   async function getNextPuzzle() {
@@ -276,6 +291,7 @@
       addSolveTime(currentPuzzleId, timeToSolve);
     }
     setActivePuzzleIds();
+    setCompletedPuzzles();
   }
 
   function addSolveTime(puzzleId, time) {
@@ -308,6 +324,7 @@
   }
 
   onMount(async () => {
+    setCompletedPuzzles();
     setActivePuzzleIds();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
@@ -341,15 +358,15 @@
                 >
               </div>
             {/if}
+            {#if !puzzleComplete}
+              <div class="block is-flex is-justify-content-center">
+                <span class="tag is-{orientation} is-size-4"
+                  >{orientation} to play</span
+                >
+              </div>
+            {/if}
           </div>
         </Chessboard>
-        {#if !puzzleComplete}
-          <div class="block is-flex is-justify-content-center">
-            <span class="tag is-{orientation} is-size-4"
-              >{orientation} to play</span
-            >
-          </div>
-        {/if}
       {:else}
         <p>All puzzles complete, add some more!</p>
       {/if}
@@ -377,6 +394,11 @@
       {#if currentPuzzleIds}
         <div class="block">
           Currently working on {currentPuzzleIds.length} puzzles
+        </div>
+      {/if}
+      {#if completedPuzzleIds}
+        <div class="block">
+          Done with {completedPuzzleIds.length} puzzles
         </div>
       {/if}
       <div class="block">
