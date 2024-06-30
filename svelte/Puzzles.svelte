@@ -10,6 +10,7 @@
   import { Chess, makeUci, parseUci } from "chessops";
   import { makeSquare, parseSquare } from "chessops/util";
   import { persisted } from "svelte-persisted-store";
+  import PuzzleHistoryProcessor from "./components/PuzzleHistoryProcessor.svelte";
 
   class Result {
     constructor(puzzleId, seenAt, skipped, madeMistake = false, doneAt = null) {
@@ -69,6 +70,26 @@
     getTotalSolves() {
       return this.getResults().filter((result) => result.wasSuccessful())
         .length;
+    }
+
+    getSolveStreak() {
+      let streak = 0;
+
+      if (!this.hasBeenSolved()) {
+        return streak;
+      }
+
+      const results = this.getResults();
+
+      for (let i = results.length - 1; i >= 0; i--) {
+        if (results[i].wasSuccessful()) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+
+      return streak;
     }
 
     averageSolveTime() {
@@ -145,13 +166,14 @@
   // Puzzle Data
   let allPuzzles = [];
   let activePuzzles = [];
+  let currentPuzzle;
   let currentPuzzleId;
   let puzzleShownAt;
 
   // Behavioral Config
   let batchSize = 10;
   let timeGoal = 15000;
-  let minimumSolves = 3;
+  let minimumSolves = 2;
   let alreadyCompleteOdds = 0.1;
   let otherIncompleteOdds = 0.1;
 
@@ -252,10 +274,21 @@
     }
 
     currentPuzzleId = candidatePuzzle.puzzleId;
+    currentPuzzle = allPuzzles.find(
+      (puzzle) => puzzle.puzzleId === currentPuzzleId,
+    );
 
+    const data = await getPuzzleData(currentPuzzleId);
+    if (data === null) {
+      return getNextPuzzle();
+    }
+    return data;
+  }
+
+  async function getPuzzleData(puzzleId) {
     // Check cache first
-    if ($puzzleDataStore[currentPuzzleId]) {
-      return $puzzleDataStore[currentPuzzleId];
+    if ($puzzleDataStore[puzzleId]) {
+      return $puzzleDataStore[puzzleId];
     }
 
     const response = await fetch(
@@ -264,8 +297,8 @@
 
     if (response.status === 404) {
       // Remove invalid
-      removePuzzleId(currentPuzzleId);
-      return getNextPuzzle();
+      removePuzzleId(puzzleId);
+      return null;
     }
 
     const puzzleData = await response.json();
@@ -450,13 +483,14 @@
     $puzzleIdsToWorkOn.forEach((puzzleId) => {
       allPuzzles.push(new Puzzle(puzzleId));
     });
+    setActivePuzzles();
   }
 
   onMount(async () => {
     initializePuzzles();
-    setActivePuzzles();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
+        event.preventDefault();
         nextButton.click();
       }
     });
@@ -526,9 +560,6 @@
       <div class="block">
         {$puzzleIdsToWorkOn.length} total puzzles
       </div>
-      <div class="block">
-        Currently working on {activePuzzles.length} puzzles
-      </div>
       <div class="block">Done with {completedPuzzles().length} puzzles</div>
       <div class="block">
         <form on:submit|preventDefault={addPuzzleIdToWorkOn}>
@@ -546,28 +577,29 @@
     </div>
     {#if activePuzzles.length >= 1}
       <div class="box">
+        <h3>Current Puzzles</h3>
         <table class="table is-fullwidth">
           <thead>
             <tr>
               <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
               <th><abbr title="Average solve time">Avg</abbr></th>
-              <th><abbr title="Total Solves">Solves</abbr></th>
+              <th><abbr title="Correct solves in a row">Solves</abbr></th>
             </tr>
           </thead>
           <tbody>
-            {#each [...activePuzzles].sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
+            {#each [...new Set( [...activePuzzles, currentPuzzle], )].sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
               <tr
                 animate:flip={{ duration: 400 }}
                 class:is-selected={currentPuzzleId === puzzle.puzzleId}
               >
                 <td class="puzzle-id">{puzzle.puzzleId}</td>
-                <td>
+                <td class:is-warning={puzzle.averageSolveTime() > timeGoal}>
                   {puzzle.averageSolveTime()
                     ? `${(puzzle.averageSolveTime() / 1000).toFixed(2)}s`
                     : "?"}
                 </td>
                 <td>
-                  {puzzle.getTotalSolves()}
+                  {puzzle.getSolveStreak()} / {minimumSolves}
                 </td>
               </tr>
             {/each}
@@ -575,6 +607,9 @@
         </table>
       </div>
     {/if}
+    <div class="box">
+      <PuzzleHistoryProcessor />
+    </div>
   </div>
 </div>
 
