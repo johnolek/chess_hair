@@ -152,6 +152,8 @@
   let batchSize = 10;
   let timeGoal = 15000;
   let minimumSolves = 3;
+  let alreadyCompleteOdds = 0.1;
+  let otherIncompleteOdds = 0.1;
 
   // Current puzzle state
   let moves;
@@ -200,6 +202,12 @@
     return allPuzzles.filter((puzzle) => puzzle.isComplete());
   }
 
+  function inactiveIncompletePuzzles() {
+    return allPuzzles.filter(
+      (puzzle) => !puzzle.isComplete() && !activePuzzles.includes(puzzle),
+    );
+  }
+
   function sortPuzzlesBySolveTime(a, b) {
     const aTime = a.averageSolveTime();
     const bTime = b.averageSolveTime();
@@ -218,27 +226,65 @@
 
   async function getNextPuzzle() {
     const previous = currentPuzzleId;
-    const currentPuzzle = Util.getRandomElement(activePuzzles);
-    currentPuzzleId = currentPuzzle.puzzleId;
-    if (activePuzzles.length > 1 && currentPuzzleId === previous) {
+    const nextType = getNextPuzzleType();
+    let candidatePuzzle;
+    switch (nextType) {
+      case "active":
+        candidatePuzzle = Util.getRandomElement(activePuzzles);
+        break;
+      case "inactive":
+        const inactivePuzzles = inactiveIncompletePuzzles();
+        candidatePuzzle =
+          inactivePuzzles.length > 0
+            ? Util.getRandomElement(inactivePuzzles)
+            : Util.getRandomElement(activePuzzles);
+        break;
+      case "alreadyComplete":
+        const completePuzzles = completedPuzzles();
+        candidatePuzzle =
+          completePuzzles.length > 0
+            ? Util.getRandomElement(completePuzzles)
+            : Util.getRandomElement(activePuzzles);
+        break;
+    }
+    if (activePuzzles.length > 1 && candidatePuzzle.puzzleId === previous) {
       return getNextPuzzle();
     }
+
+    currentPuzzleId = candidatePuzzle.puzzleId;
+
+    // Check cache first
     if ($puzzleDataStore[currentPuzzleId]) {
       return $puzzleDataStore[currentPuzzleId];
     }
+
     const response = await fetch(
       `https://lichess.org/api/puzzle/${currentPuzzleId}`,
     );
+
     if (response.status === 404) {
       // Remove invalid
       removePuzzleId(currentPuzzleId);
       return getNextPuzzle();
     }
+
     const puzzleData = await response.json();
     const data = $puzzleDataStore;
     data[currentPuzzleId] = puzzleData;
     puzzleDataStore.set(data);
     return puzzleData;
+  }
+
+  function getNextPuzzleType() {
+    const randomValue = Math.random();
+
+    if (randomValue < alreadyCompleteOdds) {
+      return "alreadyComplete";
+    } else if (randomValue < alreadyCompleteOdds + otherIncompleteOdds) {
+      return "inactive";
+    } else {
+      return "active";
+    }
   }
 
   async function skip() {
