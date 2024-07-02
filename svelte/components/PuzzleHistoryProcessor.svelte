@@ -4,7 +4,7 @@
   let filteredPuzzles = [];
   let minRating = 0;
   let maxRating = 3000;
-  let correctSolves = true;
+  let correctSolves = false;
   let incorrectSolves = true;
 
   function processPuzzleData() {
@@ -30,6 +30,7 @@
       ...new Set(filteredPuzzles.map((puzzle) => puzzle.puzzle.id)),
     ];
   }
+  let readonlyInput;
 </script>
 
 {#if puzzles.length === 0}
@@ -67,7 +68,13 @@
 
 {#if filteredPuzzles.length > 0}
   <p>Found {uniqueFilteredPuzzleIds.length} matching puzzles</p>
-  <textarea readonly>
-    {uniqueFilteredPuzzleIds.join(",")}
-  </textarea>
+  <input
+    bind:this={readonlyInput}
+    type="text"
+    readonly
+    value={uniqueFilteredPuzzleIds.join(",")}
+    on:focus={() => {
+      readonlyInput.select();
+    }}
+  />
 {/if}

@@ -547,21 +547,12 @@
   <div class="column is-3-desktop">
     <div class="box">
       <div class="block">
-        <a
-          class="button is-link ml-3"
-          href={`https://lichess.org/training/${currentPuzzleId}`}
-          target="_blank"
-        >
-          View on lichess
-        </a>
-      </div>
-      <div class="block is-flex is-justify-content-center"></div>
-    </div>
-    <div class="box">
-      <div class="block">
         {$puzzleIdsToWorkOn.length} total puzzles
       </div>
       <div class="block">Done with {completedPuzzles.length} puzzles</div>
+      <div class="block">
+        Target solve time: {(timeGoal / 1000).toFixed(1)} seconds
+      </div>
       <div class="block">
         <form on:submit|preventDefault={addPuzzleIdToWorkOn}>
           <label for="newPuzzleId">New Puzzle ID(s):</label>
@@ -593,13 +584,28 @@
                 animate:flip={{ duration: 400 }}
                 class:is-selected={currentPuzzleId === puzzle.puzzleId}
               >
-                <td class="puzzle-id">{puzzle.puzzleId}</td>
-                <td class:is-warning={puzzle.averageSolveTime() > timeGoal}>
+                <td class="puzzle-id"
+                  ><a
+                    href={puzzle.lichessUrl()}
+                    target="_blank"
+                    title="View on lichess.org">{puzzle.puzzleId}</a
+                  ></td
+                >
+                <td
+                  class:has-text-warning={puzzle.averageSolveTime() > timeGoal}
+                  class:has-text-success={puzzle.averageSolveTime() <=
+                    timeGoal && puzzle.averageSolveTime > 0}
+                >
                   {puzzle.averageSolveTime()
                     ? `${(puzzle.averageSolveTime() / 1000).toFixed(2)}s`
                     : "?"}
                 </td>
-                <td>
+                <td
+                  class:has-text-warning={puzzle.getSolveStreak() <
+                    minimumSolves}
+                  class:has-text-success={puzzle.getSolveStreak() >=
+                    minimumSolves}
+                >
                   {puzzle.getSolveStreak()} / {minimumSolves}
                 </td>
               </tr>
