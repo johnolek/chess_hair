@@ -166,6 +166,7 @@
   // Puzzle Data
   let allPuzzles = [];
   let activePuzzles = [];
+  let completedPuzzles = [];
   let currentPuzzle;
   let currentPuzzleId;
   let puzzleShownAt;
@@ -218,9 +219,10 @@
     });
 
     activePuzzles = incomplete.slice(0, batchSize);
+    completedPuzzles = getCompletedPuzzles();
   }
 
-  function completedPuzzles() {
+  function getCompletedPuzzles() {
     return allPuzzles.filter((puzzle) => puzzle.isComplete());
   }
 
@@ -262,10 +264,9 @@
             : Util.getRandomElement(activePuzzles);
         break;
       case "alreadyComplete":
-        const completePuzzles = completedPuzzles();
         candidatePuzzle =
-          completePuzzles.length > 0
-            ? Util.getRandomElement(completePuzzles)
+          completedPuzzles.length > 0
+            ? Util.getRandomElement(completedPuzzles)
             : Util.getRandomElement(activePuzzles);
         break;
     }
@@ -560,7 +561,7 @@
       <div class="block">
         {$puzzleIdsToWorkOn.length} total puzzles
       </div>
-      <div class="block">Done with {completedPuzzles().length} puzzles</div>
+      <div class="block">Done with {completedPuzzles.length} puzzles</div>
       <div class="block">
         <form on:submit|preventDefault={addPuzzleIdToWorkOn}>
           <label for="newPuzzleId">New Puzzle ID(s):</label>
