@@ -30,6 +30,10 @@
     wasSuccessful() {
       return !this.skipped && !this.madeMistake && this.doneAt;
     }
+
+    wasFailure() {
+      return this.madeMistake;
+    }
   }
 
   class Puzzle {
@@ -70,6 +74,10 @@
     getTotalSolves() {
       return this.getResults().filter((result) => result.wasSuccessful())
         .length;
+    }
+
+    getFailureCount() {
+      return this.getResults().filter((result) => result.wasFailure()).length;
     }
 
     getSolveStreak() {
@@ -181,7 +189,7 @@
   let batchSize = 10;
   let timeGoal = 15000;
   let minimumSolves = 2;
-  let alreadyCompleteOdds = 0.2;
+  let alreadyCompleteOdds = 0.3;
 
   // Current puzzle state
   let moves;
@@ -216,6 +224,7 @@
 
   // This is tied to the add new puzzle form
   let newPuzzleIds;
+
   function addPuzzleIdToWorkOn() {
     if (newPuzzleIds.length < 3) {
       newPuzzleIds = "";
@@ -510,6 +519,7 @@
   }
 
   let successMessage = null;
+
   function showSuccess(message, duration = 1500) {
     failureMessage = null;
     successMessage = message;
@@ -519,6 +529,7 @@
   }
 
   let failureMessage = null;
+
   function showFailure(message, duration = 1000) {
     successMessage = null;
     failureMessage = message;
@@ -594,28 +605,6 @@
     </div>
   </div>
   <div class="column is-3-desktop">
-    <div class="box">
-      <div class="block">
-        {$puzzleIdsToWorkOn.length} total puzzles
-      </div>
-      <div class="block">Done with {completedPuzzles.length} puzzles</div>
-      <div class="block">
-        Target solve time: {(timeGoal / 1000).toFixed(1)} seconds
-      </div>
-      <div class="block">
-        <form on:submit|preventDefault={addPuzzleIdToWorkOn}>
-          <label for="newPuzzleId">New Puzzle ID(s):</label>
-          <input
-            type="text"
-            id="newPuzzleId"
-            bind:value={newPuzzleIds}
-            placeholder=""
-          />
-          <br />
-          <button class="button is-primary" type="submit">Add</button>
-        </form>
-      </div>
-    </div>
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
         <h3>Current Puzzles</h3>
@@ -625,6 +614,7 @@
               <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
               <th><abbr title="Average solve time">Avg</abbr></th>
               <th><abbr title="Correct solves in a row">Solves</abbr></th>
+              <th><abbr title="Failure Count">Fails</abbr></th>
             </tr>
           </thead>
           <tbody>
@@ -657,12 +647,42 @@
                 >
                   {puzzle.getSolveStreak()} / {minimumSolves}
                 </td>
+                <td>
+                  {puzzle.getFailureCount()}
+                </td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
     {/if}
+    <div class="box">
+      <div class="block">
+        <p><strong>{$puzzleIdsToWorkOn.length}</strong> total puzzles</p>
+        <p>Done with <strong>{completedPuzzles.length}</strong> puzzles</p>
+        <p>
+          Target solve time: <strong>{(timeGoal / 1000).toFixed(1)}</strong> seconds
+        </p>
+        <p>
+          Must solve <strong>{minimumSolves}</strong> time{minimumSolves > 1
+            ? "s"
+            : ""} in a row
+        </p>
+      </div>
+      <div class="block">
+        <form on:submit|preventDefault={addPuzzleIdToWorkOn}>
+          <label for="newPuzzleId">New Puzzle ID(s):</label>
+          <input
+            type="text"
+            id="newPuzzleId"
+            bind:value={newPuzzleIds}
+            placeholder=""
+          />
+          <br />
+          <button class="button is-primary" type="submit">Add</button>
+        </form>
+      </div>
+    </div>
     <div class="box">
       <PuzzleHistoryProcessor />
     </div>
