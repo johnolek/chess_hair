@@ -168,7 +168,6 @@
   let activePuzzles = [];
   let completedPuzzles = [];
   let currentPuzzle;
-  let currentPuzzleId;
   let puzzleShownAt;
 
   // Behavioral Config
@@ -222,6 +221,12 @@
     completedPuzzles = getCompletedPuzzles();
   }
 
+  function removeActivePuzzle(puzzle) {
+    activePuzzles = activePuzzles.filter(
+      (activePuzzle) => activePuzzle.puzzleId !== puzzle.puzzleId,
+    );
+  }
+
   function getCompletedPuzzles() {
     return allPuzzles.filter((puzzle) => puzzle.isComplete());
   }
@@ -249,7 +254,7 @@
   }
 
   async function getNextPuzzle() {
-    const previous = currentPuzzleId;
+    const previous = currentPuzzle ? currentPuzzle.puzzleId : null;
     const nextType = getNextPuzzleType();
     let candidatePuzzle;
     switch (nextType) {
@@ -274,12 +279,11 @@
       return getNextPuzzle();
     }
 
-    currentPuzzleId = candidatePuzzle.puzzleId;
     currentPuzzle = allPuzzles.find(
-      (puzzle) => puzzle.puzzleId === currentPuzzleId,
+      (puzzle) => puzzle.puzzleId === candidatePuzzle.puzzleId,
     );
 
-    const data = await getPuzzleData(currentPuzzleId);
+    const data = await getPuzzleData(currentPuzzle.puzzleId);
     if (data === null) {
       return getNextPuzzle();
     }
@@ -292,9 +296,7 @@
       return $puzzleDataStore[puzzleId];
     }
 
-    const response = await fetch(
-      `https://lichess.org/api/puzzle/${currentPuzzleId}`,
-    );
+    const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`);
 
     if (response.status === 404) {
       // Remove invalid
@@ -304,7 +306,7 @@
 
     const puzzleData = await response.json();
     const data = $puzzleDataStore;
-    data[currentPuzzleId] = puzzleData;
+    data[currentPuzzle.puzzleId] = puzzleData;
     puzzleDataStore.set(data);
     return puzzleData;
   }
@@ -322,8 +324,8 @@
   }
 
   async function skip() {
-    const result = new Result(currentPuzzleId, puzzleShownAt, true);
-    addResult(currentPuzzleId, result);
+    const result = new Result(currentPuzzle.puzzleId, puzzleShownAt, true);
+    addResult(currentPuzzle.puzzleId, result);
     await loadNextPuzzle();
   }
 
@@ -450,13 +452,13 @@
   function handlePuzzleComplete() {
     puzzleComplete = true;
     const result = new Result(
-      currentPuzzleId,
+      currentPuzzle.puzzleId,
       puzzleShownAt,
       false,
       madeMistake,
       Util.currentMicrotime(),
     );
-    addResult(currentPuzzleId, result);
+    addResult(currentPuzzle.puzzleId, result);
     showSuccess("Correct!");
     setActivePuzzles();
   }
@@ -502,7 +504,7 @@
 <div class="columns is-centered">
   <div class="column is-6-desktop">
     <div class="block">
-      {#if activePuzzles.length > 0 && currentPuzzleId}
+      {#if activePuzzles.length > 0 && currentPuzzle}
         <Chessboard {chessgroundConfig} {orientation} bind:chessground>
           <div slot="centered-content">
             {#if successMessage}
@@ -582,7 +584,7 @@
             {#each [...new Set( [...activePuzzles, currentPuzzle], )].sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
               <tr
                 animate:flip={{ duration: 400 }}
-                class:is-selected={currentPuzzleId === puzzle.puzzleId}
+                class:is-selected={currentPuzzle.puzzleId === puzzle.puzzleId}
               >
                 <td class="puzzle-id"
                   ><a
