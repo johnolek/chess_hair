@@ -168,13 +168,13 @@
   let activePuzzles = [];
 
   $: {
+    const completed = Util.sortRandomly(getCompletedPuzzles());
+    const incompleteInactive = Util.sortRandomly(getInactiveCompletedPuzzles());
     while (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
-      const incompleteInactive = inactiveIncompletePuzzles();
-      const completed = getCompletedPuzzles();
       if (incompleteInactive.length > 0) {
-        addActivePuzzle(Util.getRandomElement(incompleteInactive));
+        addActivePuzzle(incompleteInactive.pop());
       } else if (completed.length > 0 && activePuzzles.length < batchSize) {
-        addActivePuzzle(Util.getRandomElement(completed));
+        addActivePuzzle(completed.pop());
       } else {
         break;
       }
@@ -244,7 +244,7 @@
     return allPuzzles.filter((puzzle) => !puzzle.isComplete());
   }
 
-  function inactiveIncompletePuzzles() {
+  function getInactiveCompletedPuzzles() {
     return getIncompletePuzzles().filter(
       (puzzle) => !activePuzzles.includes(puzzle),
     );
@@ -275,7 +275,7 @@
         candidatePuzzle = Util.getRandomElement(activePuzzles);
         break;
       case "inactive":
-        const inactivePuzzles = inactiveIncompletePuzzles();
+        const inactivePuzzles = getInactiveCompletedPuzzles();
         candidatePuzzle =
           inactivePuzzles.length > 0
             ? Util.getRandomElement(inactivePuzzles)
@@ -350,8 +350,19 @@
     results.set(allResults);
   }
 
-  function addCompletedPuzzle(currentPuzzle) {
-    completedPuzzles = [...completedPuzzles, currentPuzzle];
+  function addCompletedPuzzle(puzzleToAdd) {
+    completedPuzzles = [
+      ...new Set([
+        ...getCompletedPuzzles().map((puzzle) => puzzle.puzzleId),
+        puzzleToAdd.puzzleId,
+      ]),
+    ].map((puzzleId) => new Puzzle(puzzleId));
+  }
+
+  function removeCompletedPuzzle(puzzleToRemove) {
+    completedPuzzles = completedPuzzles.filter(
+      (puzzle) => puzzle.puzzleId !== puzzleToRemove.puzzleId,
+    );
   }
 
   async function loadNextPuzzle() {
@@ -481,6 +492,9 @@
       Util.currentMicrotime(),
     );
     addResult(currentPuzzle.puzzleId, result);
+    if (madeMistake) {
+      removeCompletedPuzzle(currentPuzzle);
+    }
     // Trigger reactivity
     activePuzzles = activePuzzles;
     showSuccess("Correct!");
@@ -509,7 +523,8 @@
     $puzzleIdsToWorkOn.forEach((puzzleId) => {
       allPuzzles.push(new Puzzle(puzzleId));
     });
-    addActivePuzzle(inactiveIncompletePuzzles()[0]);
+    addActivePuzzle(getInactiveCompletedPuzzles()[0]);
+    completedPuzzles = getCompletedPuzzles();
   }
 
   onMount(async () => {

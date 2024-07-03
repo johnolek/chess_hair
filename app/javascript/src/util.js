@@ -32,6 +32,15 @@ class Util {
   static currentMicrotime() {
     return new Date().getTime();
   }
+
+  static sortRandomly(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const randomIndex = Util.getRandomIntBetween(0, i);
+      // Swap elements array[i] and array[randomIndex]
+      [array[i], array[randomIndex]] = [array[randomIndex], array[i]];
+    }
+    return array;
+  }
 }
 
 export { Util };
