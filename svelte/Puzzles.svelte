@@ -608,7 +608,7 @@
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
         <h3>Current Puzzles</h3>
-        <table class="table is-fullwidth is-narrow">
+        <table class="table is-fullwidth is-narrow is-striped">
           <thead>
             <tr>
               <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
