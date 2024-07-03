@@ -604,16 +604,17 @@
       {/if}
     </div>
   </div>
-  <div class="column is-3-desktop">
+  <div class="column is-4-desktop">
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
         <h3>Current Puzzles</h3>
-        <table class="table is-fullwidth">
+        <table class="table is-fullwidth is-narrow">
           <thead>
             <tr>
               <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
               <th><abbr title="Average solve time">Avg</abbr></th>
-              <th><abbr title="Correct solves in a row">Solves</abbr></th>
+              <th><abbr title="Correct solves in a row">Streak</abbr></th>
+              <th><abbr title="Total correct solves">Solves</abbr></th>
               <th><abbr title="Failure Count">Fails</abbr></th>
             </tr>
           </thead>
@@ -633,7 +634,7 @@
                 <td
                   class:has-text-warning={puzzle.averageSolveTime() > timeGoal}
                   class:has-text-success={puzzle.averageSolveTime() <=
-                    timeGoal && puzzle.averageSolveTime > 0}
+                    timeGoal && puzzle.averageSolveTime() > 0}
                 >
                   {puzzle.averageSolveTime()
                     ? `${(puzzle.averageSolveTime() / 1000).toFixed(2)}s`
@@ -646,6 +647,9 @@
                     minimumSolves}
                 >
                   {puzzle.getSolveStreak()} / {minimumSolves}
+                </td>
+                <td>
+                  {puzzle.getTotalSolves()}
                 </td>
                 <td>
                   {puzzle.getFailureCount()}
