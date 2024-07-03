@@ -166,6 +166,13 @@
   // Puzzle Data
   let allPuzzles = [];
   let activePuzzles = [];
+
+  $: {
+    if (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
+      setActivePuzzles();
+    }
+  }
+
   let completedPuzzles = [];
   let currentPuzzle;
   let puzzleShownAt;
@@ -203,7 +210,6 @@
     idsToAdd.forEach((id) => currentPuzzleIds.add(id));
     puzzleIdsToWorkOn.set([...currentPuzzleIds]);
     newPuzzleIds = "";
-    setActivePuzzles();
   }
 
   function removePuzzleId(puzzleId) {
@@ -341,6 +347,10 @@
     puzzleComplete = false;
     madeMistake = false;
 
+    if (currentPuzzle && currentPuzzle.isComplete()) {
+      removeActivePuzzle(currentPuzzle);
+    }
+
     const next = await getNextPuzzle();
     orientation = Util.whoseMoveIsIt(next.puzzle.initialPly + 1);
     // Clone so we don't cache a value that gets shifted later
@@ -459,8 +469,8 @@
       Util.currentMicrotime(),
     );
     addResult(currentPuzzle.puzzleId, result);
+    activePuzzles = activePuzzles;
     showSuccess("Correct!");
-    setActivePuzzles();
   }
 
   let successMessage = null;
