@@ -168,16 +168,8 @@
   let activePuzzles = [];
 
   $: {
-    const completed = Util.sortRandomly(getCompletedPuzzles());
-    const incompleteInactive = Util.sortRandomly(getInactiveCompletedPuzzles());
-    while (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
-      if (incompleteInactive.length > 0) {
-        addActivePuzzle(incompleteInactive.pop());
-      } else if (completed.length > 0 && activePuzzles.length < batchSize) {
-        addActivePuzzle(completed.pop());
-      } else {
-        break;
-      }
+    if (activePuzzles.length < batchSize && allPuzzles.length > 0) {
+      fillActivePuzzles();
     }
   }
 
@@ -189,8 +181,7 @@
   let batchSize = 10;
   let timeGoal = 15000;
   let minimumSolves = 2;
-  let alreadyCompleteOdds = 0.1;
-  let otherIncompleteOdds = 0.1;
+  let alreadyCompleteOdds = 0.2;
 
   // Current puzzle state
   let moves;
@@ -205,6 +196,23 @@
   const puzzleDataStore = persisted("puzzles.data", {});
   const puzzleIdsToWorkOn = persisted("puzzles.idsToWorkOn", []);
   const results = persisted("puzzles.results", {});
+
+  function fillActivePuzzles() {
+    const completed = Util.sortRandomly(getCompletedPuzzles());
+    const incompleteInactive = Util.sortRandomly(getInactiveCompletedPuzzles());
+    let puzzleType;
+    while (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
+      puzzleType = Math.random() < 0.2 ? "completed" : "inactive";
+      if (incompleteInactive.length < 1 && completed.length < 1) {
+        break;
+      }
+      if (puzzleType === "completed" && completed.length > 0) {
+        addActivePuzzle(completed.pop());
+      } else if (incompleteInactive.length > 0) {
+        addActivePuzzle(incompleteInactive.pop());
+      }
+    }
+  }
 
   // This is tied to the add new puzzle form
   let newPuzzleIds;
@@ -227,7 +235,12 @@
   }
 
   function addActivePuzzle(puzzle) {
-    activePuzzles = [...activePuzzles, puzzle];
+    activePuzzles = [
+      ...new Set([
+        ...activePuzzles.map((puzzle) => puzzle.puzzleId),
+        puzzle.puzzleId,
+      ]),
+    ].map((puzzleId) => new Puzzle(puzzleId));
   }
 
   function removeActivePuzzle(puzzle) {
@@ -268,26 +281,24 @@
 
   async function getNextPuzzle() {
     const previous = currentPuzzle ? currentPuzzle.puzzleId : null;
-    const nextType = getNextPuzzleType();
+
+    const type = getNextPuzzleType();
+
+    const alreadyComplete = activePuzzles.filter((puzzle) =>
+      puzzle.isComplete(),
+    );
+    const incomplete = activePuzzles.filter((puzzle) => !puzzle.isComplete());
+
     let candidatePuzzle;
-    switch (nextType) {
-      case "active":
-        candidatePuzzle = Util.getRandomElement(activePuzzles);
-        break;
-      case "inactive":
-        const inactivePuzzles = getInactiveCompletedPuzzles();
-        candidatePuzzle =
-          inactivePuzzles.length > 0
-            ? Util.getRandomElement(inactivePuzzles)
-            : Util.getRandomElement(activePuzzles);
-        break;
-      case "alreadyComplete":
-        candidatePuzzle =
-          completedPuzzles.length > 0
-            ? Util.getRandomElement(completedPuzzles)
-            : Util.getRandomElement(activePuzzles);
-        break;
+    if (
+      (type === "alreadyComplete" && alreadyComplete.length > 0) ||
+      incomplete.length < 1
+    ) {
+      candidatePuzzle = Util.getRandomElement(activePuzzles);
+    } else {
+      candidatePuzzle = Util.getRandomElement(incomplete);
     }
+
     if (activePuzzles.length > 1 && candidatePuzzle.puzzleId === previous) {
       return getNextPuzzle();
     }
@@ -297,9 +308,11 @@
     );
 
     const data = await getPuzzleData(currentPuzzle.puzzleId);
+
     if (data === null) {
       return getNextPuzzle();
     }
+
     return data;
   }
 
@@ -326,14 +339,10 @@
 
   function getNextPuzzleType() {
     const randomValue = Math.random();
-
     if (randomValue < alreadyCompleteOdds) {
       return "alreadyComplete";
-    } else if (randomValue < alreadyCompleteOdds + otherIncompleteOdds) {
-      return "inactive";
-    } else {
-      return "active";
     }
+    return "incomplete";
   }
 
   async function skip() {
@@ -523,8 +532,8 @@
     $puzzleIdsToWorkOn.forEach((puzzleId) => {
       allPuzzles.push(new Puzzle(puzzleId));
     });
-    addActivePuzzle(getInactiveCompletedPuzzles()[0]);
     completedPuzzles = getCompletedPuzzles();
+    fillActivePuzzles();
   }
 
   onMount(async () => {
@@ -619,7 +628,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each [...new Set( [...activePuzzles, currentPuzzle], )].sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
+            {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
               <tr
                 animate:flip={{ duration: 400 }}
                 class:is-selected={currentPuzzle.puzzleId === puzzle.puzzleId}
