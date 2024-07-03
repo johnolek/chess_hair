@@ -224,7 +224,10 @@
     });
 
     activePuzzles = incomplete.slice(0, batchSize);
-    completedPuzzles = getCompletedPuzzles();
+  }
+
+  function addActivePuzzle(puzzle) {
+    activePuzzles = [...activePuzzles, puzzle];
   }
 
   function removeActivePuzzle(puzzle) {
@@ -343,12 +346,17 @@
     results.set(allResults);
   }
 
+  function addCompletedPuzzle(currentPuzzle) {
+    completedPuzzles = [...completedPuzzles, currentPuzzle];
+  }
+
   async function loadNextPuzzle() {
     puzzleComplete = false;
     madeMistake = false;
 
     if (currentPuzzle && currentPuzzle.isComplete()) {
       removeActivePuzzle(currentPuzzle);
+      addCompletedPuzzle(currentPuzzle);
     }
 
     const next = await getNextPuzzle();
@@ -469,6 +477,7 @@
       Util.currentMicrotime(),
     );
     addResult(currentPuzzle.puzzleId, result);
+    // Trigger reactivity
     activePuzzles = activePuzzles;
     showSuccess("Correct!");
   }
@@ -497,6 +506,7 @@
       allPuzzles.push(new Puzzle(puzzleId));
     });
     setActivePuzzles();
+    completedPuzzles = getCompletedPuzzles();
   }
 
   onMount(async () => {
