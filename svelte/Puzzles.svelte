@@ -168,8 +168,16 @@
   let activePuzzles = [];
 
   $: {
-    if (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
-      setActivePuzzles();
+    while (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
+      const incompleteInactive = inactiveIncompletePuzzles();
+      const completed = getCompletedPuzzles();
+      if (incompleteInactive.length > 0) {
+        addActivePuzzle(Util.getRandomElement(incompleteInactive));
+      } else if (completed.length > 0 && activePuzzles.length < batchSize) {
+        addActivePuzzle(Util.getRandomElement(completed));
+      } else {
+        break;
+      }
     }
   }
 
@@ -218,14 +226,6 @@
     puzzleIdsToWorkOn.set([...currentPuzzleIds]);
   }
 
-  function setActivePuzzles() {
-    const incomplete = [...allPuzzles].filter((puzzle) => {
-      return !puzzle.isComplete();
-    });
-
-    activePuzzles = incomplete.slice(0, batchSize);
-  }
-
   function addActivePuzzle(puzzle) {
     activePuzzles = [...activePuzzles, puzzle];
   }
@@ -240,9 +240,13 @@
     return allPuzzles.filter((puzzle) => puzzle.isComplete());
   }
 
+  function getIncompletePuzzles() {
+    return allPuzzles.filter((puzzle) => !puzzle.isComplete());
+  }
+
   function inactiveIncompletePuzzles() {
-    return allPuzzles.filter(
-      (puzzle) => !puzzle.isComplete() && !activePuzzles.includes(puzzle),
+    return getIncompletePuzzles().filter(
+      (puzzle) => !activePuzzles.includes(puzzle),
     );
   }
 
@@ -505,8 +509,7 @@
     $puzzleIdsToWorkOn.forEach((puzzleId) => {
       allPuzzles.push(new Puzzle(puzzleId));
     });
-    setActivePuzzles();
-    completedPuzzles = getCompletedPuzzles();
+    addActivePuzzle(inactiveIncompletePuzzles()[0]);
   }
 
   onMount(async () => {
@@ -589,7 +592,7 @@
         </form>
       </div>
     </div>
-    {#if activePuzzles.length >= 1}
+    {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
         <h3>Current Puzzles</h3>
         <table class="table is-fullwidth">
