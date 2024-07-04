@@ -55,10 +55,30 @@
   }
 
   function handleMove(from, to) {
-    const move = chessInstance.move({ from, to, promotion: "q" }); // default to queen for simplicity
+    const isPromotion = (from, to) => {
+      const fromRank = from[1];
+      const toRank = to[1];
+      const piece = chessInstance.get(from).type;
+      return (
+        piece === "p" &&
+        ((fromRank === "7" && toRank === "8") ||
+          (fromRank === "2" && toRank === "1"))
+      );
+    };
+
+    let promotion = "q"; // Default to queen
+
+    if (isPromotion(from, to)) {
+      const choice = prompt("Promote pawn to (q, r, b, n):");
+      if (["q", "r", "b", "n"].includes(choice)) {
+        promotion = choice;
+      }
+    }
+
+    const move = chessInstance.move({ from, to, promotion });
     if (move) {
       updateChessground();
-      dispatch("move", { move });
+      dispatch("move", { move, isCheckmate: chessInstance.isCheckmate() });
     }
   }
 

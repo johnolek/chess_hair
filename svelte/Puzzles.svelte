@@ -401,8 +401,9 @@
 
   function handleUserMove(moveEvent) {
     const move = moveEvent.detail.move;
+    const isCheckmate = moveEvent.detail.isCheckmate;
     const correctMove = moves[0];
-    if (move.lan === correctMove) {
+    if (move.lan === correctMove || isCheckmate) {
       moves.shift(); // remove the user move first
       const computerMove = moves.shift();
       if (computerMove) {
