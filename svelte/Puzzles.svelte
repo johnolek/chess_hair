@@ -11,6 +11,7 @@
   import { makeSquare, parseSquare } from "chessops/util";
   import { persisted } from "svelte-persisted-store";
   import PuzzleHistoryProcessor from "./components/PuzzleHistoryProcessor.svelte";
+  import CollapsibleBox from "./components/CollapsibleBox.svelte";
 
   class Result {
     constructor(puzzleId, seenAt, skipped, madeMistake = false, doneAt = null) {
@@ -687,9 +688,9 @@
         </form>
       </div>
     </div>
-    <div class="box">
+    <CollapsibleBox title="Puzzle History Helper" }>
       <PuzzleHistoryProcessor />
-    </div>
+    </CollapsibleBox>
   </div>
 </div>
 

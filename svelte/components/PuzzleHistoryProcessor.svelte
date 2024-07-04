@@ -3,7 +3,7 @@
   let puzzles = [];
   let filteredPuzzles = [];
   let minRating = 0;
-  let maxRating = 5000;
+  let maxRating = 3500;
   let correctSolves = false;
   let incorrectSolves = true;
   let filterSubmitted = false;
