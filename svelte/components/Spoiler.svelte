@@ -1,0 +1,44 @@
+<script>
+  export let isShown = false;
+
+  function toggleShown() {
+    isShown = !isShown;
+  }
+
+  function handleKeydown(event) {
+    // Check if the key is Enter or Space
+    if (event.key === "Enter" || event.key === " ") {
+      toggleShown();
+      event.preventDefault(); // Prevent the default action to avoid scrolling on Space press
+    }
+  }
+</script>
+
+<div
+  class="spoiler"
+  role="button"
+  tabindex="0"
+  on:click={toggleShown}
+  on:keydown={handleKeydown}
+>
+  <div class="content" class:hiddenContent={!isShown}>
+    <slot></slot>
+  </div>
+</div>
+
+<style>
+  .spoiler {
+    cursor: pointer;
+    display: inline-block;
+  }
+  .content {
+    border-radius: 3px;
+    transition:
+      background-color 0.5s ease,
+      color 0.5s ease;
+  }
+  .hiddenContent {
+    background-color: var(--bulma-grey);
+    color: transparent;
+  }
+</style>

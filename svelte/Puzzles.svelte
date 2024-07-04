@@ -8,6 +8,7 @@
   import { Chess } from "chess.js";
   import PuzzleHistoryProcessor from "./components/PuzzleHistoryProcessor.svelte";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
+  import Spoiler from "./components/Spoiler.svelte";
 
   class Result {
     constructor(puzzleId, seenAt, skipped, madeMistake = false, doneAt = null) {
@@ -540,7 +541,9 @@
       <div class="box">
         <h3>Current Puzzles</h3>
         {#await getPuzzleData(currentPuzzle.puzzleId) then data}
-          Rating: {data.puzzle.rating}
+          Rating: <Spoiler isShown={puzzleComplete}
+            >{data.puzzle.rating}</Spoiler
+          >
         {/await}
         <table class="table is-fullwidth is-narrow is-striped">
           <thead>
