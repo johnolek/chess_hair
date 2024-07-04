@@ -688,7 +688,7 @@
         </form>
       </div>
     </div>
-    <CollapsibleBox title="Puzzle History Helper" }>
+    <CollapsibleBox title="Puzzle History Helper">
       <PuzzleHistoryProcessor />
     </CollapsibleBox>
   </div>

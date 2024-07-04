@@ -3932,6 +3932,1896 @@ function debounceRedraw(redrawNow) {
     };
 }
 
+/**
+ * @license
+ * Copyright (c) 2023, Jeff Hlywa (jhlywa@gmail.com)
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+const WHITE = 'w';
+const BLACK = 'b';
+const PAWN = 'p';
+const KNIGHT = 'n';
+const BISHOP = 'b';
+const ROOK = 'r';
+const QUEEN = 'q';
+const KING = 'k';
+const DEFAULT_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const EMPTY = -1;
+const FLAGS = {
+    NORMAL: 'n',
+    CAPTURE: 'c',
+    BIG_PAWN: 'b',
+    EP_CAPTURE: 'e',
+    PROMOTION: 'p',
+    KSIDE_CASTLE: 'k',
+    QSIDE_CASTLE: 'q',
+};
+const BITS = {
+    NORMAL: 1,
+    CAPTURE: 2,
+    BIG_PAWN: 4,
+    EP_CAPTURE: 8,
+    PROMOTION: 16,
+    KSIDE_CASTLE: 32,
+    QSIDE_CASTLE: 64,
+};
+/*
+ * NOTES ABOUT 0x88 MOVE GENERATION ALGORITHM
+ * ----------------------------------------------------------------------------
+ * From https://github.com/jhlywa/chess.js/issues/230
+ *
+ * A lot of people are confused when they first see the internal representation
+ * of chess.js. It uses the 0x88 Move Generation Algorithm which internally
+ * stores the board as an 8x16 array. This is purely for efficiency but has a
+ * couple of interesting benefits:
+ *
+ * 1. 0x88 offers a very inexpensive "off the board" check. Bitwise AND (&) any
+ *    square with 0x88, if the result is non-zero then the square is off the
+ *    board. For example, assuming a knight square A8 (0 in 0x88 notation),
+ *    there are 8 possible directions in which the knight can move. These
+ *    directions are relative to the 8x16 board and are stored in the
+ *    PIECE_OFFSETS map. One possible move is A8 - 18 (up one square, and two
+ *    squares to the left - which is off the board). 0 - 18 = -18 & 0x88 = 0x88
+ *    (because of two-complement representation of -18). The non-zero result
+ *    means the square is off the board and the move is illegal. Take the
+ *    opposite move (from A8 to C7), 0 + 18 = 18 & 0x88 = 0. A result of zero
+ *    means the square is on the board.
+ *
+ * 2. The relative distance (or difference) between two squares on a 8x16 board
+ *    is unique and can be used to inexpensively determine if a piece on a
+ *    square can attack any other arbitrary square. For example, let's see if a
+ *    pawn on E7 can attack E2. The difference between E7 (20) - E2 (100) is
+ *    -80. We add 119 to make the ATTACKS array index non-negative (because the
+ *    worst case difference is A8 - H1 = -119). The ATTACKS array contains a
+ *    bitmask of pieces that can attack from that distance and direction.
+ *    ATTACKS[-80 + 119=39] gives us 24 or 0b11000 in binary. Look at the
+ *    PIECE_MASKS map to determine the mask for a given piece type. In our pawn
+ *    example, we would check to see if 24 & 0x1 is non-zero, which it is
+ *    not. So, naturally, a pawn on E7 can't attack a piece on E2. However, a
+ *    rook can since 24 & 0x8 is non-zero. The only thing left to check is that
+ *    there are no blocking pieces between E7 and E2. That's where the RAYS
+ *    array comes in. It provides an offset (in this case 16) to add to E7 (20)
+ *    to check for blocking pieces. E7 (20) + 16 = E6 (36) + 16 = E5 (52) etc.
+ */
+// prettier-ignore
+// eslint-disable-next-line
+const Ox88 = {
+    a8: 0, b8: 1, c8: 2, d8: 3, e8: 4, f8: 5, g8: 6, h8: 7,
+    a7: 16, b7: 17, c7: 18, d7: 19, e7: 20, f7: 21, g7: 22, h7: 23,
+    a6: 32, b6: 33, c6: 34, d6: 35, e6: 36, f6: 37, g6: 38, h6: 39,
+    a5: 48, b5: 49, c5: 50, d5: 51, e5: 52, f5: 53, g5: 54, h5: 55,
+    a4: 64, b4: 65, c4: 66, d4: 67, e4: 68, f4: 69, g4: 70, h4: 71,
+    a3: 80, b3: 81, c3: 82, d3: 83, e3: 84, f3: 85, g3: 86, h3: 87,
+    a2: 96, b2: 97, c2: 98, d2: 99, e2: 100, f2: 101, g2: 102, h2: 103,
+    a1: 112, b1: 113, c1: 114, d1: 115, e1: 116, f1: 117, g1: 118, h1: 119
+};
+const PAWN_OFFSETS = {
+    b: [16, 32, 17, 15],
+    w: [-16, -32, -17, -15],
+};
+const PIECE_OFFSETS = {
+    n: [-18, -33, -31, -14, 18, 33, 31, 14],
+    b: [-17, -15, 17, 15],
+    r: [-16, 1, 16, -1],
+    q: [-17, -16, -15, 1, 17, 16, 15, -1],
+    k: [-17, -16, -15, 1, 17, 16, 15, -1],
+};
+// prettier-ignore
+const ATTACKS = [
+    20, 0, 0, 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 20, 0,
+    0, 20, 0, 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 20, 0, 0,
+    0, 0, 20, 0, 0, 0, 0, 24, 0, 0, 0, 0, 20, 0, 0, 0,
+    0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 20, 0, 0, 0, 0,
+    0, 0, 0, 0, 20, 0, 0, 24, 0, 0, 20, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 20, 2, 24, 2, 20, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 2, 53, 56, 53, 2, 0, 0, 0, 0, 0, 0,
+    24, 24, 24, 24, 24, 24, 56, 0, 56, 24, 24, 24, 24, 24, 24, 0,
+    0, 0, 0, 0, 0, 2, 53, 56, 53, 2, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 20, 2, 24, 2, 20, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 20, 0, 0, 24, 0, 0, 20, 0, 0, 0, 0, 0,
+    0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 20, 0, 0, 0, 0,
+    0, 0, 20, 0, 0, 0, 0, 24, 0, 0, 0, 0, 20, 0, 0, 0,
+    0, 20, 0, 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 20, 0, 0,
+    20, 0, 0, 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 20
+];
+// prettier-ignore
+const RAYS = [
+    17, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 15, 0,
+    0, 17, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0, 0, 15, 0, 0,
+    0, 0, 17, 0, 0, 0, 0, 16, 0, 0, 0, 0, 15, 0, 0, 0,
+    0, 0, 0, 17, 0, 0, 0, 16, 0, 0, 0, 15, 0, 0, 0, 0,
+    0, 0, 0, 0, 17, 0, 0, 16, 0, 0, 15, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 17, 0, 16, 0, 15, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 17, 16, 15, 0, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 1, 0, -1, -1, -1, -1, -1, -1, -1, 0,
+    0, 0, 0, 0, 0, 0, -15, -16, -17, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, -15, 0, -16, 0, -17, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, -15, 0, 0, -16, 0, 0, -17, 0, 0, 0, 0, 0,
+    0, 0, 0, -15, 0, 0, 0, -16, 0, 0, 0, -17, 0, 0, 0, 0,
+    0, 0, -15, 0, 0, 0, 0, -16, 0, 0, 0, 0, -17, 0, 0, 0,
+    0, -15, 0, 0, 0, 0, 0, -16, 0, 0, 0, 0, 0, -17, 0, 0,
+    -15, 0, 0, 0, 0, 0, 0, -16, 0, 0, 0, 0, 0, 0, -17
+];
+const PIECE_MASKS = { p: 0x1, n: 0x2, b: 0x4, r: 0x8, q: 0x10, k: 0x20 };
+const SYMBOLS = 'pnbrqkPNBRQK';
+const PROMOTIONS = [KNIGHT, BISHOP, ROOK, QUEEN];
+const RANK_1 = 7;
+const RANK_2 = 6;
+/*
+ * const RANK_3 = 5
+ * const RANK_4 = 4
+ * const RANK_5 = 3
+ * const RANK_6 = 2
+ */
+const RANK_7 = 1;
+const RANK_8 = 0;
+const SIDES = {
+    [KING]: BITS.KSIDE_CASTLE,
+    [QUEEN]: BITS.QSIDE_CASTLE,
+};
+const ROOKS = {
+    w: [
+        { square: Ox88.a1, flag: BITS.QSIDE_CASTLE },
+        { square: Ox88.h1, flag: BITS.KSIDE_CASTLE },
+    ],
+    b: [
+        { square: Ox88.a8, flag: BITS.QSIDE_CASTLE },
+        { square: Ox88.h8, flag: BITS.KSIDE_CASTLE },
+    ],
+};
+const SECOND_RANK = { b: RANK_7, w: RANK_2 };
+const TERMINATION_MARKERS = ['1-0', '0-1', '1/2-1/2', '*'];
+// Extracts the zero-based rank of an 0x88 square.
+function rank(square) {
+    return square >> 4;
+}
+// Extracts the zero-based file of an 0x88 square.
+function file$d(square) {
+    return square & 0xf;
+}
+function isDigit(c) {
+    return '0123456789'.indexOf(c) !== -1;
+}
+// Converts a 0x88 square to algebraic notation.
+function algebraic(square) {
+    const f = file$d(square);
+    const r = rank(square);
+    return ('abcdefgh'.substring(f, f + 1) +
+        '87654321'.substring(r, r + 1));
+}
+function swapColor(color) {
+    return color === WHITE ? BLACK : WHITE;
+}
+function validateFen(fen) {
+    // 1st criterion: 6 space-seperated fields?
+    const tokens = fen.split(/\s+/);
+    if (tokens.length !== 6) {
+        return {
+            ok: false,
+            error: 'Invalid FEN: must contain six space-delimited fields',
+        };
+    }
+    // 2nd criterion: move number field is a integer value > 0?
+    const moveNumber = parseInt(tokens[5], 10);
+    if (isNaN(moveNumber) || moveNumber <= 0) {
+        return {
+            ok: false,
+            error: 'Invalid FEN: move number must be a positive integer',
+        };
+    }
+    // 3rd criterion: half move counter is an integer >= 0?
+    const halfMoves = parseInt(tokens[4], 10);
+    if (isNaN(halfMoves) || halfMoves < 0) {
+        return {
+            ok: false,
+            error: 'Invalid FEN: half move counter number must be a non-negative integer',
+        };
+    }
+    // 4th criterion: 4th field is a valid e.p.-string?
+    if (!/^(-|[abcdefgh][36])$/.test(tokens[3])) {
+        return { ok: false, error: 'Invalid FEN: en-passant square is invalid' };
+    }
+    // 5th criterion: 3th field is a valid castle-string?
+    if (/[^kKqQ-]/.test(tokens[2])) {
+        return { ok: false, error: 'Invalid FEN: castling availability is invalid' };
+    }
+    // 6th criterion: 2nd field is "w" (white) or "b" (black)?
+    if (!/^(w|b)$/.test(tokens[1])) {
+        return { ok: false, error: 'Invalid FEN: side-to-move is invalid' };
+    }
+    // 7th criterion: 1st field contains 8 rows?
+    const rows = tokens[0].split('/');
+    if (rows.length !== 8) {
+        return {
+            ok: false,
+            error: "Invalid FEN: piece data does not contain 8 '/'-delimited rows",
+        };
+    }
+    // 8th criterion: every row is valid?
+    for (let i = 0; i < rows.length; i++) {
+        // check for right sum of fields AND not two numbers in succession
+        let sumFields = 0;
+        let previousWasNumber = false;
+        for (let k = 0; k < rows[i].length; k++) {
+            if (isDigit(rows[i][k])) {
+                if (previousWasNumber) {
+                    return {
+                        ok: false,
+                        error: 'Invalid FEN: piece data is invalid (consecutive number)',
+                    };
+                }
+                sumFields += parseInt(rows[i][k], 10);
+                previousWasNumber = true;
+            }
+            else {
+                if (!/^[prnbqkPRNBQK]$/.test(rows[i][k])) {
+                    return {
+                        ok: false,
+                        error: 'Invalid FEN: piece data is invalid (invalid piece)',
+                    };
+                }
+                sumFields += 1;
+                previousWasNumber = false;
+            }
+        }
+        if (sumFields !== 8) {
+            return {
+                ok: false,
+                error: 'Invalid FEN: piece data is invalid (too many squares in rank)',
+            };
+        }
+    }
+    // 9th criterion: is en-passant square legal?
+    if ((tokens[3][1] == '3' && tokens[1] == 'w') ||
+        (tokens[3][1] == '6' && tokens[1] == 'b')) {
+        return { ok: false, error: 'Invalid FEN: illegal en-passant square' };
+    }
+    // 10th criterion: does chess position contain exact two kings?
+    const kings = [
+        { color: 'white', regex: /K/g },
+        { color: 'black', regex: /k/g },
+    ];
+    for (const { color, regex } of kings) {
+        if (!regex.test(tokens[0])) {
+            return { ok: false, error: `Invalid FEN: missing ${color} king` };
+        }
+        if ((tokens[0].match(regex) || []).length > 1) {
+            return { ok: false, error: `Invalid FEN: too many ${color} kings` };
+        }
+    }
+    // 11th criterion: are any pawns on the first or eighth rows?
+    if (Array.from(rows[0] + rows[7]).some((char) => char.toUpperCase() === 'P')) {
+        return {
+            ok: false,
+            error: 'Invalid FEN: some pawns are on the edge rows',
+        };
+    }
+    return { ok: true };
+}
+// this function is used to uniquely identify ambiguous moves
+function getDisambiguator(move, moves) {
+    const from = move.from;
+    const to = move.to;
+    const piece = move.piece;
+    let ambiguities = 0;
+    let sameRank = 0;
+    let sameFile = 0;
+    for (let i = 0, len = moves.length; i < len; i++) {
+        const ambigFrom = moves[i].from;
+        const ambigTo = moves[i].to;
+        const ambigPiece = moves[i].piece;
+        /*
+         * if a move of the same piece type ends on the same to square, we'll need
+         * to add a disambiguator to the algebraic notation
+         */
+        if (piece === ambigPiece && from !== ambigFrom && to === ambigTo) {
+            ambiguities++;
+            if (rank(from) === rank(ambigFrom)) {
+                sameRank++;
+            }
+            if (file$d(from) === file$d(ambigFrom)) {
+                sameFile++;
+            }
+        }
+    }
+    if (ambiguities > 0) {
+        if (sameRank > 0 && sameFile > 0) {
+            /*
+             * if there exists a similar moving piece on the same rank and file as
+             * the move in question, use the square as the disambiguator
+             */
+            return algebraic(from);
+        }
+        else if (sameFile > 0) {
+            /*
+             * if the moving piece rests on the same file, use the rank symbol as the
+             * disambiguator
+             */
+            return algebraic(from).charAt(1);
+        }
+        else {
+            // else use the file symbol
+            return algebraic(from).charAt(0);
+        }
+    }
+    return '';
+}
+function addMove(moves, color, from, to, piece, captured = undefined, flags = BITS.NORMAL) {
+    const r = rank(to);
+    if (piece === PAWN && (r === RANK_1 || r === RANK_8)) {
+        for (let i = 0; i < PROMOTIONS.length; i++) {
+            const promotion = PROMOTIONS[i];
+            moves.push({
+                color,
+                from,
+                to,
+                piece,
+                captured,
+                promotion,
+                flags: flags | BITS.PROMOTION,
+            });
+        }
+    }
+    else {
+        moves.push({
+            color,
+            from,
+            to,
+            piece,
+            captured,
+            flags,
+        });
+    }
+}
+function inferPieceType(san) {
+    let pieceType = san.charAt(0);
+    if (pieceType >= 'a' && pieceType <= 'h') {
+        const matches = san.match(/[a-h]\d.*[a-h]\d/);
+        if (matches) {
+            return undefined;
+        }
+        return PAWN;
+    }
+    pieceType = pieceType.toLowerCase();
+    if (pieceType === 'o') {
+        return KING;
+    }
+    return pieceType;
+}
+// parses all of the decorators out of a SAN string
+function strippedSan(move) {
+    return move.replace(/=/, '').replace(/[+#]?[?!]*$/, '');
+}
+function trimFen(fen) {
+    /*
+     * remove last two fields in FEN string as they're not needed when checking
+     * for repetition
+     */
+    return fen.split(' ').slice(0, 4).join(' ');
+}
+let Chess$1 = class Chess {
+    _board = new Array(128);
+    _turn = WHITE;
+    _header = {};
+    _kings = { w: EMPTY, b: EMPTY };
+    _epSquare = -1;
+    _halfMoves = 0;
+    _moveNumber = 0;
+    _history = [];
+    _comments = {};
+    _castling = { w: 0, b: 0 };
+    // tracks number of times a position has been seen for repetition checking
+    _positionCount = {};
+    constructor(fen = DEFAULT_POSITION) {
+        this.load(fen);
+    }
+    clear({ preserveHeaders = false } = {}) {
+        this._board = new Array(128);
+        this._kings = { w: EMPTY, b: EMPTY };
+        this._turn = WHITE;
+        this._castling = { w: 0, b: 0 };
+        this._epSquare = EMPTY;
+        this._halfMoves = 0;
+        this._moveNumber = 1;
+        this._history = [];
+        this._comments = {};
+        this._header = preserveHeaders ? this._header : {};
+        this._positionCount = {};
+        /*
+         * Delete the SetUp and FEN headers (if preserved), the board is empty and
+         * these headers don't make sense in this state. They'll get added later
+         * via .load() or .put()
+         */
+        delete this._header['SetUp'];
+        delete this._header['FEN'];
+    }
+    removeHeader(key) {
+        if (key in this._header) {
+            delete this._header[key];
+        }
+    }
+    load(fen, { skipValidation = false, preserveHeaders = false } = {}) {
+        let tokens = fen.split(/\s+/);
+        // append commonly omitted fen tokens
+        if (tokens.length >= 2 && tokens.length < 6) {
+            const adjustments = ['-', '-', '0', '1'];
+            fen = tokens.concat(adjustments.slice(-(6 - tokens.length))).join(' ');
+        }
+        tokens = fen.split(/\s+/);
+        if (!skipValidation) {
+            const { ok, error } = validateFen(fen);
+            if (!ok) {
+                throw new Error(error);
+            }
+        }
+        const position = tokens[0];
+        let square = 0;
+        this.clear({ preserveHeaders });
+        for (let i = 0; i < position.length; i++) {
+            const piece = position.charAt(i);
+            if (piece === '/') {
+                square += 8;
+            }
+            else if (isDigit(piece)) {
+                square += parseInt(piece, 10);
+            }
+            else {
+                const color = piece < 'a' ? WHITE : BLACK;
+                this._put({ type: piece.toLowerCase(), color }, algebraic(square));
+                square++;
+            }
+        }
+        this._turn = tokens[1];
+        if (tokens[2].indexOf('K') > -1) {
+            this._castling.w |= BITS.KSIDE_CASTLE;
+        }
+        if (tokens[2].indexOf('Q') > -1) {
+            this._castling.w |= BITS.QSIDE_CASTLE;
+        }
+        if (tokens[2].indexOf('k') > -1) {
+            this._castling.b |= BITS.KSIDE_CASTLE;
+        }
+        if (tokens[2].indexOf('q') > -1) {
+            this._castling.b |= BITS.QSIDE_CASTLE;
+        }
+        this._epSquare = tokens[3] === '-' ? EMPTY : Ox88[tokens[3]];
+        this._halfMoves = parseInt(tokens[4], 10);
+        this._moveNumber = parseInt(tokens[5], 10);
+        this._updateSetup(fen);
+        this._incPositionCount(fen);
+    }
+    fen() {
+        let empty = 0;
+        let fen = '';
+        for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+            if (this._board[i]) {
+                if (empty > 0) {
+                    fen += empty;
+                    empty = 0;
+                }
+                const { color, type: piece } = this._board[i];
+                fen += color === WHITE ? piece.toUpperCase() : piece.toLowerCase();
+            }
+            else {
+                empty++;
+            }
+            if ((i + 1) & 0x88) {
+                if (empty > 0) {
+                    fen += empty;
+                }
+                if (i !== Ox88.h1) {
+                    fen += '/';
+                }
+                empty = 0;
+                i += 8;
+            }
+        }
+        let castling = '';
+        if (this._castling[WHITE] & BITS.KSIDE_CASTLE) {
+            castling += 'K';
+        }
+        if (this._castling[WHITE] & BITS.QSIDE_CASTLE) {
+            castling += 'Q';
+        }
+        if (this._castling[BLACK] & BITS.KSIDE_CASTLE) {
+            castling += 'k';
+        }
+        if (this._castling[BLACK] & BITS.QSIDE_CASTLE) {
+            castling += 'q';
+        }
+        // do we have an empty castling flag?
+        castling = castling || '-';
+        let epSquare = '-';
+        /*
+         * only print the ep square if en passant is a valid move (pawn is present
+         * and ep capture is not pinned)
+         */
+        if (this._epSquare !== EMPTY) {
+            const bigPawnSquare = this._epSquare + (this._turn === WHITE ? 16 : -16);
+            const squares = [bigPawnSquare + 1, bigPawnSquare - 1];
+            for (const square of squares) {
+                // is the square off the board?
+                if (square & 0x88) {
+                    continue;
+                }
+                const color = this._turn;
+                // is there a pawn that can capture the epSquare?
+                if (this._board[square]?.color === color &&
+                    this._board[square]?.type === PAWN) {
+                    // if the pawn makes an ep capture, does it leave it's king in check?
+                    this._makeMove({
+                        color,
+                        from: square,
+                        to: this._epSquare,
+                        piece: PAWN,
+                        captured: PAWN,
+                        flags: BITS.EP_CAPTURE,
+                    });
+                    const isLegal = !this._isKingAttacked(color);
+                    this._undoMove();
+                    // if ep is legal, break and set the ep square in the FEN output
+                    if (isLegal) {
+                        epSquare = algebraic(this._epSquare);
+                        break;
+                    }
+                }
+            }
+        }
+        return [
+            fen,
+            this._turn,
+            castling,
+            epSquare,
+            this._halfMoves,
+            this._moveNumber,
+        ].join(' ');
+    }
+    /*
+     * Called when the initial board setup is changed with put() or remove().
+     * modifies the SetUp and FEN properties of the header object. If the FEN
+     * is equal to the default position, the SetUp and FEN are deleted the setup
+     * is only updated if history.length is zero, ie moves haven't been made.
+     */
+    _updateSetup(fen) {
+        if (this._history.length > 0)
+            return;
+        if (fen !== DEFAULT_POSITION) {
+            this._header['SetUp'] = '1';
+            this._header['FEN'] = fen;
+        }
+        else {
+            delete this._header['SetUp'];
+            delete this._header['FEN'];
+        }
+    }
+    reset() {
+        this.load(DEFAULT_POSITION);
+    }
+    get(square) {
+        return this._board[Ox88[square]] || false;
+    }
+    put({ type, color }, square) {
+        if (this._put({ type, color }, square)) {
+            this._updateCastlingRights();
+            this._updateEnPassantSquare();
+            this._updateSetup(this.fen());
+            return true;
+        }
+        return false;
+    }
+    _put({ type, color }, square) {
+        // check for piece
+        if (SYMBOLS.indexOf(type.toLowerCase()) === -1) {
+            return false;
+        }
+        // check for valid square
+        if (!(square in Ox88)) {
+            return false;
+        }
+        const sq = Ox88[square];
+        // don't let the user place more than one king
+        if (type == KING &&
+            !(this._kings[color] == EMPTY || this._kings[color] == sq)) {
+            return false;
+        }
+        const currentPieceOnSquare = this._board[sq];
+        // if one of the kings will be replaced by the piece from args, set the `_kings` respective entry to `EMPTY`
+        if (currentPieceOnSquare && currentPieceOnSquare.type === KING) {
+            this._kings[currentPieceOnSquare.color] = EMPTY;
+        }
+        this._board[sq] = { type: type, color: color };
+        if (type === KING) {
+            this._kings[color] = sq;
+        }
+        return true;
+    }
+    remove(square) {
+        const piece = this.get(square);
+        delete this._board[Ox88[square]];
+        if (piece && piece.type === KING) {
+            this._kings[piece.color] = EMPTY;
+        }
+        this._updateCastlingRights();
+        this._updateEnPassantSquare();
+        this._updateSetup(this.fen());
+        return piece;
+    }
+    _updateCastlingRights() {
+        const whiteKingInPlace = this._board[Ox88.e1]?.type === KING &&
+            this._board[Ox88.e1]?.color === WHITE;
+        const blackKingInPlace = this._board[Ox88.e8]?.type === KING &&
+            this._board[Ox88.e8]?.color === BLACK;
+        if (!whiteKingInPlace ||
+            this._board[Ox88.a1]?.type !== ROOK ||
+            this._board[Ox88.a1]?.color !== WHITE) {
+            this._castling.w &= ~BITS.QSIDE_CASTLE;
+        }
+        if (!whiteKingInPlace ||
+            this._board[Ox88.h1]?.type !== ROOK ||
+            this._board[Ox88.h1]?.color !== WHITE) {
+            this._castling.w &= ~BITS.KSIDE_CASTLE;
+        }
+        if (!blackKingInPlace ||
+            this._board[Ox88.a8]?.type !== ROOK ||
+            this._board[Ox88.a8]?.color !== BLACK) {
+            this._castling.b &= ~BITS.QSIDE_CASTLE;
+        }
+        if (!blackKingInPlace ||
+            this._board[Ox88.h8]?.type !== ROOK ||
+            this._board[Ox88.h8]?.color !== BLACK) {
+            this._castling.b &= ~BITS.KSIDE_CASTLE;
+        }
+    }
+    _updateEnPassantSquare() {
+        if (this._epSquare === EMPTY) {
+            return;
+        }
+        const startSquare = this._epSquare + (this._turn === WHITE ? -16 : 16);
+        const currentSquare = this._epSquare + (this._turn === WHITE ? 16 : -16);
+        const attackers = [currentSquare + 1, currentSquare - 1];
+        if (this._board[startSquare] !== null ||
+            this._board[this._epSquare] !== null ||
+            this._board[currentSquare]?.color !== swapColor(this._turn) ||
+            this._board[currentSquare]?.type !== PAWN) {
+            this._epSquare = EMPTY;
+            return;
+        }
+        const canCapture = (square) => !(square & 0x88) &&
+            this._board[square]?.color === this._turn &&
+            this._board[square]?.type === PAWN;
+        if (!attackers.some(canCapture)) {
+            this._epSquare = EMPTY;
+        }
+    }
+    _attacked(color, square) {
+        for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+            // did we run off the end of the board
+            if (i & 0x88) {
+                i += 7;
+                continue;
+            }
+            // if empty square or wrong color
+            if (this._board[i] === undefined || this._board[i].color !== color) {
+                continue;
+            }
+            const piece = this._board[i];
+            const difference = i - square;
+            // skip - to/from square are the same
+            if (difference === 0) {
+                continue;
+            }
+            const index = difference + 119;
+            if (ATTACKS[index] & PIECE_MASKS[piece.type]) {
+                if (piece.type === PAWN) {
+                    if (difference > 0) {
+                        if (piece.color === WHITE)
+                            return true;
+                    }
+                    else {
+                        if (piece.color === BLACK)
+                            return true;
+                    }
+                    continue;
+                }
+                // if the piece is a knight or a king
+                if (piece.type === 'n' || piece.type === 'k')
+                    return true;
+                const offset = RAYS[index];
+                let j = i + offset;
+                let blocked = false;
+                while (j !== square) {
+                    if (this._board[j] != null) {
+                        blocked = true;
+                        break;
+                    }
+                    j += offset;
+                }
+                if (!blocked)
+                    return true;
+            }
+        }
+        return false;
+    }
+    _isKingAttacked(color) {
+        const square = this._kings[color];
+        return square === -1 ? false : this._attacked(swapColor(color), square);
+    }
+    isAttacked(square, attackedBy) {
+        return this._attacked(attackedBy, Ox88[square]);
+    }
+    isCheck() {
+        return this._isKingAttacked(this._turn);
+    }
+    inCheck() {
+        return this.isCheck();
+    }
+    isCheckmate() {
+        return this.isCheck() && this._moves().length === 0;
+    }
+    isStalemate() {
+        return !this.isCheck() && this._moves().length === 0;
+    }
+    isInsufficientMaterial() {
+        /*
+         * k.b. vs k.b. (of opposite colors) with mate in 1:
+         * 8/8/8/8/1b6/8/B1k5/K7 b - - 0 1
+         *
+         * k.b. vs k.n. with mate in 1:
+         * 8/8/8/8/1n6/8/B7/K1k5 b - - 2 1
+         */
+        const pieces = {
+            b: 0,
+            n: 0,
+            r: 0,
+            q: 0,
+            k: 0,
+            p: 0,
+        };
+        const bishops = [];
+        let numPieces = 0;
+        let squareColor = 0;
+        for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+            squareColor = (squareColor + 1) % 2;
+            if (i & 0x88) {
+                i += 7;
+                continue;
+            }
+            const piece = this._board[i];
+            if (piece) {
+                pieces[piece.type] = piece.type in pieces ? pieces[piece.type] + 1 : 1;
+                if (piece.type === BISHOP) {
+                    bishops.push(squareColor);
+                }
+                numPieces++;
+            }
+        }
+        // k vs. k
+        if (numPieces === 2) {
+            return true;
+        }
+        else if (
+        // k vs. kn .... or .... k vs. kb
+        numPieces === 3 &&
+            (pieces[BISHOP] === 1 || pieces[KNIGHT] === 1)) {
+            return true;
+        }
+        else if (numPieces === pieces[BISHOP] + 2) {
+            // kb vs. kb where any number of bishops are all on the same color
+            let sum = 0;
+            const len = bishops.length;
+            for (let i = 0; i < len; i++) {
+                sum += bishops[i];
+            }
+            if (sum === 0 || sum === len) {
+                return true;
+            }
+        }
+        return false;
+    }
+    isThreefoldRepetition() {
+        return this._getPositionCount(this.fen()) >= 3;
+    }
+    isDraw() {
+        return (this._halfMoves >= 100 || // 50 moves per side = 100 half moves
+            this.isStalemate() ||
+            this.isInsufficientMaterial() ||
+            this.isThreefoldRepetition());
+    }
+    isGameOver() {
+        return this.isCheckmate() || this.isStalemate() || this.isDraw();
+    }
+    moves({ verbose = false, square = undefined, piece = undefined, } = {}) {
+        const moves = this._moves({ square, piece });
+        if (verbose) {
+            return moves.map((move) => this._makePretty(move));
+        }
+        else {
+            return moves.map((move) => this._moveToSan(move, moves));
+        }
+    }
+    _moves({ legal = true, piece = undefined, square = undefined, } = {}) {
+        const forSquare = square ? square.toLowerCase() : undefined;
+        const forPiece = piece?.toLowerCase();
+        const moves = [];
+        const us = this._turn;
+        const them = swapColor(us);
+        let firstSquare = Ox88.a8;
+        let lastSquare = Ox88.h1;
+        let singleSquare = false;
+        // are we generating moves for a single square?
+        if (forSquare) {
+            // illegal square, return empty moves
+            if (!(forSquare in Ox88)) {
+                return [];
+            }
+            else {
+                firstSquare = lastSquare = Ox88[forSquare];
+                singleSquare = true;
+            }
+        }
+        for (let from = firstSquare; from <= lastSquare; from++) {
+            // did we run off the end of the board
+            if (from & 0x88) {
+                from += 7;
+                continue;
+            }
+            // empty square or opponent, skip
+            if (!this._board[from] || this._board[from].color === them) {
+                continue;
+            }
+            const { type } = this._board[from];
+            let to;
+            if (type === PAWN) {
+                if (forPiece && forPiece !== type)
+                    continue;
+                // single square, non-capturing
+                to = from + PAWN_OFFSETS[us][0];
+                if (!this._board[to]) {
+                    addMove(moves, us, from, to, PAWN);
+                    // double square
+                    to = from + PAWN_OFFSETS[us][1];
+                    if (SECOND_RANK[us] === rank(from) && !this._board[to]) {
+                        addMove(moves, us, from, to, PAWN, undefined, BITS.BIG_PAWN);
+                    }
+                }
+                // pawn captures
+                for (let j = 2; j < 4; j++) {
+                    to = from + PAWN_OFFSETS[us][j];
+                    if (to & 0x88)
+                        continue;
+                    if (this._board[to]?.color === them) {
+                        addMove(moves, us, from, to, PAWN, this._board[to].type, BITS.CAPTURE);
+                    }
+                    else if (to === this._epSquare) {
+                        addMove(moves, us, from, to, PAWN, PAWN, BITS.EP_CAPTURE);
+                    }
+                }
+            }
+            else {
+                if (forPiece && forPiece !== type)
+                    continue;
+                for (let j = 0, len = PIECE_OFFSETS[type].length; j < len; j++) {
+                    const offset = PIECE_OFFSETS[type][j];
+                    to = from;
+                    while (true) {
+                        to += offset;
+                        if (to & 0x88)
+                            break;
+                        if (!this._board[to]) {
+                            addMove(moves, us, from, to, type);
+                        }
+                        else {
+                            // own color, stop loop
+                            if (this._board[to].color === us)
+                                break;
+                            addMove(moves, us, from, to, type, this._board[to].type, BITS.CAPTURE);
+                            break;
+                        }
+                        /* break, if knight or king */
+                        if (type === KNIGHT || type === KING)
+                            break;
+                    }
+                }
+            }
+        }
+        /*
+         * check for castling if we're:
+         *   a) generating all moves, or
+         *   b) doing single square move generation on the king's square
+         */
+        if (forPiece === undefined || forPiece === KING) {
+            if (!singleSquare || lastSquare === this._kings[us]) {
+                // king-side castling
+                if (this._castling[us] & BITS.KSIDE_CASTLE) {
+                    const castlingFrom = this._kings[us];
+                    const castlingTo = castlingFrom + 2;
+                    if (!this._board[castlingFrom + 1] &&
+                        !this._board[castlingTo] &&
+                        !this._attacked(them, this._kings[us]) &&
+                        !this._attacked(them, castlingFrom + 1) &&
+                        !this._attacked(them, castlingTo)) {
+                        addMove(moves, us, this._kings[us], castlingTo, KING, undefined, BITS.KSIDE_CASTLE);
+                    }
+                }
+                // queen-side castling
+                if (this._castling[us] & BITS.QSIDE_CASTLE) {
+                    const castlingFrom = this._kings[us];
+                    const castlingTo = castlingFrom - 2;
+                    if (!this._board[castlingFrom - 1] &&
+                        !this._board[castlingFrom - 2] &&
+                        !this._board[castlingFrom - 3] &&
+                        !this._attacked(them, this._kings[us]) &&
+                        !this._attacked(them, castlingFrom - 1) &&
+                        !this._attacked(them, castlingTo)) {
+                        addMove(moves, us, this._kings[us], castlingTo, KING, undefined, BITS.QSIDE_CASTLE);
+                    }
+                }
+            }
+        }
+        /*
+         * return all pseudo-legal moves (this includes moves that allow the king
+         * to be captured)
+         */
+        if (!legal || this._kings[us] === -1) {
+            return moves;
+        }
+        // filter out illegal moves
+        const legalMoves = [];
+        for (let i = 0, len = moves.length; i < len; i++) {
+            this._makeMove(moves[i]);
+            if (!this._isKingAttacked(us)) {
+                legalMoves.push(moves[i]);
+            }
+            this._undoMove();
+        }
+        return legalMoves;
+    }
+    move(move, { strict = false } = {}) {
+        /*
+         * The move function can be called with in the following parameters:
+         *
+         * .move('Nxb7')       <- argument is a case-sensitive SAN string
+         *
+         * .move({ from: 'h7', <- argument is a move object
+         *         to :'h8',
+         *         promotion: 'q' })
+         *
+         *
+         * An optional strict argument may be supplied to tell chess.js to
+         * strictly follow the SAN specification.
+         */
+        let moveObj = null;
+        if (typeof move === 'string') {
+            moveObj = this._moveFromSan(move, strict);
+        }
+        else if (typeof move === 'object') {
+            const moves = this._moves();
+            // convert the pretty move object to an ugly move object
+            for (let i = 0, len = moves.length; i < len; i++) {
+                if (move.from === algebraic(moves[i].from) &&
+                    move.to === algebraic(moves[i].to) &&
+                    (!('promotion' in moves[i]) || move.promotion === moves[i].promotion)) {
+                    moveObj = moves[i];
+                    break;
+                }
+            }
+        }
+        // failed to find move
+        if (!moveObj) {
+            if (typeof move === 'string') {
+                throw new Error(`Invalid move: ${move}`);
+            }
+            else {
+                throw new Error(`Invalid move: ${JSON.stringify(move)}`);
+            }
+        }
+        /*
+         * need to make a copy of move because we can't generate SAN after the move
+         * is made
+         */
+        const prettyMove = this._makePretty(moveObj);
+        this._makeMove(moveObj);
+        this._incPositionCount(prettyMove.after);
+        return prettyMove;
+    }
+    _push(move) {
+        this._history.push({
+            move,
+            kings: { b: this._kings.b, w: this._kings.w },
+            turn: this._turn,
+            castling: { b: this._castling.b, w: this._castling.w },
+            epSquare: this._epSquare,
+            halfMoves: this._halfMoves,
+            moveNumber: this._moveNumber,
+        });
+    }
+    _makeMove(move) {
+        const us = this._turn;
+        const them = swapColor(us);
+        this._push(move);
+        this._board[move.to] = this._board[move.from];
+        delete this._board[move.from];
+        // if ep capture, remove the captured pawn
+        if (move.flags & BITS.EP_CAPTURE) {
+            if (this._turn === BLACK) {
+                delete this._board[move.to - 16];
+            }
+            else {
+                delete this._board[move.to + 16];
+            }
+        }
+        // if pawn promotion, replace with new piece
+        if (move.promotion) {
+            this._board[move.to] = { type: move.promotion, color: us };
+        }
+        // if we moved the king
+        if (this._board[move.to].type === KING) {
+            this._kings[us] = move.to;
+            // if we castled, move the rook next to the king
+            if (move.flags & BITS.KSIDE_CASTLE) {
+                const castlingTo = move.to - 1;
+                const castlingFrom = move.to + 1;
+                this._board[castlingTo] = this._board[castlingFrom];
+                delete this._board[castlingFrom];
+            }
+            else if (move.flags & BITS.QSIDE_CASTLE) {
+                const castlingTo = move.to + 1;
+                const castlingFrom = move.to - 2;
+                this._board[castlingTo] = this._board[castlingFrom];
+                delete this._board[castlingFrom];
+            }
+            // turn off castling
+            this._castling[us] = 0;
+        }
+        // turn off castling if we move a rook
+        if (this._castling[us]) {
+            for (let i = 0, len = ROOKS[us].length; i < len; i++) {
+                if (move.from === ROOKS[us][i].square &&
+                    this._castling[us] & ROOKS[us][i].flag) {
+                    this._castling[us] ^= ROOKS[us][i].flag;
+                    break;
+                }
+            }
+        }
+        // turn off castling if we capture a rook
+        if (this._castling[them]) {
+            for (let i = 0, len = ROOKS[them].length; i < len; i++) {
+                if (move.to === ROOKS[them][i].square &&
+                    this._castling[them] & ROOKS[them][i].flag) {
+                    this._castling[them] ^= ROOKS[them][i].flag;
+                    break;
+                }
+            }
+        }
+        // if big pawn move, update the en passant square
+        if (move.flags & BITS.BIG_PAWN) {
+            if (us === BLACK) {
+                this._epSquare = move.to - 16;
+            }
+            else {
+                this._epSquare = move.to + 16;
+            }
+        }
+        else {
+            this._epSquare = EMPTY;
+        }
+        // reset the 50 move counter if a pawn is moved or a piece is captured
+        if (move.piece === PAWN) {
+            this._halfMoves = 0;
+        }
+        else if (move.flags & (BITS.CAPTURE | BITS.EP_CAPTURE)) {
+            this._halfMoves = 0;
+        }
+        else {
+            this._halfMoves++;
+        }
+        if (us === BLACK) {
+            this._moveNumber++;
+        }
+        this._turn = them;
+    }
+    undo() {
+        const move = this._undoMove();
+        if (move) {
+            const prettyMove = this._makePretty(move);
+            this._decPositionCount(prettyMove.after);
+            return prettyMove;
+        }
+        return null;
+    }
+    _undoMove() {
+        const old = this._history.pop();
+        if (old === undefined) {
+            return null;
+        }
+        const move = old.move;
+        this._kings = old.kings;
+        this._turn = old.turn;
+        this._castling = old.castling;
+        this._epSquare = old.epSquare;
+        this._halfMoves = old.halfMoves;
+        this._moveNumber = old.moveNumber;
+        const us = this._turn;
+        const them = swapColor(us);
+        this._board[move.from] = this._board[move.to];
+        this._board[move.from].type = move.piece; // to undo any promotions
+        delete this._board[move.to];
+        if (move.captured) {
+            if (move.flags & BITS.EP_CAPTURE) {
+                // en passant capture
+                let index;
+                if (us === BLACK) {
+                    index = move.to - 16;
+                }
+                else {
+                    index = move.to + 16;
+                }
+                this._board[index] = { type: PAWN, color: them };
+            }
+            else {
+                // regular capture
+                this._board[move.to] = { type: move.captured, color: them };
+            }
+        }
+        if (move.flags & (BITS.KSIDE_CASTLE | BITS.QSIDE_CASTLE)) {
+            let castlingTo, castlingFrom;
+            if (move.flags & BITS.KSIDE_CASTLE) {
+                castlingTo = move.to + 1;
+                castlingFrom = move.to - 1;
+            }
+            else {
+                castlingTo = move.to - 2;
+                castlingFrom = move.to + 1;
+            }
+            this._board[castlingTo] = this._board[castlingFrom];
+            delete this._board[castlingFrom];
+        }
+        return move;
+    }
+    pgn({ newline = '\n', maxWidth = 0, } = {}) {
+        /*
+         * using the specification from http://www.chessclub.com/help/PGN-spec
+         * example for html usage: .pgn({ max_width: 72, newline_char: "<br />" })
+         */
+        const result = [];
+        let headerExists = false;
+        /* add the PGN header information */
+        for (const i in this._header) {
+            /*
+             * TODO: order of enumerated properties in header object is not
+             * guaranteed, see ECMA-262 spec (section 12.6.4)
+             */
+            result.push('[' + i + ' "' + this._header[i] + '"]' + newline);
+            headerExists = true;
+        }
+        if (headerExists && this._history.length) {
+            result.push(newline);
+        }
+        const appendComment = (moveString) => {
+            const comment = this._comments[this.fen()];
+            if (typeof comment !== 'undefined') {
+                const delimiter = moveString.length > 0 ? ' ' : '';
+                moveString = `${moveString}${delimiter}{${comment}}`;
+            }
+            return moveString;
+        };
+        // pop all of history onto reversed_history
+        const reversedHistory = [];
+        while (this._history.length > 0) {
+            reversedHistory.push(this._undoMove());
+        }
+        const moves = [];
+        let moveString = '';
+        // special case of a commented starting position with no moves
+        if (reversedHistory.length === 0) {
+            moves.push(appendComment(''));
+        }
+        // build the list of moves.  a move_string looks like: "3. e3 e6"
+        while (reversedHistory.length > 0) {
+            moveString = appendComment(moveString);
+            const move = reversedHistory.pop();
+            // make TypeScript stop complaining about move being undefined
+            if (!move) {
+                break;
+            }
+            // if the position started with black to move, start PGN with #. ...
+            if (!this._history.length && move.color === 'b') {
+                const prefix = `${this._moveNumber}. ...`;
+                // is there a comment preceding the first move?
+                moveString = moveString ? `${moveString} ${prefix}` : prefix;
+            }
+            else if (move.color === 'w') {
+                // store the previous generated move_string if we have one
+                if (moveString.length) {
+                    moves.push(moveString);
+                }
+                moveString = this._moveNumber + '.';
+            }
+            moveString =
+                moveString + ' ' + this._moveToSan(move, this._moves({ legal: true }));
+            this._makeMove(move);
+        }
+        // are there any other leftover moves?
+        if (moveString.length) {
+            moves.push(appendComment(moveString));
+        }
+        // is there a result?
+        if (typeof this._header.Result !== 'undefined') {
+            moves.push(this._header.Result);
+        }
+        /*
+         * history should be back to what it was before we started generating PGN,
+         * so join together moves
+         */
+        if (maxWidth === 0) {
+            return result.join('') + moves.join(' ');
+        }
+        // TODO (jah): huh?
+        const strip = function () {
+            if (result.length > 0 && result[result.length - 1] === ' ') {
+                result.pop();
+                return true;
+            }
+            return false;
+        };
+        // NB: this does not preserve comment whitespace.
+        const wrapComment = function (width, move) {
+            for (const token of move.split(' ')) {
+                if (!token) {
+                    continue;
+                }
+                if (width + token.length > maxWidth) {
+                    while (strip()) {
+                        width--;
+                    }
+                    result.push(newline);
+                    width = 0;
+                }
+                result.push(token);
+                width += token.length;
+                result.push(' ');
+                width++;
+            }
+            if (strip()) {
+                width--;
+            }
+            return width;
+        };
+        // wrap the PGN output at max_width
+        let currentWidth = 0;
+        for (let i = 0; i < moves.length; i++) {
+            if (currentWidth + moves[i].length > maxWidth) {
+                if (moves[i].includes('{')) {
+                    currentWidth = wrapComment(currentWidth, moves[i]);
+                    continue;
+                }
+            }
+            // if the current move will push past max_width
+            if (currentWidth + moves[i].length > maxWidth && i !== 0) {
+                // don't end the line with whitespace
+                if (result[result.length - 1] === ' ') {
+                    result.pop();
+                }
+                result.push(newline);
+                currentWidth = 0;
+            }
+            else if (i !== 0) {
+                result.push(' ');
+                currentWidth++;
+            }
+            result.push(moves[i]);
+            currentWidth += moves[i].length;
+        }
+        return result.join('');
+    }
+    header(...args) {
+        for (let i = 0; i < args.length; i += 2) {
+            if (typeof args[i] === 'string' && typeof args[i + 1] === 'string') {
+                this._header[args[i]] = args[i + 1];
+            }
+        }
+        return this._header;
+    }
+    loadPgn(pgn, { strict = false, newlineChar = '\r?\n', } = {}) {
+        function mask(str) {
+            return str.replace(/\\/g, '\\');
+        }
+        function parsePgnHeader(header) {
+            const headerObj = {};
+            const headers = header.split(new RegExp(mask(newlineChar)));
+            let key = '';
+            let value = '';
+            for (let i = 0; i < headers.length; i++) {
+                const regex = /^\s*\[\s*([A-Za-z]+)\s*"(.*)"\s*\]\s*$/;
+                key = headers[i].replace(regex, '$1');
+                value = headers[i].replace(regex, '$2');
+                if (key.trim().length > 0) {
+                    headerObj[key] = value;
+                }
+            }
+            return headerObj;
+        }
+        // strip whitespace from head/tail of PGN block
+        pgn = pgn.trim();
+        /*
+         * RegExp to split header. Takes advantage of the fact that header and movetext
+         * will always have a blank line between them (ie, two newline_char's). Handles
+         * case where movetext is empty by matching newlineChar until end of string is
+         * matched - effectively trimming from the end extra newlineChar.
+         *
+         * With default newline_char, will equal:
+         * /^(\[((?:\r?\n)|.)*\])((?:\s*\r?\n){2}|(?:\s*\r?\n)*$)/
+         */
+        const headerRegex = new RegExp('^(\\[((?:' +
+            mask(newlineChar) +
+            ')|.)*\\])' +
+            '((?:\\s*' +
+            mask(newlineChar) +
+            '){2}|(?:\\s*' +
+            mask(newlineChar) +
+            ')*$)');
+        // If no header given, begin with moves.
+        const headerRegexResults = headerRegex.exec(pgn);
+        const headerString = headerRegexResults
+            ? headerRegexResults.length >= 2
+                ? headerRegexResults[1]
+                : ''
+            : '';
+        // Put the board in the starting position
+        this.reset();
+        // parse PGN header
+        const headers = parsePgnHeader(headerString);
+        let fen = '';
+        for (const key in headers) {
+            // check to see user is including fen (possibly with wrong tag case)
+            if (key.toLowerCase() === 'fen') {
+                fen = headers[key];
+            }
+            this.header(key, headers[key]);
+        }
+        /*
+         * the permissive parser should attempt to load a fen tag, even if it's the
+         * wrong case and doesn't include a corresponding [SetUp "1"] tag
+         */
+        if (!strict) {
+            if (fen) {
+                this.load(fen, { preserveHeaders: true });
+            }
+        }
+        else {
+            /*
+             * strict parser - load the starting position indicated by [Setup '1']
+             * and [FEN position]
+             */
+            if (headers['SetUp'] === '1') {
+                if (!('FEN' in headers)) {
+                    throw new Error('Invalid PGN: FEN tag must be supplied with SetUp tag');
+                }
+                // don't clear the headers when loading
+                this.load(headers['FEN'], { preserveHeaders: true });
+            }
+        }
+        /*
+         * NB: the regexes below that delete move numbers, recursive annotations,
+         * and numeric annotation glyphs may also match text in comments. To
+         * prevent this, we transform comments by hex-encoding them in place and
+         * decoding them again after the other tokens have been deleted.
+         *
+         * While the spec states that PGN files should be ASCII encoded, we use
+         * {en,de}codeURIComponent here to support arbitrary UTF8 as a convenience
+         * for modern users
+         */
+        function toHex(s) {
+            return Array.from(s)
+                .map(function (c) {
+                /*
+                 * encodeURI doesn't transform most ASCII characters, so we handle
+                 * these ourselves
+                 */
+                return c.charCodeAt(0) < 128
+                    ? c.charCodeAt(0).toString(16)
+                    : encodeURIComponent(c).replace(/%/g, '').toLowerCase();
+            })
+                .join('');
+        }
+        function fromHex(s) {
+            return s.length == 0
+                ? ''
+                : decodeURIComponent('%' + (s.match(/.{1,2}/g) || []).join('%'));
+        }
+        const encodeComment = function (s) {
+            s = s.replace(new RegExp(mask(newlineChar), 'g'), ' ');
+            return `{${toHex(s.slice(1, s.length - 1))}}`;
+        };
+        const decodeComment = function (s) {
+            if (s.startsWith('{') && s.endsWith('}')) {
+                return fromHex(s.slice(1, s.length - 1));
+            }
+        };
+        // delete header to get the moves
+        let ms = pgn
+            .replace(headerString, '')
+            .replace(
+        // encode comments so they don't get deleted below
+        new RegExp(`({[^}]*})+?|;([^${mask(newlineChar)}]*)`, 'g'), function (_match, bracket, semicolon) {
+            return bracket !== undefined
+                ? encodeComment(bracket)
+                : ' ' + encodeComment(`{${semicolon.slice(1)}}`);
+        })
+            .replace(new RegExp(mask(newlineChar), 'g'), ' ');
+        // delete recursive annotation variations
+        const ravRegex = /(\([^()]+\))+?/g;
+        while (ravRegex.test(ms)) {
+            ms = ms.replace(ravRegex, '');
+        }
+        // delete move numbers
+        ms = ms.replace(/\d+\.(\.\.)?/g, '');
+        // delete ... indicating black to move
+        ms = ms.replace(/\.\.\./g, '');
+        /* delete numeric annotation glyphs */
+        ms = ms.replace(/\$\d+/g, '');
+        // trim and get array of moves
+        let moves = ms.trim().split(new RegExp(/\s+/));
+        // delete empty entries
+        moves = moves.filter((move) => move !== '');
+        let result = '';
+        for (let halfMove = 0; halfMove < moves.length; halfMove++) {
+            const comment = decodeComment(moves[halfMove]);
+            if (comment !== undefined) {
+                this._comments[this.fen()] = comment;
+                continue;
+            }
+            const move = this._moveFromSan(moves[halfMove], strict);
+            // invalid move
+            if (move == null) {
+                // was the move an end of game marker
+                if (TERMINATION_MARKERS.indexOf(moves[halfMove]) > -1) {
+                    result = moves[halfMove];
+                }
+                else {
+                    throw new Error(`Invalid move in PGN: ${moves[halfMove]}`);
+                }
+            }
+            else {
+                // reset the end of game marker if making a valid move
+                result = '';
+                this._makeMove(move);
+                this._incPositionCount(this.fen());
+            }
+        }
+        /*
+         * Per section 8.2.6 of the PGN spec, the Result tag pair must match match
+         * the termination marker. Only do this when headers are present, but the
+         * result tag is missing
+         */
+        if (result && Object.keys(this._header).length && !this._header['Result']) {
+            this.header('Result', result);
+        }
+    }
+    /*
+     * Convert a move from 0x88 coordinates to Standard Algebraic Notation
+     * (SAN)
+     *
+     * @param {boolean} strict Use the strict SAN parser. It will throw errors
+     * on overly disambiguated moves (see below):
+     *
+     * r1bqkbnr/ppp2ppp/2n5/1B1pP3/4P3/8/PPPP2PP/RNBQK1NR b KQkq - 2 4
+     * 4. ... Nge7 is overly disambiguated because the knight on c6 is pinned
+     * 4. ... Ne7 is technically the valid SAN
+     */
+    _moveToSan(move, moves) {
+        let output = '';
+        if (move.flags & BITS.KSIDE_CASTLE) {
+            output = 'O-O';
+        }
+        else if (move.flags & BITS.QSIDE_CASTLE) {
+            output = 'O-O-O';
+        }
+        else {
+            if (move.piece !== PAWN) {
+                const disambiguator = getDisambiguator(move, moves);
+                output += move.piece.toUpperCase() + disambiguator;
+            }
+            if (move.flags & (BITS.CAPTURE | BITS.EP_CAPTURE)) {
+                if (move.piece === PAWN) {
+                    output += algebraic(move.from)[0];
+                }
+                output += 'x';
+            }
+            output += algebraic(move.to);
+            if (move.promotion) {
+                output += '=' + move.promotion.toUpperCase();
+            }
+        }
+        this._makeMove(move);
+        if (this.isCheck()) {
+            if (this.isCheckmate()) {
+                output += '#';
+            }
+            else {
+                output += '+';
+            }
+        }
+        this._undoMove();
+        return output;
+    }
+    // convert a move from Standard Algebraic Notation (SAN) to 0x88 coordinates
+    _moveFromSan(move, strict = false) {
+        // strip off any move decorations: e.g Nf3+?! becomes Nf3
+        const cleanMove = strippedSan(move);
+        let pieceType = inferPieceType(cleanMove);
+        let moves = this._moves({ legal: true, piece: pieceType });
+        // strict parser
+        for (let i = 0, len = moves.length; i < len; i++) {
+            if (cleanMove === strippedSan(this._moveToSan(moves[i], moves))) {
+                return moves[i];
+            }
+        }
+        // the strict parser failed
+        if (strict) {
+            return null;
+        }
+        let piece = undefined;
+        let matches = undefined;
+        let from = undefined;
+        let to = undefined;
+        let promotion = undefined;
+        /*
+         * The default permissive (non-strict) parser allows the user to parse
+         * non-standard chess notations. This parser is only run after the strict
+         * Standard Algebraic Notation (SAN) parser has failed.
+         *
+         * When running the permissive parser, we'll run a regex to grab the piece, the
+         * to/from square, and an optional promotion piece. This regex will
+         * parse common non-standard notation like: Pe2-e4, Rc1c4, Qf3xf7,
+         * f7f8q, b1c3
+         *
+         * NOTE: Some positions and moves may be ambiguous when using the permissive
+         * parser. For example, in this position: 6k1/8/8/B7/8/8/8/BN4K1 w - - 0 1,
+         * the move b1c3 may be interpreted as Nc3 or B1c3 (a disambiguated bishop
+         * move). In these cases, the permissive parser will default to the most
+         * basic interpretation (which is b1c3 parsing to Nc3).
+         */
+        let overlyDisambiguated = false;
+        matches = cleanMove.match(/([pnbrqkPNBRQK])?([a-h][1-8])x?-?([a-h][1-8])([qrbnQRBN])?/);
+        if (matches) {
+            piece = matches[1];
+            from = matches[2];
+            to = matches[3];
+            promotion = matches[4];
+            if (from.length == 1) {
+                overlyDisambiguated = true;
+            }
+        }
+        else {
+            /*
+             * The [a-h]?[1-8]? portion of the regex below handles moves that may be
+             * overly disambiguated (e.g. Nge7 is unnecessary and non-standard when
+             * there is one legal knight move to e7). In this case, the value of
+             * 'from' variable will be a rank or file, not a square.
+             */
+            matches = cleanMove.match(/([pnbrqkPNBRQK])?([a-h]?[1-8]?)x?-?([a-h][1-8])([qrbnQRBN])?/);
+            if (matches) {
+                piece = matches[1];
+                from = matches[2];
+                to = matches[3];
+                promotion = matches[4];
+                if (from.length == 1) {
+                    overlyDisambiguated = true;
+                }
+            }
+        }
+        pieceType = inferPieceType(cleanMove);
+        moves = this._moves({
+            legal: true,
+            piece: piece ? piece : pieceType,
+        });
+        if (!to) {
+            return null;
+        }
+        for (let i = 0, len = moves.length; i < len; i++) {
+            if (!from) {
+                // if there is no from square, it could be just 'x' missing from a capture
+                if (cleanMove ===
+                    strippedSan(this._moveToSan(moves[i], moves)).replace('x', '')) {
+                    return moves[i];
+                }
+                // hand-compare move properties with the results from our permissive regex
+            }
+            else if ((!piece || piece.toLowerCase() == moves[i].piece) &&
+                Ox88[from] == moves[i].from &&
+                Ox88[to] == moves[i].to &&
+                (!promotion || promotion.toLowerCase() == moves[i].promotion)) {
+                return moves[i];
+            }
+            else if (overlyDisambiguated) {
+                /*
+                 * SPECIAL CASE: we parsed a move string that may have an unneeded
+                 * rank/file disambiguator (e.g. Nge7).  The 'from' variable will
+                 */
+                const square = algebraic(moves[i].from);
+                if ((!piece || piece.toLowerCase() == moves[i].piece) &&
+                    Ox88[to] == moves[i].to &&
+                    (from == square[0] || from == square[1]) &&
+                    (!promotion || promotion.toLowerCase() == moves[i].promotion)) {
+                    return moves[i];
+                }
+            }
+        }
+        return null;
+    }
+    ascii() {
+        let s = '   +------------------------+\n';
+        for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+            // display the rank
+            if (file$d(i) === 0) {
+                s += ' ' + '87654321'[rank(i)] + ' |';
+            }
+            if (this._board[i]) {
+                const piece = this._board[i].type;
+                const color = this._board[i].color;
+                const symbol = color === WHITE ? piece.toUpperCase() : piece.toLowerCase();
+                s += ' ' + symbol + ' ';
+            }
+            else {
+                s += ' . ';
+            }
+            if ((i + 1) & 0x88) {
+                s += '|\n';
+                i += 8;
+            }
+        }
+        s += '   +------------------------+\n';
+        s += '     a  b  c  d  e  f  g  h';
+        return s;
+    }
+    perft(depth) {
+        const moves = this._moves({ legal: false });
+        let nodes = 0;
+        const color = this._turn;
+        for (let i = 0, len = moves.length; i < len; i++) {
+            this._makeMove(moves[i]);
+            if (!this._isKingAttacked(color)) {
+                if (depth - 1 > 0) {
+                    nodes += this.perft(depth - 1);
+                }
+                else {
+                    nodes++;
+                }
+            }
+            this._undoMove();
+        }
+        return nodes;
+    }
+    // pretty = external move object
+    _makePretty(uglyMove) {
+        const { color, piece, from, to, flags, captured, promotion } = uglyMove;
+        let prettyFlags = '';
+        for (const flag in BITS) {
+            if (BITS[flag] & flags) {
+                prettyFlags += FLAGS[flag];
+            }
+        }
+        const fromAlgebraic = algebraic(from);
+        const toAlgebraic = algebraic(to);
+        const move = {
+            color,
+            piece,
+            from: fromAlgebraic,
+            to: toAlgebraic,
+            san: this._moveToSan(uglyMove, this._moves({ legal: true })),
+            flags: prettyFlags,
+            lan: fromAlgebraic + toAlgebraic,
+            before: this.fen(),
+            after: '',
+        };
+        // generate the FEN for the 'after' key
+        this._makeMove(uglyMove);
+        move.after = this.fen();
+        this._undoMove();
+        if (captured) {
+            move.captured = captured;
+        }
+        if (promotion) {
+            move.promotion = promotion;
+            move.lan += promotion;
+        }
+        return move;
+    }
+    turn() {
+        return this._turn;
+    }
+    board() {
+        const output = [];
+        let row = [];
+        for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+            if (this._board[i] == null) {
+                row.push(null);
+            }
+            else {
+                row.push({
+                    square: algebraic(i),
+                    type: this._board[i].type,
+                    color: this._board[i].color,
+                });
+            }
+            if ((i + 1) & 0x88) {
+                output.push(row);
+                row = [];
+                i += 8;
+            }
+        }
+        return output;
+    }
+    squareColor(square) {
+        if (square in Ox88) {
+            const sq = Ox88[square];
+            return (rank(sq) + file$d(sq)) % 2 === 0 ? 'light' : 'dark';
+        }
+        return null;
+    }
+    history({ verbose = false } = {}) {
+        const reversedHistory = [];
+        const moveHistory = [];
+        while (this._history.length > 0) {
+            reversedHistory.push(this._undoMove());
+        }
+        while (true) {
+            const move = reversedHistory.pop();
+            if (!move) {
+                break;
+            }
+            if (verbose) {
+                moveHistory.push(this._makePretty(move));
+            }
+            else {
+                moveHistory.push(this._moveToSan(move, this._moves()));
+            }
+            this._makeMove(move);
+        }
+        return moveHistory;
+    }
+    /*
+     * Keeps track of position occurrence counts for the purpose of repetition
+     * checking. All three methods (`_inc`, `_dec`, and `_get`) trim the
+     * irrelevent information from the fen, initialising new positions, and
+     * removing old positions from the record if their counts are reduced to 0.
+     */
+    _getPositionCount(fen) {
+        const trimmedFen = trimFen(fen);
+        return this._positionCount[trimmedFen] || 0;
+    }
+    _incPositionCount(fen) {
+        const trimmedFen = trimFen(fen);
+        if (this._positionCount[trimmedFen] === undefined) {
+            this._positionCount[trimmedFen] = 0;
+        }
+        this._positionCount[trimmedFen] += 1;
+    }
+    _decPositionCount(fen) {
+        const trimmedFen = trimFen(fen);
+        if (this._positionCount[trimmedFen] === 1) {
+            delete this._positionCount[trimmedFen];
+        }
+        else {
+            this._positionCount[trimmedFen] -= 1;
+        }
+    }
+    _pruneComments() {
+        const reversedHistory = [];
+        const currentComments = {};
+        const copyComment = (fen) => {
+            if (fen in this._comments) {
+                currentComments[fen] = this._comments[fen];
+            }
+        };
+        while (this._history.length > 0) {
+            reversedHistory.push(this._undoMove());
+        }
+        copyComment(this.fen());
+        while (true) {
+            const move = reversedHistory.pop();
+            if (!move) {
+                break;
+            }
+            this._makeMove(move);
+            copyComment(this.fen());
+        }
+        this._comments = currentComments;
+    }
+    getComment() {
+        return this._comments[this.fen()];
+    }
+    setComment(comment) {
+        this._comments[this.fen()] = comment.replace('{', '[').replace('}', ']');
+    }
+    deleteComment() {
+        const comment = this._comments[this.fen()];
+        delete this._comments[this.fen()];
+        return comment;
+    }
+    getComments() {
+        this._pruneComments();
+        return Object.keys(this._comments).map((fen) => {
+            return { fen: fen, comment: this._comments[fen] };
+        });
+    }
+    deleteComments() {
+        this._pruneComments();
+        return Object.keys(this._comments).map((fen) => {
+            const comment = this._comments[fen];
+            delete this._comments[fen];
+            return { fen: fen, comment: comment };
+        });
+    }
+    setCastlingRights(color, rights) {
+        for (const side of [KING, QUEEN]) {
+            if (rights[side] !== undefined) {
+                if (rights[side]) {
+                    this._castling[color] |= SIDES[side];
+                }
+                else {
+                    this._castling[color] &= ~SIDES[side];
+                }
+            }
+        }
+        this._updateCastlingRights();
+        const result = this.getCastlingRights(color);
+        return ((rights[KING] === undefined || rights[KING] === result[KING]) &&
+            (rights[QUEEN] === undefined || rights[QUEEN] === result[QUEEN]));
+    }
+    getCastlingRights(color) {
+        return {
+            [KING]: (this._castling[color] & SIDES[KING]) !== 0,
+            [QUEEN]: (this._castling[color] & SIDES[QUEEN]) !== 0,
+        };
+    }
+    moveNumber() {
+        return this._moveNumber;
+    }
+};
+
 const subscriber_queue = [];
 
 /**
@@ -4105,7 +5995,7 @@ boardStyle.subscribe((value) => {
 const file$c = "svelte/components/Chessboard.svelte";
 
 function add_css$5(target) {
-	append_styles(target, "svelte-iagpad", ".board-wrapper.svelte-iagpad{position:relative;width:100%}.centered-content.svelte-iagpad{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdiBjbGFzcz1cImNlbnRlcmVkLWNvbnRlbnRcIj5cbiAgICA8c2xvdCBuYW1lPVwiY2VudGVyZWQtY29udGVudFwiPjwvc2xvdD5cbiAgPC9kaXY+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIlxuICA+PC9kaXY+XG4gIDxkaXYgY2xhc3M9XCJibG9jayBtdC0yXCI+XG4gICAgPHNsb3QgbmFtZT1cImJlbG93LWJvYXJkXCI+PC9zbG90PlxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbiAgLmNlbnRlcmVkLWNvbnRlbnQge1xuICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTtcbiAgICB0b3A6IDUwJTtcbiAgICBsZWZ0OiA1MCU7XG4gICAgdHJhbnNmb3JtOiB0cmFuc2xhdGUoLTUwJSwgLTUwJSk7XG4gICAgei1pbmRleDogMzsgLyogcmVxdWlyZWQgdG8gYXBwZWFyIGluIGZyb250IG9mIHBpZWNlcyAqL1xuICAgIG9wYWNpdHk6IDAuODtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUF1RUUsNEJBQWUsQ0FDYixRQUFRLENBQUUsUUFBUSxDQUNsQixLQUFLLENBQUUsSUFDVCxDQUNBLCtCQUFrQixDQUNoQixRQUFRLENBQUUsUUFBUSxDQUNsQixHQUFHLENBQUUsR0FBRyxDQUNSLElBQUksQ0FBRSxHQUFHLENBQ1QsU0FBUyxDQUFFLFVBQVUsSUFBSSxDQUFDLENBQUMsSUFBSSxDQUFDLENBQ2hDLE9BQU8sQ0FBRSxDQUFDLENBQ1YsT0FBTyxDQUFFLEdBQ1gifQ== */");
+	append_styles(target, "svelte-iagpad", ".board-wrapper.svelte-iagpad{position:relative;width:100%}.centered-content.svelte-iagpad{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IENoZXNzIH0gZnJvbSBcImNoZXNzLmpzXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IGNoZXNzO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdiBjbGFzcz1cImNlbnRlcmVkLWNvbnRlbnRcIj5cbiAgICA8c2xvdCBuYW1lPVwiY2VudGVyZWQtY29udGVudFwiPjwvc2xvdD5cbiAgPC9kaXY+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIlxuICA+PC9kaXY+XG4gIDxkaXYgY2xhc3M9XCJibG9jayBtdC0yXCI+XG4gICAgPHNsb3QgbmFtZT1cImJlbG93LWJvYXJkXCI+PC9zbG90PlxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbiAgLmNlbnRlcmVkLWNvbnRlbnQge1xuICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTtcbiAgICB0b3A6IDUwJTtcbiAgICBsZWZ0OiA1MCU7XG4gICAgdHJhbnNmb3JtOiB0cmFuc2xhdGUoLTUwJSwgLTUwJSk7XG4gICAgei1pbmRleDogMzsgLyogcmVxdWlyZWQgdG8gYXBwZWFyIGluIGZyb250IG9mIHBpZWNlcyAqL1xuICAgIG9wYWNpdHk6IDAuODtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUF5RUUsNEJBQWUsQ0FDYixRQUFRLENBQUUsUUFBUSxDQUNsQixLQUFLLENBQUUsSUFDVCxDQUNBLCtCQUFrQixDQUNoQixRQUFRLENBQUUsUUFBUSxDQUNsQixHQUFHLENBQUUsR0FBRyxDQUNSLElBQUksQ0FBRSxHQUFHLENBQ1QsU0FBUyxDQUFFLFVBQVUsSUFBSSxDQUFDLENBQUMsSUFBSSxDQUFDLENBQ2hDLE9BQU8sQ0FBRSxDQUFDLENBQ1YsT0FBTyxDQUFFLEdBQ1gifQ== */");
 }
 
 const get_below_board_slot_changes = dirty => ({});
@@ -4113,7 +6003,7 @@ const get_below_board_slot_context = ctx => ({});
 const get_centered_content_slot_changes = dirty => ({});
 const get_centered_content_slot_context = ctx => ({});
 
-// (49:0) {:else}
+// (51:0) {:else}
 function create_else_block$4(ctx) {
 	let link;
 	let link_href_value;
@@ -4124,7 +6014,7 @@ function create_else_block$4(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[4] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$c, 49, 2, 931);
+			add_location(link, file$c, 51, 2, 987);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -4145,14 +6035,14 @@ function create_else_block$4(ctx) {
 		block,
 		id: create_else_block$4.name,
 		type: "else",
-		source: "(49:0) {:else}",
+		source: "(51:0) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (43:0) {#if pieceSetOverride}
+// (45:0) {#if pieceSetOverride}
 function create_if_block$7(ctx) {
 	let link;
 	let link_href_value;
@@ -4163,7 +6053,7 @@ function create_if_block$7(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSetOverride*/ ctx[1] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$c, 43, 2, 822);
+			add_location(link, file$c, 45, 2, 878);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -4184,7 +6074,7 @@ function create_if_block$7(ctx) {
 		block,
 		id: create_if_block$7.name,
 		type: "if",
-		source: "(43:0) {#if pieceSetOverride}",
+		source: "(45:0) {#if pieceSetOverride}",
 		ctx
 	});
 
@@ -4210,10 +6100,10 @@ function create_fragment$d(ctx) {
 
 	let current_block_type = select_block_type(ctx);
 	let if_block = current_block_type(ctx);
-	const centered_content_slot_template = /*#slots*/ ctx[11]["centered-content"];
-	const centered_content_slot = create_slot(centered_content_slot_template, ctx, /*$$scope*/ ctx[10], get_centered_content_slot_context);
-	const below_board_slot_template = /*#slots*/ ctx[11]["below-board"];
-	const below_board_slot = create_slot(below_board_slot_template, ctx, /*$$scope*/ ctx[10], get_below_board_slot_context);
+	const centered_content_slot_template = /*#slots*/ ctx[12]["centered-content"];
+	const centered_content_slot = create_slot(centered_content_slot_template, ctx, /*$$scope*/ ctx[11], get_centered_content_slot_context);
+	const below_board_slot_template = /*#slots*/ ctx[12]["below-board"];
+	const below_board_slot = create_slot(below_board_slot_template, ctx, /*$$scope*/ ctx[11], get_below_board_slot_context);
 
 	const block = {
 		c: function create() {
@@ -4228,7 +6118,7 @@ function create_fragment$d(ctx) {
 			div2 = element("div");
 			if (below_board_slot) below_board_slot.c();
 			attr_dev(div0, "class", "centered-content svelte-iagpad");
-			add_location(div0, file$c, 57, 2, 1107);
+			add_location(div0, file$c, 59, 2, 1163);
 
 			attr_dev(div1, "class", div1_class_value = "is2d " + (/*boardStyleOverride*/ ctx[2]
 			? /*boardStyleOverride*/ ctx[2]
@@ -4237,13 +6127,13 @@ function create_fragment$d(ctx) {
 			set_style(div1, "position", "relative");
 			set_style(div1, "width", /*size*/ ctx[0] + "px");
 			set_style(div1, "height", /*size*/ ctx[0] + "px");
-			add_location(div1, file$c, 60, 2, 1191);
+			add_location(div1, file$c, 62, 2, 1247);
 			attr_dev(div2, "class", "block mt-2");
-			add_location(div2, file$c, 65, 2, 1368);
+			add_location(div2, file$c, 67, 2, 1424);
 			attr_dev(div3, "class", "board-wrapper svelte-iagpad");
 			set_style(div3, "max-width", /*maxWidth*/ ctx[5]);
-			add_render_callback(() => /*div3_elementresize_handler*/ ctx[13].call(div3));
-			add_location(div3, file$c, 52, 0, 1016);
+			add_render_callback(() => /*div3_elementresize_handler*/ ctx[14].call(div3));
+			add_location(div3, file$c, 54, 0, 1072);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -4260,7 +6150,7 @@ function create_fragment$d(ctx) {
 
 			append_dev(div3, t1);
 			append_dev(div3, div1);
-			/*div1_binding*/ ctx[12](div1);
+			/*div1_binding*/ ctx[13](div1);
 			append_dev(div3, t2);
 			append_dev(div3, div2);
 
@@ -4268,7 +6158,7 @@ function create_fragment$d(ctx) {
 				below_board_slot.m(div2, null);
 			}
 
-			div3_resize_listener = add_iframe_resize_listener(div3, /*div3_elementresize_handler*/ ctx[13].bind(div3));
+			div3_resize_listener = add_iframe_resize_listener(div3, /*div3_elementresize_handler*/ ctx[14].bind(div3));
 			current = true;
 		},
 		p: function update(ctx, [dirty]) {
@@ -4285,15 +6175,15 @@ function create_fragment$d(ctx) {
 			}
 
 			if (centered_content_slot) {
-				if (centered_content_slot.p && (!current || dirty & /*$$scope*/ 1024)) {
+				if (centered_content_slot.p && (!current || dirty & /*$$scope*/ 2048)) {
 					update_slot_base(
 						centered_content_slot,
 						centered_content_slot_template,
 						ctx,
-						/*$$scope*/ ctx[10],
+						/*$$scope*/ ctx[11],
 						!current
-						? get_all_dirty_from_scope(/*$$scope*/ ctx[10])
-						: get_slot_changes(centered_content_slot_template, /*$$scope*/ ctx[10], dirty, get_centered_content_slot_changes),
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[11])
+						: get_slot_changes(centered_content_slot_template, /*$$scope*/ ctx[11], dirty, get_centered_content_slot_changes),
 						get_centered_content_slot_context
 					);
 				}
@@ -4314,15 +6204,15 @@ function create_fragment$d(ctx) {
 			}
 
 			if (below_board_slot) {
-				if (below_board_slot.p && (!current || dirty & /*$$scope*/ 1024)) {
+				if (below_board_slot.p && (!current || dirty & /*$$scope*/ 2048)) {
 					update_slot_base(
 						below_board_slot,
 						below_board_slot_template,
 						ctx,
-						/*$$scope*/ ctx[10],
+						/*$$scope*/ ctx[11],
 						!current
-						? get_all_dirty_from_scope(/*$$scope*/ ctx[10])
-						: get_slot_changes(below_board_slot_template, /*$$scope*/ ctx[10], dirty, get_below_board_slot_changes),
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[11])
+						: get_slot_changes(below_board_slot_template, /*$$scope*/ ctx[11], dirty, get_below_board_slot_changes),
 						get_below_board_slot_context
 					);
 				}
@@ -4347,7 +6237,7 @@ function create_fragment$d(ctx) {
 
 			if_block.d(detaching);
 			if (centered_content_slot) centered_content_slot.d(detaching);
-			/*div1_binding*/ ctx[12](null);
+			/*div1_binding*/ ctx[13](null);
 			if (below_board_slot) below_board_slot.d(detaching);
 			div3_resize_listener();
 		}
@@ -4375,6 +6265,7 @@ function instance$d($$self, $$props, $$invalidate) {
 	let { orientation = "white" } = $$props;
 	let { fen = null } = $$props;
 	let { chessground } = $$props;
+	let { chess } = $$props;
 	let { size } = $$props;
 	let { pieceSetOverride = null } = $$props;
 	let { boardStyleOverride = null } = $$props;
@@ -4389,6 +6280,10 @@ function instance$d($$self, $$props, $$invalidate) {
 			console.warn("<Chessboard> was created without expected prop 'chessground'");
 		}
 
+		if (chess === undefined && !('chess' in $$props || $$self.$$.bound[$$self.$$.props['chess']])) {
+			console.warn("<Chessboard> was created without expected prop 'chess'");
+		}
+
 		if (size === undefined && !('size' in $$props || $$self.$$.bound[$$self.$$.props['size']])) {
 			console.warn("<Chessboard> was created without expected prop 'size'");
 		}
@@ -4399,6 +6294,7 @@ function instance$d($$self, $$props, $$invalidate) {
 		'orientation',
 		'fen',
 		'chessground',
+		'chess',
 		'size',
 		'pieceSetOverride',
 		'boardStyleOverride'
@@ -4425,21 +6321,24 @@ function instance$d($$self, $$props, $$invalidate) {
 		if ('orientation' in $$props) $$invalidate(8, orientation = $$props.orientation);
 		if ('fen' in $$props) $$invalidate(9, fen = $$props.fen);
 		if ('chessground' in $$props) $$invalidate(6, chessground = $$props.chessground);
+		if ('chess' in $$props) $$invalidate(10, chess = $$props.chess);
 		if ('size' in $$props) $$invalidate(0, size = $$props.size);
 		if ('pieceSetOverride' in $$props) $$invalidate(1, pieceSetOverride = $$props.pieceSetOverride);
 		if ('boardStyleOverride' in $$props) $$invalidate(2, boardStyleOverride = $$props.boardStyleOverride);
-		if ('$$scope' in $$props) $$invalidate(10, $$scope = $$props.$$scope);
+		if ('$$scope' in $$props) $$invalidate(11, $$scope = $$props.$$scope);
 	};
 
 	$$self.$capture_state = () => ({
 		onMount,
 		Chessground,
+		Chess: Chess$1,
 		pieceSet,
 		boardContainer,
 		chessgroundConfig,
 		orientation,
 		fen,
 		chessground,
+		chess,
 		size,
 		pieceSetOverride,
 		boardStyleOverride,
@@ -4453,6 +6352,7 @@ function instance$d($$self, $$props, $$invalidate) {
 		if ('orientation' in $$props) $$invalidate(8, orientation = $$props.orientation);
 		if ('fen' in $$props) $$invalidate(9, fen = $$props.fen);
 		if ('chessground' in $$props) $$invalidate(6, chessground = $$props.chessground);
+		if ('chess' in $$props) $$invalidate(10, chess = $$props.chess);
 		if ('size' in $$props) $$invalidate(0, size = $$props.size);
 		if ('pieceSetOverride' in $$props) $$invalidate(1, pieceSetOverride = $$props.pieceSetOverride);
 		if ('boardStyleOverride' in $$props) $$invalidate(2, boardStyleOverride = $$props.boardStyleOverride);
@@ -4495,6 +6395,7 @@ function instance$d($$self, $$props, $$invalidate) {
 		chessgroundConfig,
 		orientation,
 		fen,
+		chess,
 		$$scope,
 		slots,
 		div1_binding,
@@ -4517,6 +6418,7 @@ class Chessboard extends SvelteComponentDev {
 				orientation: 8,
 				fen: 9,
 				chessground: 6,
+				chess: 10,
 				size: 0,
 				pieceSetOverride: 1,
 				boardStyleOverride: 2
@@ -4561,6 +6463,14 @@ class Chessboard extends SvelteComponentDev {
 	}
 
 	set chessground(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get chess() {
+		throw new Error("<Chessboard>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set chess(value) {
 		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
 	}
 
@@ -5398,15 +7308,6 @@ Distributed under MIT License https://github.com/mattdesl/eases/blob/master/LICE
  */
 function cubicInOut(t) {
 	return t < 0.5 ? 4.0 * t * t * t : 0.5 * Math.pow(2.0 * t - 2.0, 3.0) + 1.0;
-}
-
-/**
- * https://svelte.dev/docs/svelte-easing
- * @param {number} t
- * @returns {number}
- */
-function cubicIn(t) {
-	return t * t * t;
 }
 
 /**
@@ -8334,7 +10235,7 @@ function tweened(value, defaults = {}) {
 const file$a = "svelte/components/CollapsibleBox.svelte";
 
 function add_css$4(target) {
-	append_styles(target, "svelte-b8skwo", ".toggle-button.svelte-b8skwo.svelte-b8skwo{cursor:pointer;display:flex;align-items:center;justify-content:space-between}.toggle-button.svelte-b8skwo span.svelte-b8skwo{font-weight:bold;font-size:1.2em;transition:color 0.3s ease}.box.open.svelte-b8skwo .toggle-button span.svelte-b8skwo{color:var(--bulma-primary)}.box.svelte-b8skwo:not(.open) .toggle-button span.svelte-b8skwo{color:var(--bulma-primary-20)}.icon.svelte-b8skwo.svelte-b8skwo{margin-right:8px;transition:transform 0.3s ease}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ29sbGFwc2libGVCb3guc3ZlbHRlIiwic291cmNlcyI6WyJDb2xsYXBzaWJsZUJveC5zdmVsdGUiXSwic291cmNlc0NvbnRlbnQiOlsiPHNjcmlwdD5cbiAgaW1wb3J0IHsgc2xpZGUgfSBmcm9tIFwic3ZlbHRlL3RyYW5zaXRpb25cIjtcbiAgaW1wb3J0IHsgd3JpdGFibGUgfSBmcm9tIFwic3ZlbHRlL3N0b3JlXCI7XG4gIGltcG9ydCB7IHR3ZWVuZWQgfSBmcm9tIFwic3ZlbHRlL21vdGlvblwiO1xuICBpbXBvcnQgeyBjdWJpY0luLCBjdWJpY091dCwgbGluZWFyIH0gZnJvbSBcInN2ZWx0ZS9lYXNpbmdcIjtcblxuICBleHBvcnQgbGV0IGRlZmF1bHRPcGVuID0gZmFsc2U7XG4gIGV4cG9ydCBsZXQgdGl0bGUgPSBcIlwiO1xuICBjb25zdCBpc09wZW4gPSB3cml0YWJsZShkZWZhdWx0T3Blbik7XG4gIGNvbnN0IHJvdGF0aW9uID0gdHdlZW5lZCgwLCB7XG4gICAgZHVyYXRpb246IDMwMCxcbiAgICBlYXNpbmc6IGxpbmVhcixcbiAgfSk7XG5cbiAgZnVuY3Rpb24gdG9nZ2xlT3BlbigpIHtcbiAgICBpc09wZW4udXBkYXRlKChuKSA9PiAhbik7XG4gICAgcm90YXRpb24uc2V0KCRpc09wZW4gPyA5MCA6IDApO1xuICB9XG5cbiAgZnVuY3Rpb24gaGFuZGxlS2V5ZG93bihldmVudCkge1xuICAgIGlmIChldmVudC5rZXkgPT09IFwiRW50ZXJcIikge1xuICAgICAgdG9nZ2xlT3BlbigpO1xuICAgIH1cbiAgfVxuPC9zY3JpcHQ+XG5cbjxkaXYgY2xhc3M9XCJib3hcIiBjbGFzczpvcGVuPXskaXNPcGVufT5cbiAgPGRpdlxuICAgIGNsYXNzPVwidG9nZ2xlLWJ1dHRvblwiXG4gICAgcm9sZT1cImJ1dHRvblwiXG4gICAgdGFiaW5kZXg9XCIwXCJcbiAgICBvbjpjbGljaz17dG9nZ2xlT3Blbn1cbiAgICBvbjprZXlkb3duPXtoYW5kbGVLZXlkb3dufVxuICA+XG4gICAgPHNwYW4gY2xhc3M9XCJtYi0yXCI+e3RpdGxlfTwvc3Bhbj5cbiAgICA8c3BhbiBjbGFzcz1cImljb25cIiBzdHlsZT1cInRyYW5zZm9ybTogcm90YXRlKHskcm90YXRpb259ZGVnKTtcIj7ilrY8L3NwYW4+XG4gIDwvZGl2PlxuICB7I2lmICRpc09wZW59XG4gICAgPGRpdiB0cmFuc2l0aW9uOnNsaWRlPlxuICAgICAgPHNsb3Q+PC9zbG90PlxuICAgIDwvZGl2PlxuICB7L2lmfVxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLnRvZ2dsZS1idXR0b24ge1xuICAgIGN1cnNvcjogcG9pbnRlcjtcbiAgICBkaXNwbGF5OiBmbGV4O1xuICAgIGFsaWduLWl0ZW1zOiBjZW50ZXI7XG4gICAganVzdGlmeS1jb250ZW50OiBzcGFjZS1iZXR3ZWVuO1xuICB9XG5cbiAgLnRvZ2dsZS1idXR0b24gc3BhbiB7XG4gICAgZm9udC13ZWlnaHQ6IGJvbGQ7IC8qIE1ha2UgdGhlIHRpdGxlIGJvbGQgKi9cbiAgICBmb250LXNpemU6IDEuMmVtOyAvKiBJbmNyZWFzZSB0aGUgdGl0bGUgc2l6ZSAqL1xuICAgIHRyYW5zaXRpb246IGNvbG9yIDAuM3MgZWFzZTsgLyogU21vb3RoIHRyYW5zaXRpb24gZm9yIGNvbG9yIGNoYW5nZSAqL1xuICB9XG5cbiAgLyogQ29sb3IgY2hhbmdlIHdoZW4gb3BlbiAqL1xuICAuYm94Lm9wZW4gLnRvZ2dsZS1idXR0b24gc3BhbiB7XG4gICAgY29sb3I6IHZhcigtLWJ1bG1hLXByaW1hcnkpOyAvKiBDb2xvciB3aGVuIG9wZW4gKi9cbiAgfVxuXG4gIC8qIENvbG9yIGNoYW5nZSB3aGVuIGNsb3NlZCAqL1xuICAuYm94Om5vdCgub3BlbikgLnRvZ2dsZS1idXR0b24gc3BhbiB7XG4gICAgY29sb3I6IHZhcigtLWJ1bG1hLXByaW1hcnktMjApOyAvKiBDb2xvciB3aGVuIGNsb3NlZCAqL1xuICB9XG5cbiAgLmljb24ge1xuICAgIG1hcmdpbi1yaWdodDogOHB4O1xuICAgIHRyYW5zaXRpb246IHRyYW5zZm9ybSAwLjNzIGVhc2U7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBNkNFLDBDQUFlLENBQ2IsTUFBTSxDQUFFLE9BQU8sQ0FDZixPQUFPLENBQUUsSUFBSSxDQUNiLFdBQVcsQ0FBRSxNQUFNLENBQ25CLGVBQWUsQ0FBRSxhQUNuQixDQUVBLDRCQUFjLENBQUMsa0JBQUssQ0FDbEIsV0FBVyxDQUFFLElBQUksQ0FDakIsU0FBUyxDQUFFLEtBQUssQ0FDaEIsVUFBVSxDQUFFLEtBQUssQ0FBQyxJQUFJLENBQUMsSUFDekIsQ0FHQSxJQUFJLG1CQUFLLENBQUMsY0FBYyxDQUFDLGtCQUFLLENBQzVCLEtBQUssQ0FBRSxJQUFJLGVBQWUsQ0FDNUIsQ0FHQSxrQkFBSSxLQUFLLEtBQUssQ0FBQyxDQUFDLGNBQWMsQ0FBQyxrQkFBSyxDQUNsQyxLQUFLLENBQUUsSUFBSSxrQkFBa0IsQ0FDL0IsQ0FFQSxpQ0FBTSxDQUNKLFlBQVksQ0FBRSxHQUFHLENBQ2pCLFVBQVUsQ0FBRSxTQUFTLENBQUMsSUFBSSxDQUFDLElBQzdCIn0= */");
+	append_styles(target, "svelte-b8skwo", ".toggle-button.svelte-b8skwo.svelte-b8skwo{cursor:pointer;display:flex;align-items:center;justify-content:space-between}.toggle-button.svelte-b8skwo span.svelte-b8skwo{font-weight:bold;font-size:1.2em;transition:color 0.3s ease}.box.open.svelte-b8skwo .toggle-button span.svelte-b8skwo{color:var(--bulma-primary)}.box.svelte-b8skwo:not(.open) .toggle-button span.svelte-b8skwo{color:var(--bulma-primary-20)}.icon.svelte-b8skwo.svelte-b8skwo{margin-right:8px;transition:transform 0.3s ease}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ29sbGFwc2libGVCb3guc3ZlbHRlIiwic291cmNlcyI6WyJDb2xsYXBzaWJsZUJveC5zdmVsdGUiXSwic291cmNlc0NvbnRlbnQiOlsiPHNjcmlwdD5cbiAgaW1wb3J0IHsgc2xpZGUgfSBmcm9tIFwic3ZlbHRlL3RyYW5zaXRpb25cIjtcbiAgaW1wb3J0IHsgd3JpdGFibGUgfSBmcm9tIFwic3ZlbHRlL3N0b3JlXCI7XG4gIGltcG9ydCB7IHR3ZWVuZWQgfSBmcm9tIFwic3ZlbHRlL21vdGlvblwiO1xuICBpbXBvcnQgeyBsaW5lYXIgfSBmcm9tIFwic3ZlbHRlL2Vhc2luZ1wiO1xuXG4gIGV4cG9ydCBsZXQgZGVmYXVsdE9wZW4gPSBmYWxzZTtcbiAgZXhwb3J0IGxldCB0aXRsZSA9IFwiXCI7XG4gIGNvbnN0IGlzT3BlbiA9IHdyaXRhYmxlKGRlZmF1bHRPcGVuKTtcbiAgY29uc3Qgcm90YXRpb24gPSB0d2VlbmVkKDAsIHtcbiAgICBkdXJhdGlvbjogMzAwLFxuICAgIGVhc2luZzogbGluZWFyLFxuICB9KTtcblxuICBmdW5jdGlvbiB0b2dnbGVPcGVuKCkge1xuICAgIGlzT3Blbi51cGRhdGUoKG4pID0+ICFuKTtcbiAgICByb3RhdGlvbi5zZXQoJGlzT3BlbiA/IDkwIDogMCk7XG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVLZXlkb3duKGV2ZW50KSB7XG4gICAgaWYgKGV2ZW50LmtleSA9PT0gXCJFbnRlclwiKSB7XG4gICAgICB0b2dnbGVPcGVuKCk7XG4gICAgfVxuICB9XG48L3NjcmlwdD5cblxuPGRpdiBjbGFzcz1cImJveFwiIGNsYXNzOm9wZW49eyRpc09wZW59PlxuICA8ZGl2XG4gICAgY2xhc3M9XCJ0b2dnbGUtYnV0dG9uXCJcbiAgICByb2xlPVwiYnV0dG9uXCJcbiAgICB0YWJpbmRleD1cIjBcIlxuICAgIG9uOmNsaWNrPXt0b2dnbGVPcGVufVxuICAgIG9uOmtleWRvd249e2hhbmRsZUtleWRvd259XG4gID5cbiAgICA8c3BhbiBjbGFzcz1cIm1iLTJcIj57dGl0bGV9PC9zcGFuPlxuICAgIDxzcGFuIGNsYXNzPVwiaWNvblwiIHN0eWxlPVwidHJhbnNmb3JtOiByb3RhdGUoeyRyb3RhdGlvbn1kZWcpO1wiPuKWtjwvc3Bhbj5cbiAgPC9kaXY+XG4gIHsjaWYgJGlzT3Blbn1cbiAgICA8ZGl2IHRyYW5zaXRpb246c2xpZGU+XG4gICAgICA8c2xvdD48L3Nsb3Q+XG4gICAgPC9kaXY+XG4gIHsvaWZ9XG48L2Rpdj5cblxuPHN0eWxlPlxuICAudG9nZ2xlLWJ1dHRvbiB7XG4gICAgY3Vyc29yOiBwb2ludGVyO1xuICAgIGRpc3BsYXk6IGZsZXg7XG4gICAgYWxpZ24taXRlbXM6IGNlbnRlcjtcbiAgICBqdXN0aWZ5LWNvbnRlbnQ6IHNwYWNlLWJldHdlZW47XG4gIH1cblxuICAudG9nZ2xlLWJ1dHRvbiBzcGFuIHtcbiAgICBmb250LXdlaWdodDogYm9sZDsgLyogTWFrZSB0aGUgdGl0bGUgYm9sZCAqL1xuICAgIGZvbnQtc2l6ZTogMS4yZW07IC8qIEluY3JlYXNlIHRoZSB0aXRsZSBzaXplICovXG4gICAgdHJhbnNpdGlvbjogY29sb3IgMC4zcyBlYXNlOyAvKiBTbW9vdGggdHJhbnNpdGlvbiBmb3IgY29sb3IgY2hhbmdlICovXG4gIH1cblxuICAvKiBDb2xvciBjaGFuZ2Ugd2hlbiBvcGVuICovXG4gIC5ib3gub3BlbiAudG9nZ2xlLWJ1dHRvbiBzcGFuIHtcbiAgICBjb2xvcjogdmFyKC0tYnVsbWEtcHJpbWFyeSk7IC8qIENvbG9yIHdoZW4gb3BlbiAqL1xuICB9XG5cbiAgLyogQ29sb3IgY2hhbmdlIHdoZW4gY2xvc2VkICovXG4gIC5ib3g6bm90KC5vcGVuKSAudG9nZ2xlLWJ1dHRvbiBzcGFuIHtcbiAgICBjb2xvcjogdmFyKC0tYnVsbWEtcHJpbWFyeS0yMCk7IC8qIENvbG9yIHdoZW4gY2xvc2VkICovXG4gIH1cblxuICAuaWNvbiB7XG4gICAgbWFyZ2luLXJpZ2h0OiA4cHg7XG4gICAgdHJhbnNpdGlvbjogdHJhbnNmb3JtIDAuM3MgZWFzZTtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUE2Q0UsMENBQWUsQ0FDYixNQUFNLENBQUUsT0FBTyxDQUNmLE9BQU8sQ0FBRSxJQUFJLENBQ2IsV0FBVyxDQUFFLE1BQU0sQ0FDbkIsZUFBZSxDQUFFLGFBQ25CLENBRUEsNEJBQWMsQ0FBQyxrQkFBSyxDQUNsQixXQUFXLENBQUUsSUFBSSxDQUNqQixTQUFTLENBQUUsS0FBSyxDQUNoQixVQUFVLENBQUUsS0FBSyxDQUFDLElBQUksQ0FBQyxJQUN6QixDQUdBLElBQUksbUJBQUssQ0FBQyxjQUFjLENBQUMsa0JBQUssQ0FDNUIsS0FBSyxDQUFFLElBQUksZUFBZSxDQUM1QixDQUdBLGtCQUFJLEtBQUssS0FBSyxDQUFDLENBQUMsY0FBYyxDQUFDLGtCQUFLLENBQ2xDLEtBQUssQ0FBRSxJQUFJLGtCQUFrQixDQUMvQixDQUVBLGlDQUFNLENBQ0osWUFBWSxDQUFFLEdBQUcsQ0FDakIsVUFBVSxDQUFFLFNBQVMsQ0FBQyxJQUFJLENBQUMsSUFDN0IifQ== */");
 }
 
 // (38:2) {#if $isOpen}
@@ -8349,7 +10250,7 @@ function create_if_block$5(ctx) {
 		c: function create() {
 			div = element("div");
 			if (default_slot) default_slot.c();
-			add_location(div, file$a, 38, 4, 894);
+			add_location(div, file$a, 38, 4, 875);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -8447,17 +10348,17 @@ function create_fragment$b(ctx) {
 			t3 = space();
 			if (if_block) if_block.c();
 			attr_dev(span0, "class", "mb-2 svelte-b8skwo");
-			add_location(span0, file$a, 34, 4, 756);
+			add_location(span0, file$a, 34, 4, 737);
 			attr_dev(span1, "class", "icon svelte-b8skwo");
 			set_style(span1, "transform", "rotate(" + /*$rotation*/ ctx[2] + "deg)");
-			add_location(span1, file$a, 35, 4, 794);
+			add_location(span1, file$a, 35, 4, 775);
 			attr_dev(div0, "class", "toggle-button svelte-b8skwo");
 			attr_dev(div0, "role", "button");
 			attr_dev(div0, "tabindex", "0");
-			add_location(div0, file$a, 27, 2, 625);
+			add_location(div0, file$a, 27, 2, 606);
 			attr_dev(div1, "class", "box svelte-b8skwo");
 			toggle_class(div1, "open", /*$isOpen*/ ctx[1]);
-			add_location(div1, file$a, 26, 0, 584);
+			add_location(div1, file$a, 26, 0, 565);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -8589,8 +10490,6 @@ function instance$b($$self, $$props, $$invalidate) {
 		slide,
 		writable,
 		tweened,
-		cubicIn,
-		cubicOut,
 		linear: identity,
 		defaultOpen,
 		title,
@@ -8661,7 +10560,7 @@ const { Map: Map_1 } = globals;
 const file$9 = "svelte/Puzzles.svelte";
 
 function add_css$3(target) {
-	append_styles(target, "svelte-1oimmcd", ".puzzle-id.svelte-1oimmcd{font-family:monospace}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHV6emxlcy5zdmVsdGUiLCJzb3VyY2VzIjpbIlB1enpsZXMuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDaGVzc2JvYXJkIGZyb20gXCIuL2NvbXBvbmVudHMvQ2hlc3Nib2FyZC5zdmVsdGVcIjtcbiAgaW1wb3J0IHsgSU5JVElBTF9GRU4sIG1ha2VGZW4sIHBhcnNlRmVuIH0gZnJvbSBcImNoZXNzb3BzL2ZlblwiO1xuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSBcInN2ZWx0ZVwiO1xuICBpbXBvcnQgeyBmYWRlIH0gZnJvbSBcInN2ZWx0ZS90cmFuc2l0aW9uXCI7XG4gIGltcG9ydCB7IGZsaXAgfSBmcm9tIFwic3ZlbHRlL2FuaW1hdGVcIjtcbiAgaW1wb3J0IHsgVXRpbCB9IGZyb20gXCJzcmMvdXRpbFwiO1xuICBpbXBvcnQgeyBwYXJzZVBnbiwgc3RhcnRpbmdQb3NpdGlvbiB9IGZyb20gXCJjaGVzc29wcy9wZ25cIjtcbiAgaW1wb3J0IHsgcGFyc2VTYW4gfSBmcm9tIFwiY2hlc3NvcHMvc2FuXCI7XG4gIGltcG9ydCB7IENoZXNzLCBtYWtlVWNpLCBwYXJzZVVjaSB9IGZyb20gXCJjaGVzc29wc1wiO1xuICBpbXBvcnQgeyBtYWtlU3F1YXJlLCBwYXJzZVNxdWFyZSB9IGZyb20gXCJjaGVzc29wcy91dGlsXCI7XG4gIGltcG9ydCB7IHBlcnNpc3RlZCB9IGZyb20gXCJzdmVsdGUtcGVyc2lzdGVkLXN0b3JlXCI7XG4gIGltcG9ydCBQdXp6bGVIaXN0b3J5UHJvY2Vzc29yIGZyb20gXCIuL2NvbXBvbmVudHMvUHV6emxlSGlzdG9yeVByb2Nlc3Nvci5zdmVsdGVcIjtcbiAgaW1wb3J0IENvbGxhcHNpYmxlQm94IGZyb20gXCIuL2NvbXBvbmVudHMvQ29sbGFwc2libGVCb3guc3ZlbHRlXCI7XG5cbiAgY2xhc3MgUmVzdWx0IHtcbiAgICBjb25zdHJ1Y3RvcihwdXp6bGVJZCwgc2VlbkF0LCBza2lwcGVkLCBtYWRlTWlzdGFrZSA9IGZhbHNlLCBkb25lQXQgPSBudWxsKSB7XG4gICAgICB0aGlzLnB1enpsZUlkID0gcHV6emxlSWQ7XG4gICAgICB0aGlzLnNraXBwZWQgPSBza2lwcGVkO1xuICAgICAgdGhpcy5tYWRlTWlzdGFrZSA9IG1hZGVNaXN0YWtlO1xuICAgICAgdGhpcy5zZWVuQXQgPSBzZWVuQXQ7XG4gICAgICB0aGlzLmRvbmVBdCA9IGRvbmVBdDtcbiAgICB9XG5cbiAgICBnZXREdXJhdGlvbigpIHtcbiAgICAgIGlmICh0aGlzLmRvbmVBdCkge1xuICAgICAgICByZXR1cm4gdGhpcy5kb25lQXQgLSB0aGlzLnNlZW5BdDtcbiAgICAgIH1cbiAgICB9XG5cbiAgICB3YXNTdWNjZXNzZnVsKCkge1xuICAgICAgcmV0dXJuICF0aGlzLnNraXBwZWQgJiYgIXRoaXMubWFkZU1pc3Rha2UgJiYgdGhpcy5kb25lQXQ7XG4gICAgfVxuXG4gICAgd2FzRmFpbHVyZSgpIHtcbiAgICAgIHJldHVybiB0aGlzLm1hZGVNaXN0YWtlO1xuICAgIH1cbiAgfVxuXG4gIGNsYXNzIFB1enpsZSB7XG4gICAgY29uc3RydWN0b3IocHV6emxlSWQpIHtcbiAgICAgIHRoaXMucHV6emxlSWQgPSBwdXp6bGVJZDtcbiAgICB9XG5cbiAgICBsaWNoZXNzVXJsKCkge1xuICAgICAgcmV0dXJuIGBodHRwczovL2xpY2hlc3Mub3JnL3RyYWluaW5nLyR7dGhpcy5wdXp6bGVJZH1gO1xuICAgIH1cblxuICAgIGhhc1Jlc3VsdHMoKSB7XG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkubGVuZ3RoID49IDE7XG4gICAgfVxuXG4gICAgaGFzQmVlblNvbHZlZCgpIHtcbiAgICAgIGlmICghdGhpcy5oYXNSZXN1bHRzKCkpIHtcbiAgICAgICAgcmV0dXJuIGZhbHNlO1xuICAgICAgfVxuICAgICAgcmV0dXJuIHRoaXMuZ2V0UmVzdWx0cygpLnNvbWUoKHJlc3VsdCkgPT4ge1xuICAgICAgICByZXR1cm4gcmVzdWx0Lndhc1N1Y2Nlc3NmdWwoKTtcbiAgICAgIH0pO1xuICAgIH1cblxuICAgIGdldFJlc3VsdHMoKSB7XG4gICAgICByZXR1cm4gKCRyZXN1bHRzW3RoaXMucHV6emxlSWRdIHx8IFtdKS5tYXAoXG4gICAgICAgIChyZXN1bHREYXRhKSA9PlxuICAgICAgICAgIG5ldyBSZXN1bHQoXG4gICAgICAgICAgICByZXN1bHREYXRhLnB1enpsZUlkLFxuICAgICAgICAgICAgcmVzdWx0RGF0YS5zZWVuQXQsXG4gICAgICAgICAgICByZXN1bHREYXRhLnNraXBwZWQsXG4gICAgICAgICAgICByZXN1bHREYXRhLm1hZGVNaXN0YWtlLFxuICAgICAgICAgICAgcmVzdWx0RGF0YS5kb25lQXQsXG4gICAgICAgICAgKSxcbiAgICAgICk7XG4gICAgfVxuXG4gICAgZ2V0VG90YWxTb2x2ZXMoKSB7XG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkuZmlsdGVyKChyZXN1bHQpID0+IHJlc3VsdC53YXNTdWNjZXNzZnVsKCkpXG4gICAgICAgIC5sZW5ndGg7XG4gICAgfVxuXG4gICAgZ2V0RmFpbHVyZUNvdW50KCkge1xuICAgICAgcmV0dXJuIHRoaXMuZ2V0UmVzdWx0cygpLmZpbHRlcigocmVzdWx0KSA9PiByZXN1bHQud2FzRmFpbHVyZSgpKS5sZW5ndGg7XG4gICAgfVxuXG4gICAgZ2V0U29sdmVTdHJlYWsoKSB7XG4gICAgICBsZXQgc3RyZWFrID0gMDtcblxuICAgICAgaWYgKCF0aGlzLmhhc0JlZW5Tb2x2ZWQoKSkge1xuICAgICAgICByZXR1cm4gc3RyZWFrO1xuICAgICAgfVxuXG4gICAgICBjb25zdCByZXN1bHRzID0gdGhpcy5nZXRSZXN1bHRzKCk7XG5cbiAgICAgIGZvciAobGV0IGkgPSByZXN1bHRzLmxlbmd0aCAtIDE7IGkgPj0gMDsgaS0tKSB7XG4gICAgICAgIGlmIChyZXN1bHRzW2ldLndhc1N1Y2Nlc3NmdWwoKSkge1xuICAgICAgICAgIHN0cmVhaysrO1xuICAgICAgICB9IGVsc2Uge1xuICAgICAgICAgIGJyZWFrO1xuICAgICAgICB9XG4gICAgICB9XG5cbiAgICAgIHJldHVybiBzdHJlYWs7XG4gICAgfVxuXG4gICAgYXZlcmFnZVNvbHZlVGltZSgpIHtcbiAgICAgIGlmICghdGhpcy5oYXNCZWVuU29sdmVkKCkpIHtcbiAgICAgICAgcmV0dXJuIG51bGw7XG4gICAgICB9XG4gICAgICBjb25zdCBzdWNjZXNzZnVsUmVzdWx0cyA9IHRoaXMuZ2V0UmVzdWx0cygpLmZpbHRlcigocmVzdWx0KSA9PlxuICAgICAgICByZXN1bHQud2FzU3VjY2Vzc2Z1bCgpLFxuICAgICAgKTtcbiAgICAgIGNvbnN0IGxhc3RGZXcgPSBzdWNjZXNzZnVsUmVzdWx0cy5zbGljZShtaW5pbXVtU29sdmVzICogLTEpO1xuICAgICAgY29uc3QgZHVyYXRpb25zID0gbGFzdEZldy5tYXAoKHJlc3VsdCkgPT4gcmVzdWx0LmdldER1cmF0aW9uKCkpO1xuICAgICAgY29uc3Qgc3VtID0gZHVyYXRpb25zLnJlZHVjZSgoYSwgYikgPT4gYSArIGIsIDApO1xuICAgICAgY29uc3QgYXZlcmFnZSA9IHN1bSAvIChsYXN0RmV3Lmxlbmd0aCB8fCAxKTtcbiAgICAgIHJldHVybiBhdmVyYWdlO1xuICAgIH1cblxuICAgIGxhc3RTZWVuQXQoKSB7XG4gICAgICBpZiAoIXRoaXMuaGFzUmVzdWx0cygpKSB7XG4gICAgICAgIHJldHVybiBudWxsO1xuICAgICAgfVxuXG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkuc2xpY2UoLTEpLnNlZW5BdDtcbiAgICB9XG5cbiAgICBpc0NvbXBsZXRlKCkge1xuICAgICAgaWYgKCF0aGlzLmhhc0JlZW5Tb2x2ZWQoKSkge1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICB9XG4gICAgICBjb25zdCBsYXN0U29sdmVzID0gdGhpcy5nZXRSZXN1bHRzKCkuc2xpY2UoLTEgKiBtaW5pbXVtU29sdmVzKTtcblxuICAgICAgaWYgKGxhc3RTb2x2ZXMubGVuZ3RoIDwgbWluaW11bVNvbHZlcykge1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICB9XG5cbiAgICAgIGlmICghbGFzdFNvbHZlcy5ldmVyeSgocmVzdWx0KSA9PiByZXN1bHQud2FzU3VjY2Vzc2Z1bCgpKSkge1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICB9XG5cbiAgICAgIHJldHVybiB0aGlzLmF2ZXJhZ2VTb2x2ZVRpbWUoKSA8PSB0aW1lR29hbDtcbiAgICB9XG4gIH1cblxuICAvLyBDaGVzcyBib2FyZCBzdHVmZlxuICBsZXQgZmVuO1xuICBsZXQgY2hlc3Nncm91bmQ7XG4gIGxldCBvcmllbnRhdGlvbiA9IFwid2hpdGVcIjtcbiAgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge1xuICAgIGZlbjogSU5JVElBTF9GRU4sXG4gICAgY29vcmRpbmF0ZXM6IHRydWUsXG4gICAgYW5pbWF0aW9uOiB7XG4gICAgICBlbmFibGVkOiB0cnVlLFxuICAgIH0sXG4gICAgaGlnaGxpZ2h0OiB7XG4gICAgICBsYXN0TW92ZTogdHJ1ZSxcbiAgICAgIGNoZWNrOiB0cnVlLFxuICAgIH0sXG4gICAgZHJhZ2dhYmxlOiB7XG4gICAgICBlbmFibGVkOiB0cnVlLFxuICAgIH0sXG4gICAgc2VsZWN0YWJsZToge1xuICAgICAgZW5hYmxlZDogdHJ1ZSxcbiAgICB9LFxuICAgIG1vdmFibGU6IHtcbiAgICAgIGZyZWU6IGZhbHNlLFxuICAgICAgY29sb3I6IFwiYm90aFwiLFxuICAgICAgZGVzdHM6IG5ldyBNYXAoKSxcbiAgICAgIGV2ZW50czoge1xuICAgICAgICBhZnRlcjogaGFuZGxlVXNlck1vdmUsXG4gICAgICB9LFxuICAgIH0sXG4gICAgb3JpZW50YXRpb246IG9yaWVudGF0aW9uLFxuICB9O1xuXG4gIC8vIFB1enpsZSBEYXRhXG4gIGxldCBhbGxQdXp6bGVzID0gW107XG4gIGxldCBhY3RpdmVQdXp6bGVzID0gW107XG5cbiAgJDoge1xuICAgIGlmIChhY3RpdmVQdXp6bGVzLmxlbmd0aCA8IGJhdGNoU2l6ZSAmJiBhbGxQdXp6bGVzLmxlbmd0aCA+IDApIHtcbiAgICAgIGZpbGxBY3RpdmVQdXp6bGVzKCk7XG4gICAgfVxuICB9XG5cbiAgbGV0IGNvbXBsZXRlZFB1enpsZXMgPSBbXTtcbiAgbGV0IGN1cnJlbnRQdXp6bGU7XG4gIGxldCBwdXp6bGVTaG93bkF0O1xuXG4gIC8vIEJlaGF2aW9yYWwgQ29uZmlnXG4gIGxldCBiYXRjaFNpemUgPSAxMDtcbiAgbGV0IHRpbWVHb2FsID0gMTUwMDA7XG4gIGxldCBtaW5pbXVtU29sdmVzID0gMjtcbiAgbGV0IGFscmVhZHlDb21wbGV0ZU9kZHMgPSAwLjM7XG5cbiAgLy8gQ3VycmVudCBwdXp6bGUgc3RhdGVcbiAgbGV0IG1vdmVzO1xuICBsZXQgcG9zaXRpb247XG4gIGxldCBtYWRlTWlzdGFrZSA9IGZhbHNlO1xuICBsZXQgcHV6emxlQ29tcGxldGUgPSBmYWxzZTtcblxuICAvLyBET00gZWxlbWVudHNcbiAgbGV0IG5leHRCdXR0b247XG5cbiAgLy8gUGVyc2lzdGVkIGRhdGFcbiAgY29uc3QgcHV6emxlRGF0YVN0b3JlID0gcGVyc2lzdGVkKFwicHV6emxlcy5kYXRhXCIsIHt9KTtcbiAgY29uc3QgcHV6emxlSWRzVG9Xb3JrT24gPSBwZXJzaXN0ZWQoXCJwdXp6bGVzLmlkc1RvV29ya09uXCIsIFtdKTtcbiAgY29uc3QgcmVzdWx0cyA9IHBlcnNpc3RlZChcInB1enpsZXMucmVzdWx0c1wiLCB7fSk7XG5cbiAgZnVuY3Rpb24gZmlsbEFjdGl2ZVB1enpsZXMoKSB7XG4gICAgY29uc3QgY29tcGxldGVkID0gVXRpbC5zb3J0UmFuZG9tbHkoZ2V0Q29tcGxldGVkUHV6emxlcygpKTtcbiAgICBjb25zdCBpbmNvbXBsZXRlSW5hY3RpdmUgPSBVdGlsLnNvcnRSYW5kb21seShnZXRJbmFjdGl2ZUNvbXBsZXRlZFB1enpsZXMoKSk7XG4gICAgbGV0IHB1enpsZVR5cGU7XG4gICAgd2hpbGUgKGFsbFB1enpsZXMubGVuZ3RoID4gMCAmJiBhY3RpdmVQdXp6bGVzLmxlbmd0aCA8IGJhdGNoU2l6ZSkge1xuICAgICAgcHV6emxlVHlwZSA9IE1hdGgucmFuZG9tKCkgPCAwLjIgPyBcImNvbXBsZXRlZFwiIDogXCJpbmFjdGl2ZVwiO1xuICAgICAgaWYgKGluY29tcGxldGVJbmFjdGl2ZS5sZW5ndGggPCAxICYmIGNvbXBsZXRlZC5sZW5ndGggPCAxKSB7XG4gICAgICAgIGJyZWFrO1xuICAgICAgfVxuICAgICAgaWYgKHB1enpsZVR5cGUgPT09IFwiY29tcGxldGVkXCIgJiYgY29tcGxldGVkLmxlbmd0aCA+IDApIHtcbiAgICAgICAgYWRkQWN0aXZlUHV6emxlKGNvbXBsZXRlZC5wb3AoKSk7XG4gICAgICB9IGVsc2UgaWYgKGluY29tcGxldGVJbmFjdGl2ZS5sZW5ndGggPiAwKSB7XG4gICAgICAgIGFkZEFjdGl2ZVB1enpsZShpbmNvbXBsZXRlSW5hY3RpdmUucG9wKCkpO1xuICAgICAgfVxuICAgIH1cbiAgfVxuXG4gIC8vIFRoaXMgaXMgdGllZCB0byB0aGUgYWRkIG5ldyBwdXp6bGUgZm9ybVxuICBsZXQgbmV3UHV6emxlSWRzO1xuXG4gIGZ1bmN0aW9uIGFkZFB1enpsZUlkVG9Xb3JrT24oKSB7XG4gICAgaWYgKG5ld1B1enpsZUlkcy5sZW5ndGggPCAzKSB7XG4gICAgICBuZXdQdXp6bGVJZHMgPSBcIlwiO1xuICAgICAgcmV0dXJuO1xuICAgIH1cbiAgICBjb25zdCBpZHNUb0FkZCA9IG5ld1B1enpsZUlkcy5zcGxpdChcIixcIikubWFwKChpZCkgPT4gaWQudHJpbSgpKTtcbiAgICBjb25zdCBjdXJyZW50UHV6emxlSWRzID0gbmV3IFNldCgkcHV6emxlSWRzVG9Xb3JrT24pO1xuICAgIGlkc1RvQWRkLmZvckVhY2goKGlkKSA9PiBjdXJyZW50UHV6emxlSWRzLmFkZChpZCkpO1xuICAgIHB1enpsZUlkc1RvV29ya09uLnNldChbLi4uY3VycmVudFB1enpsZUlkc10pO1xuICAgIG5ld1B1enpsZUlkcyA9IFwiXCI7XG4gIH1cblxuICBmdW5jdGlvbiByZW1vdmVQdXp6bGVJZChwdXp6bGVJZCkge1xuICAgIGNvbnN0IGN1cnJlbnRQdXp6bGVJZHMgPSBuZXcgU2V0KCRwdXp6bGVJZHNUb1dvcmtPbik7XG4gICAgY3VycmVudFB1enpsZUlkcy5kZWxldGUocHV6emxlSWQudHJpbSgpKTtcbiAgICBwdXp6bGVJZHNUb1dvcmtPbi5zZXQoWy4uLmN1cnJlbnRQdXp6bGVJZHNdKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGFkZEFjdGl2ZVB1enpsZShwdXp6bGUpIHtcbiAgICBhY3RpdmVQdXp6bGVzID0gW1xuICAgICAgLi4ubmV3IFNldChbXG4gICAgICAgIC4uLmFjdGl2ZVB1enpsZXMubWFwKChwdXp6bGUpID0+IHB1enpsZS5wdXp6bGVJZCksXG4gICAgICAgIHB1enpsZS5wdXp6bGVJZCxcbiAgICAgIF0pLFxuICAgIF0ubWFwKChwdXp6bGVJZCkgPT4gbmV3IFB1enpsZShwdXp6bGVJZCkpO1xuICB9XG5cbiAgZnVuY3Rpb24gcmVtb3ZlQWN0aXZlUHV6emxlKHB1enpsZSkge1xuICAgIGFjdGl2ZVB1enpsZXMgPSBhY3RpdmVQdXp6bGVzLmZpbHRlcihcbiAgICAgIChhY3RpdmVQdXp6bGUpID0+IGFjdGl2ZVB1enpsZS5wdXp6bGVJZCAhPT0gcHV6emxlLnB1enpsZUlkLFxuICAgICk7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRDb21wbGV0ZWRQdXp6bGVzKCkge1xuICAgIHJldHVybiBhbGxQdXp6bGVzLmZpbHRlcigocHV6emxlKSA9PiBwdXp6bGUuaXNDb21wbGV0ZSgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldEluY29tcGxldGVQdXp6bGVzKCkge1xuICAgIHJldHVybiBhbGxQdXp6bGVzLmZpbHRlcigocHV6emxlKSA9PiAhcHV6emxlLmlzQ29tcGxldGUoKSk7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRJbmFjdGl2ZUNvbXBsZXRlZFB1enpsZXMoKSB7XG4gICAgcmV0dXJuIGdldEluY29tcGxldGVQdXp6bGVzKCkuZmlsdGVyKFxuICAgICAgKHB1enpsZSkgPT4gIWFjdGl2ZVB1enpsZXMuaW5jbHVkZXMocHV6emxlKSxcbiAgICApO1xuICB9XG5cbiAgZnVuY3Rpb24gc29ydFB1enpsZXNCeVNvbHZlVGltZShhLCBiKSB7XG4gICAgY29uc3QgYVRpbWUgPSBhLmF2ZXJhZ2VTb2x2ZVRpbWUoKTtcbiAgICBjb25zdCBiVGltZSA9IGIuYXZlcmFnZVNvbHZlVGltZSgpO1xuXG4gICAgaWYgKGFUaW1lID09PSBudWxsICYmIGJUaW1lID09PSBudWxsKSB7XG4gICAgICByZXR1cm4gMDtcbiAgICB9XG4gICAgaWYgKGFUaW1lID09PSBudWxsKSB7XG4gICAgICByZXR1cm4gMTtcbiAgICB9XG4gICAgaWYgKGJUaW1lID09PSBudWxsKSB7XG4gICAgICByZXR1cm4gLTE7XG4gICAgfVxuICAgIHJldHVybiBhVGltZSAtIGJUaW1lO1xuICB9XG5cbiAgYXN5bmMgZnVuY3Rpb24gZ2V0TmV4dFB1enpsZSgpIHtcbiAgICBjb25zdCBwcmV2aW91cyA9IGN1cnJlbnRQdXp6bGUgPyBjdXJyZW50UHV6emxlLnB1enpsZUlkIDogbnVsbDtcblxuICAgIGNvbnN0IHR5cGUgPSBnZXROZXh0UHV6emxlVHlwZSgpO1xuXG4gICAgY29uc3QgYWxyZWFkeUNvbXBsZXRlID0gYWN0aXZlUHV6emxlcy5maWx0ZXIoKHB1enpsZSkgPT5cbiAgICAgIHB1enpsZS5pc0NvbXBsZXRlKCksXG4gICAgKTtcbiAgICBjb25zdCBpbmNvbXBsZXRlID0gYWN0aXZlUHV6emxlcy5maWx0ZXIoKHB1enpsZSkgPT4gIXB1enpsZS5pc0NvbXBsZXRlKCkpO1xuXG4gICAgbGV0IGNhbmRpZGF0ZVB1enpsZTtcbiAgICBpZiAoXG4gICAgICAodHlwZSA9PT0gXCJhbHJlYWR5Q29tcGxldGVcIiAmJiBhbHJlYWR5Q29tcGxldGUubGVuZ3RoID4gMCkgfHxcbiAgICAgIGluY29tcGxldGUubGVuZ3RoIDwgMVxuICAgICkge1xuICAgICAgY2FuZGlkYXRlUHV6emxlID0gVXRpbC5nZXRSYW5kb21FbGVtZW50KGFjdGl2ZVB1enpsZXMpO1xuICAgIH0gZWxzZSB7XG4gICAgICBjYW5kaWRhdGVQdXp6bGUgPSBVdGlsLmdldFJhbmRvbUVsZW1lbnQoaW5jb21wbGV0ZSk7XG4gICAgfVxuXG4gICAgaWYgKGFjdGl2ZVB1enpsZXMubGVuZ3RoID4gMSAmJiBjYW5kaWRhdGVQdXp6bGUucHV6emxlSWQgPT09IHByZXZpb3VzKSB7XG4gICAgICByZXR1cm4gZ2V0TmV4dFB1enpsZSgpO1xuICAgIH1cblxuICAgIGN1cnJlbnRQdXp6bGUgPSBhbGxQdXp6bGVzLmZpbmQoXG4gICAgICAocHV6emxlKSA9PiBwdXp6bGUucHV6emxlSWQgPT09IGNhbmRpZGF0ZVB1enpsZS5wdXp6bGVJZCxcbiAgICApO1xuXG4gICAgY29uc3QgZGF0YSA9IGF3YWl0IGdldFB1enpsZURhdGEoY3VycmVudFB1enpsZS5wdXp6bGVJZCk7XG5cbiAgICBpZiAoZGF0YSA9PT0gbnVsbCkge1xuICAgICAgcmV0dXJuIGdldE5leHRQdXp6bGUoKTtcbiAgICB9XG5cbiAgICByZXR1cm4gZGF0YTtcbiAgfVxuXG4gIGFzeW5jIGZ1bmN0aW9uIGdldFB1enpsZURhdGEocHV6emxlSWQpIHtcbiAgICAvLyBDaGVjayBjYWNoZSBmaXJzdFxuICAgIGlmICgkcHV6emxlRGF0YVN0b3JlW3B1enpsZUlkXSkge1xuICAgICAgcmV0dXJuICRwdXp6bGVEYXRhU3RvcmVbcHV6emxlSWRdO1xuICAgIH1cblxuICAgIGNvbnN0IHJlc3BvbnNlID0gYXdhaXQgZmV0Y2goYGh0dHBzOi8vbGljaGVzcy5vcmcvYXBpL3B1enpsZS8ke3B1enpsZUlkfWApO1xuXG4gICAgaWYgKHJlc3BvbnNlLnN0YXR1cyA9PT0gNDA0KSB7XG4gICAgICAvLyBSZW1vdmUgaW52YWxpZFxuICAgICAgcmVtb3ZlUHV6emxlSWQocHV6emxlSWQpO1xuICAgICAgcmV0dXJuIG51bGw7XG4gICAgfVxuXG4gICAgY29uc3QgcHV6emxlRGF0YSA9IGF3YWl0IHJlc3BvbnNlLmpzb24oKTtcbiAgICBjb25zdCBkYXRhID0gJHB1enpsZURhdGFTdG9yZTtcbiAgICBkYXRhW2N1cnJlbnRQdXp6bGUucHV6emxlSWRdID0gcHV6emxlRGF0YTtcbiAgICBwdXp6bGVEYXRhU3RvcmUuc2V0KGRhdGEpO1xuICAgIHJldHVybiBwdXp6bGVEYXRhO1xuICB9XG5cbiAgZnVuY3Rpb24gZ2V0TmV4dFB1enpsZVR5cGUoKSB7XG4gICAgY29uc3QgcmFuZG9tVmFsdWUgPSBNYXRoLnJhbmRvbSgpO1xuICAgIGlmIChyYW5kb21WYWx1ZSA8IGFscmVhZHlDb21wbGV0ZU9kZHMpIHtcbiAgICAgIHJldHVybiBcImFscmVhZHlDb21wbGV0ZVwiO1xuICAgIH1cbiAgICByZXR1cm4gXCJpbmNvbXBsZXRlXCI7XG4gIH1cblxuICBhc3luYyBmdW5jdGlvbiBza2lwKCkge1xuICAgIGNvbnN0IHJlc3VsdCA9IG5ldyBSZXN1bHQoY3VycmVudFB1enpsZS5wdXp6bGVJZCwgcHV6emxlU2hvd25BdCwgdHJ1ZSk7XG4gICAgYWRkUmVzdWx0KGN1cnJlbnRQdXp6bGUucHV6emxlSWQsIHJlc3VsdCk7XG4gICAgYXdhaXQgbG9hZE5leHRQdXp6bGUoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGFkZFJlc3VsdChwdXp6bGVJZCwgcmVzdWx0KSB7XG4gICAgY29uc3QgYWxsUmVzdWx0cyA9ICRyZXN1bHRzO1xuICAgIGNvbnN0IGV4aXN0aW5nUmVzdWx0cyA9ICRyZXN1bHRzW3B1enpsZUlkXSB8fCBbXTtcbiAgICBleGlzdGluZ1Jlc3VsdHMucHVzaChyZXN1bHQpO1xuICAgIGFsbFJlc3VsdHNbcHV6emxlSWRdID0gZXhpc3RpbmdSZXN1bHRzO1xuICAgIHJlc3VsdHMuc2V0KGFsbFJlc3VsdHMpO1xuICB9XG5cbiAgZnVuY3Rpb24gYWRkQ29tcGxldGVkUHV6emxlKHB1enpsZVRvQWRkKSB7XG4gICAgY29tcGxldGVkUHV6emxlcyA9IFtcbiAgICAgIC4uLm5ldyBTZXQoW1xuICAgICAgICAuLi5nZXRDb21wbGV0ZWRQdXp6bGVzKCkubWFwKChwdXp6bGUpID0+IHB1enpsZS5wdXp6bGVJZCksXG4gICAgICAgIHB1enpsZVRvQWRkLnB1enpsZUlkLFxuICAgICAgXSksXG4gICAgXS5tYXAoKHB1enpsZUlkKSA9PiBuZXcgUHV6emxlKHB1enpsZUlkKSk7XG4gIH1cblxuICBmdW5jdGlvbiByZW1vdmVDb21wbGV0ZWRQdXp6bGUocHV6emxlVG9SZW1vdmUpIHtcbiAgICBjb21wbGV0ZWRQdXp6bGVzID0gY29tcGxldGVkUHV6emxlcy5maWx0ZXIoXG4gICAgICAocHV6emxlKSA9PiBwdXp6bGUucHV6emxlSWQgIT09IHB1enpsZVRvUmVtb3ZlLnB1enpsZUlkLFxuICAgICk7XG4gIH1cblxuICBhc3luYyBmdW5jdGlvbiBsb2FkTmV4dFB1enpsZSgpIHtcbiAgICBwdXp6bGVDb21wbGV0ZSA9IGZhbHNlO1xuICAgIG1hZGVNaXN0YWtlID0gZmFsc2U7XG5cbiAgICBpZiAoY3VycmVudFB1enpsZSAmJiBjdXJyZW50UHV6emxlLmlzQ29tcGxldGUoKSkge1xuICAgICAgcmVtb3ZlQWN0aXZlUHV6emxlKGN1cnJlbnRQdXp6bGUpO1xuICAgICAgYWRkQ29tcGxldGVkUHV6emxlKGN1cnJlbnRQdXp6bGUpO1xuICAgIH1cblxuICAgIGNvbnN0IG5leHQgPSBhd2FpdCBnZXROZXh0UHV6emxlKCk7XG4gICAgb3JpZW50YXRpb24gPSBVdGlsLndob3NlTW92ZUlzSXQobmV4dC5wdXp6bGUuaW5pdGlhbFBseSArIDEpO1xuICAgIC8vIENsb25lIHNvIHdlIGRvbid0IGNhY2hlIGEgdmFsdWUgdGhhdCBnZXRzIHNoaWZ0ZWQgbGF0ZXJcbiAgICBtb3ZlcyA9IFsuLi5uZXh0LnB1enpsZS5zb2x1dGlvbl07XG5cbiAgICBjb25zdCBwZ24gPSBwYXJzZVBnbihuZXh0LmdhbWUucGduKVswXTtcblxuICAgIHBvc2l0aW9uID0gc3RhcnRpbmdQb3NpdGlvbihwZ24uaGVhZGVycykudW53cmFwKCk7XG4gICAgY29uc3QgYWxsTm9kZXMgPSBbLi4ucGduLm1vdmVzLm1haW5saW5lTm9kZXMoKV07XG5cbiAgICBmb3IgKGxldCBpID0gMDsgaSA8IGFsbE5vZGVzLmxlbmd0aCAtIDE7IGkrKykge1xuICAgICAgY29uc3Qgbm9kZSA9IGFsbE5vZGVzW2ldO1xuICAgICAgY29uc3QgbW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBub2RlLmRhdGEuc2FuKTtcbiAgICAgIHBvc2l0aW9uLnBsYXkobW92ZSk7XG4gICAgfVxuXG4gICAgY29uc3QgbGFzdE1vdmUgPSBwYXJzZVNhbihwb3NpdGlvbiwgYWxsTm9kZXNbYWxsTm9kZXMubGVuZ3RoIC0gMV0uZGF0YS5zYW4pO1xuXG4gICAgc2V0Q2hlc3Nncm91bmRGcm9tUG9zaXRpb24oKTtcblxuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgcG9zaXRpb24ucGxheShsYXN0TW92ZSk7XG4gICAgICBjaGVzc2dyb3VuZC5tb3ZlKG1ha2VTcXVhcmUobGFzdE1vdmUuZnJvbSksIG1ha2VTcXVhcmUobGFzdE1vdmUudG8pKTtcbiAgICAgIHVwZGF0ZUxlZ2FsTW92ZXMoKTtcbiAgICAgIHB1enpsZVNob3duQXQgPSBVdGlsLmN1cnJlbnRNaWNyb3RpbWUoKTtcbiAgICB9LCAzMDApO1xuICB9XG5cbiAgZnVuY3Rpb24gc2V0Q2hlc3Nncm91bmRGcm9tUG9zaXRpb24oKSB7XG4gICAgZmVuID0gbWFrZUZlbihwb3NpdGlvbi50b1NldHVwKCkpO1xuICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICBmZW46IGZlbixcbiAgICB9KTtcbiAgICB1cGRhdGVMZWdhbE1vdmVzKCk7XG4gIH1cblxuICBmdW5jdGlvbiB1cGRhdGVMZWdhbE1vdmVzKCkge1xuICAgIGZlbiA9IG1ha2VGZW4ocG9zaXRpb24udG9TZXR1cCgpKTtcbiAgICBjb25zdCBsZWdhbE1vdmVzID0gZ2V0TGVnYWxNb3Zlc0ZvckZlbihmZW4pO1xuICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICBtb3ZhYmxlOiB7XG4gICAgICAgIGRlc3RzOiBsZWdhbE1vdmVzLFxuICAgICAgfSxcbiAgICB9KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldExlZ2FsTW92ZXNGb3JGZW4oZmVuKSB7XG4gICAgY29uc3Qgc2V0dXAgPSBwYXJzZUZlbihmZW4pLnVud3JhcCgpO1xuICAgIGNvbnN0IGNoZXNzID0gQ2hlc3MuZnJvbVNldHVwKHNldHVwKS51bndyYXAoKTtcbiAgICBjb25zdCBkZXN0c01hcCA9IGNoZXNzLmFsbERlc3RzKCk7XG5cbiAgICBjb25zdCBkZXN0c01hcEluU2FuID0gbmV3IE1hcCgpO1xuXG4gICAgZm9yIChjb25zdCBba2V5LCB2YWx1ZV0gb2YgZGVzdHNNYXAuZW50cmllcygpKSB7XG4gICAgICBjb25zdCBkZXN0c0FycmF5ID0gQXJyYXkuZnJvbSh2YWx1ZSkubWFwKChzcSkgPT4gbWFrZVNxdWFyZShzcSkpO1xuICAgICAgZGVzdHNNYXBJblNhbi5zZXQobWFrZVNxdWFyZShrZXkpLCBkZXN0c0FycmF5KTtcbiAgICB9XG5cbiAgICByZXR1cm4gZGVzdHNNYXBJblNhbjtcbiAgfVxuXG4gIGZ1bmN0aW9uIGhhbmRsZVVzZXJNb3ZlKG9yaWcsIGRlc3QpIHtcbiAgICBjb25zdCBjb3JyZWN0TW92ZSA9IG1vdmVzWzBdO1xuICAgIGNvbnN0IG9yaWdTcXVhcmUgPSBwYXJzZVNxdWFyZShvcmlnKTtcbiAgICBjb25zdCBkZXN0U3F1YXJlID0gcGFyc2VTcXVhcmUoZGVzdCk7XG4gICAgbGV0IG1vdmUgPSB7IGZyb206IG9yaWdTcXVhcmUsIHRvOiBkZXN0U3F1YXJlIH07XG4gICAgaWYgKFxuICAgICAgY2hlc3Nncm91bmQuc3RhdGUucGllY2VzLmdldChkZXN0KT8ucm9sZSA9PT0gXCJwYXduXCIgJiZcbiAgICAgIChkZXN0WzFdID09PSBcIjFcIiB8fCBkZXN0WzFdID09PSBcIjhcIilcbiAgICApIHtcbiAgICAgIG1vdmUgPSB7IC4uLm1vdmUsIHByb21vdGlvbjogXCJxdWVlblwiIH07XG4gICAgICBjaGVzc2dyb3VuZC5zZXRQaWVjZXMoXG4gICAgICAgIG5ldyBNYXAoW1tkZXN0LCB7IGNvbG9yOiBvcmllbnRhdGlvbiwgcm9sZTogXCJxdWVlblwiIH1dXSksXG4gICAgICApO1xuICAgIH1cbiAgICBjb25zdCB1Y2lNb3ZlID0gbWFrZVVjaShtb3ZlKTtcbiAgICBpZiAod291bGRCZUNoZWNrbWF0ZShvcmlnLCBkZXN0KSkge1xuICAgICAgcmV0dXJuIGhhbmRsZVB1enpsZUNvbXBsZXRlKCk7XG4gICAgfVxuICAgIGlmICh1Y2lNb3ZlID09PSBjb3JyZWN0TW92ZSkge1xuICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICAgIG1vdmVzLnNoaWZ0KCk7IC8vIHJlbW92ZSB0aGUgdXNlciBtb3ZlIGZpcnN0XG4gICAgICBjb25zdCBjb21wdXRlck1vdmUgPSBtb3Zlcy5zaGlmdCgpO1xuICAgICAgaWYgKGNvbXB1dGVyTW92ZSkge1xuICAgICAgICBjb25zdCBtb3ZlID0gcGFyc2VVY2koY29tcHV0ZXJNb3ZlKTtcbiAgICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICAgICAgY2hlc3Nncm91bmQubW92ZShtYWtlU3F1YXJlKG1vdmUuZnJvbSksIG1ha2VTcXVhcmUobW92ZS50bykpO1xuICAgICAgICB1cGRhdGVMZWdhbE1vdmVzKCk7XG4gICAgICB9IGVsc2Uge1xuICAgICAgICByZXR1cm4gaGFuZGxlUHV6emxlQ29tcGxldGUoKTtcbiAgICAgIH1cbiAgICB9IGVsc2Uge1xuICAgICAgbWFkZU1pc3Rha2UgPSB0cnVlO1xuICAgICAgc2hvd0ZhaWx1cmUoXCJOb3BlIVwiKTtcbiAgICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgICBzZXRDaGVzc2dyb3VuZEZyb21Qb3NpdGlvbigpO1xuICAgICAgfSwgMjAwKTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiB3b3VsZEJlQ2hlY2ttYXRlKG9yaWcsIGRlc3QpIHtcbiAgICBjb25zdCBvcmlnU3F1YXJlID0gcGFyc2VTcXVhcmUob3JpZyk7XG4gICAgY29uc3QgZGVzdFNxdWFyZSA9IHBhcnNlU3F1YXJlKGRlc3QpO1xuICAgIGNvbnN0IGNsb25lZFBvc2l0aW9uID0gcG9zaXRpb24uY2xvbmUoKTtcbiAgICBjbG9uZWRQb3NpdGlvbi5wbGF5KHsgZnJvbTogb3JpZ1NxdWFyZSwgdG86IGRlc3RTcXVhcmUgfSk7XG4gICAgcmV0dXJuIGNsb25lZFBvc2l0aW9uLmlzQ2hlY2ttYXRlKCk7XG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVQdXp6bGVDb21wbGV0ZSgpIHtcbiAgICBwdXp6bGVDb21wbGV0ZSA9IHRydWU7XG4gICAgY29uc3QgcmVzdWx0ID0gbmV3IFJlc3VsdChcbiAgICAgIGN1cnJlbnRQdXp6bGUucHV6emxlSWQsXG4gICAgICBwdXp6bGVTaG93bkF0LFxuICAgICAgZmFsc2UsXG4gICAgICBtYWRlTWlzdGFrZSxcbiAgICAgIFV0aWwuY3VycmVudE1pY3JvdGltZSgpLFxuICAgICk7XG4gICAgYWRkUmVzdWx0KGN1cnJlbnRQdXp6bGUucHV6emxlSWQsIHJlc3VsdCk7XG4gICAgaWYgKG1hZGVNaXN0YWtlKSB7XG4gICAgICByZW1vdmVDb21wbGV0ZWRQdXp6bGUoY3VycmVudFB1enpsZSk7XG4gICAgfVxuICAgIC8vIFRyaWdnZXIgcmVhY3Rpdml0eVxuICAgIGFjdGl2ZVB1enpsZXMgPSBhY3RpdmVQdXp6bGVzO1xuICAgIHNob3dTdWNjZXNzKFwiQ29ycmVjdCFcIik7XG4gIH1cblxuICBsZXQgc3VjY2Vzc01lc3NhZ2UgPSBudWxsO1xuXG4gIGZ1bmN0aW9uIHNob3dTdWNjZXNzKG1lc3NhZ2UsIGR1cmF0aW9uID0gMTUwMCkge1xuICAgIGZhaWx1cmVNZXNzYWdlID0gbnVsbDtcbiAgICBzdWNjZXNzTWVzc2FnZSA9IG1lc3NhZ2U7XG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBzdWNjZXNzTWVzc2FnZSA9IG51bGw7XG4gICAgfSwgZHVyYXRpb24pO1xuICB9XG5cbiAgbGV0IGZhaWx1cmVNZXNzYWdlID0gbnVsbDtcblxuICBmdW5jdGlvbiBzaG93RmFpbHVyZShtZXNzYWdlLCBkdXJhdGlvbiA9IDEwMDApIHtcbiAgICBzdWNjZXNzTWVzc2FnZSA9IG51bGw7XG4gICAgZmFpbHVyZU1lc3NhZ2UgPSBtZXNzYWdlO1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgZmFpbHVyZU1lc3NhZ2UgPSBudWxsO1xuICAgIH0sIGR1cmF0aW9uKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGluaXRpYWxpemVQdXp6bGVzKCkge1xuICAgIGFsbFB1enpsZXMgPSBbXTtcbiAgICAkcHV6emxlSWRzVG9Xb3JrT24uZm9yRWFjaCgocHV6emxlSWQpID0+IHtcbiAgICAgIGFsbFB1enpsZXMucHVzaChuZXcgUHV6emxlKHB1enpsZUlkKSk7XG4gICAgfSk7XG4gICAgY29tcGxldGVkUHV6emxlcyA9IGdldENvbXBsZXRlZFB1enpsZXMoKTtcbiAgICBmaWxsQWN0aXZlUHV6emxlcygpO1xuICB9XG5cbiAgb25Nb3VudChhc3luYyAoKSA9PiB7XG4gICAgaW5pdGlhbGl6ZVB1enpsZXMoKTtcbiAgICBkb2N1bWVudC5hZGRFdmVudExpc3RlbmVyKFwia2V5ZG93blwiLCBmdW5jdGlvbiAoZXZlbnQpIHtcbiAgICAgIGlmIChbXCJFbnRlclwiLCBcIiBcIl0uaW5jbHVkZXMoZXZlbnQua2V5KSAmJiBuZXh0QnV0dG9uKSB7XG4gICAgICAgIGV2ZW50LnByZXZlbnREZWZhdWx0KCk7XG4gICAgICAgIG5leHRCdXR0b24uY2xpY2soKTtcbiAgICAgIH1cbiAgICB9KTtcbiAgICBhd2FpdCBsb2FkTmV4dFB1enpsZSgpO1xuICB9KTtcbjwvc2NyaXB0PlxuXG48ZGl2IGNsYXNzPVwiY29sdW1ucyBpcy1jZW50ZXJlZFwiPlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGlzLTYtZGVza3RvcFwiPlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgeyNpZiBhY3RpdmVQdXp6bGVzLmxlbmd0aCA+IDAgJiYgY3VycmVudFB1enpsZX1cbiAgICAgICAgPENoZXNzYm9hcmQge2NoZXNzZ3JvdW5kQ29uZmlnfSB7b3JpZW50YXRpb259IGJpbmQ6Y2hlc3Nncm91bmQ+XG4gICAgICAgICAgPGRpdiBzbG90PVwiY2VudGVyZWQtY29udGVudFwiPlxuICAgICAgICAgICAgeyNpZiBzdWNjZXNzTWVzc2FnZX1cbiAgICAgICAgICAgICAgPHNwYW4gdHJhbnNpdGlvbjpmYWRlIGNsYXNzPVwidGFnIGlzLXN1Y2Nlc3MgaXMtc2l6ZS00XCI+XG4gICAgICAgICAgICAgICAge3N1Y2Nlc3NNZXNzYWdlfVxuICAgICAgICAgICAgICA8L3NwYW4+XG4gICAgICAgICAgICB7L2lmfVxuICAgICAgICAgICAgeyNpZiBmYWlsdXJlTWVzc2FnZX1cbiAgICAgICAgICAgICAgPHNwYW4gdHJhbnNpdGlvbjpmYWRlIGNsYXNzPVwidGFnIGlzLWRhbmdlciBpcy1zaXplLTRcIj5cbiAgICAgICAgICAgICAgICB7ZmFpbHVyZU1lc3NhZ2V9XG4gICAgICAgICAgICAgIDwvc3Bhbj5cbiAgICAgICAgICAgIHsvaWZ9XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgPGRpdiBzbG90PVwiYmVsb3ctYm9hcmRcIj5cbiAgICAgICAgICAgIHsjaWYgcHV6emxlQ29tcGxldGV9XG4gICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9jayBpcy1mbGV4IGlzLWp1c3RpZnktY29udGVudC1jZW50ZXJcIj5cbiAgICAgICAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICAgICAgICBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCJcbiAgICAgICAgICAgICAgICAgIGJpbmQ6dGhpcz17bmV4dEJ1dHRvbn1cbiAgICAgICAgICAgICAgICAgIG9uOmNsaWNrPXthc3luYyAoKSA9PiB7XG4gICAgICAgICAgICAgICAgICAgIGF3YWl0IGxvYWROZXh0UHV6emxlKCk7XG4gICAgICAgICAgICAgICAgICB9fVxuICAgICAgICAgICAgICAgICAgPk5leHRcbiAgICAgICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICB7L2lmfVxuICAgICAgICAgICAgeyNpZiAhcHV6emxlQ29tcGxldGV9XG4gICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9jayBpcy1mbGV4IGlzLWp1c3RpZnktY29udGVudC1jZW50ZXJcIj5cbiAgICAgICAgICAgICAgICA8c3BhbiBjbGFzcz1cInRhZyBpcy17b3JpZW50YXRpb259IGlzLXNpemUtNFwiXG4gICAgICAgICAgICAgICAgICA+e29yaWVudGF0aW9ufSB0byBwbGF5PC9zcGFuXG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiIG9uOmNsaWNrPXtza2lwfT5Ta2lwPC9idXR0b24+XG4gICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgey9pZn1cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9DaGVzc2JvYXJkPlxuICAgICAgezplbHNlfVxuICAgICAgICA8cD5BbGwgcHV6emxlcyBjb21wbGV0ZSwgYWRkIHNvbWUgbW9yZSE8L3A+XG4gICAgICB7L2lmfVxuICAgIDwvZGl2PlxuICA8L2Rpdj5cbiAgPGRpdiBjbGFzcz1cImNvbHVtbiBpcy00LWRlc2t0b3BcIj5cbiAgICB7I2lmIGFjdGl2ZVB1enpsZXMubGVuZ3RoID49IDEgJiYgY3VycmVudFB1enpsZX1cbiAgICAgIDxkaXYgY2xhc3M9XCJib3hcIj5cbiAgICAgICAgPGgzPkN1cnJlbnQgUHV6emxlczwvaDM+XG4gICAgICAgIDx0YWJsZSBjbGFzcz1cInRhYmxlIGlzLWZ1bGx3aWR0aCBpcy1uYXJyb3cgaXMtc3RyaXBlZFwiPlxuICAgICAgICAgIDx0aGVhZD5cbiAgICAgICAgICAgIDx0cj5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiTGljaGVzcyBQdXp6bGUgSURcIj5JRDwvYWJicj48L3RoPlxuICAgICAgICAgICAgICA8dGg+PGFiYnIgdGl0bGU9XCJBdmVyYWdlIHNvbHZlIHRpbWVcIj5Bdmc8L2FiYnI+PC90aD5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiQ29ycmVjdCBzb2x2ZXMgaW4gYSByb3dcIj5TdHJlYWs8L2FiYnI+PC90aD5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiVG90YWwgY29ycmVjdCBzb2x2ZXNcIj5Tb2x2ZXM8L2FiYnI+PC90aD5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiRmFpbHVyZSBDb3VudFwiPkZhaWxzPC9hYmJyPjwvdGg+XG4gICAgICAgICAgICA8L3RyPlxuICAgICAgICAgIDwvdGhlYWQ+XG4gICAgICAgICAgPHRib2R5PlxuICAgICAgICAgICAgeyNlYWNoIGFjdGl2ZVB1enpsZXMuc29ydChzb3J0UHV6emxlc0J5U29sdmVUaW1lKSBhcyBwdXp6bGUgKHB1enpsZSl9XG4gICAgICAgICAgICAgIDx0clxuICAgICAgICAgICAgICAgIGFuaW1hdGU6ZmxpcD17eyBkdXJhdGlvbjogNDAwIH19XG4gICAgICAgICAgICAgICAgY2xhc3M6aXMtc2VsZWN0ZWQ9e2N1cnJlbnRQdXp6bGUucHV6emxlSWQgPT09IHB1enpsZS5wdXp6bGVJZH1cbiAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDx0ZCBjbGFzcz1cInB1enpsZS1pZFwiXG4gICAgICAgICAgICAgICAgICA+PGFcbiAgICAgICAgICAgICAgICAgICAgaHJlZj17cHV6emxlLmxpY2hlc3NVcmwoKX1cbiAgICAgICAgICAgICAgICAgICAgdGFyZ2V0PVwiX2JsYW5rXCJcbiAgICAgICAgICAgICAgICAgICAgdGl0bGU9XCJWaWV3IG9uIGxpY2hlc3Mub3JnXCI+e3B1enpsZS5wdXp6bGVJZH08L2FcbiAgICAgICAgICAgICAgICAgID48L3RkXG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDx0ZFxuICAgICAgICAgICAgICAgICAgY2xhc3M6aGFzLXRleHQtd2FybmluZz17cHV6emxlLmF2ZXJhZ2VTb2x2ZVRpbWUoKSA+IHRpbWVHb2FsfVxuICAgICAgICAgICAgICAgICAgY2xhc3M6aGFzLXRleHQtc3VjY2Vzcz17cHV6emxlLmF2ZXJhZ2VTb2x2ZVRpbWUoKSA8PVxuICAgICAgICAgICAgICAgICAgICB0aW1lR29hbCAmJiBwdXp6bGUuYXZlcmFnZVNvbHZlVGltZSgpID4gMH1cbiAgICAgICAgICAgICAgICA+XG4gICAgICAgICAgICAgICAgICB7cHV6emxlLmF2ZXJhZ2VTb2x2ZVRpbWUoKVxuICAgICAgICAgICAgICAgICAgICA/IGAkeyhwdXp6bGUuYXZlcmFnZVNvbHZlVGltZSgpIC8gMTAwMCkudG9GaXhlZCgyKX1zYFxuICAgICAgICAgICAgICAgICAgICA6IFwiP1wifVxuICAgICAgICAgICAgICAgIDwvdGQ+XG4gICAgICAgICAgICAgICAgPHRkXG4gICAgICAgICAgICAgICAgICBjbGFzczpoYXMtdGV4dC13YXJuaW5nPXtwdXp6bGUuZ2V0U29sdmVTdHJlYWsoKSA8XG4gICAgICAgICAgICAgICAgICAgIG1pbmltdW1Tb2x2ZXN9XG4gICAgICAgICAgICAgICAgICBjbGFzczpoYXMtdGV4dC1zdWNjZXNzPXtwdXp6bGUuZ2V0U29sdmVTdHJlYWsoKSA+PVxuICAgICAgICAgICAgICAgICAgICBtaW5pbXVtU29sdmVzfVxuICAgICAgICAgICAgICAgID5cbiAgICAgICAgICAgICAgICAgIHtwdXp6bGUuZ2V0U29sdmVTdHJlYWsoKX0gLyB7bWluaW11bVNvbHZlc31cbiAgICAgICAgICAgICAgICA8L3RkPlxuICAgICAgICAgICAgICAgIDx0ZD5cbiAgICAgICAgICAgICAgICAgIHtwdXp6bGUuZ2V0VG90YWxTb2x2ZXMoKX1cbiAgICAgICAgICAgICAgICA8L3RkPlxuICAgICAgICAgICAgICAgIDx0ZD5cbiAgICAgICAgICAgICAgICAgIHtwdXp6bGUuZ2V0RmFpbHVyZUNvdW50KCl9XG4gICAgICAgICAgICAgICAgPC90ZD5cbiAgICAgICAgICAgICAgPC90cj5cbiAgICAgICAgICAgIHsvZWFjaH1cbiAgICAgICAgICA8L3Rib2R5PlxuICAgICAgICA8L3RhYmxlPlxuICAgICAgPC9kaXY+XG4gICAgey9pZn1cbiAgICA8ZGl2IGNsYXNzPVwiYm94XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgICAgPHA+PHN0cm9uZz57JHB1enpsZUlkc1RvV29ya09uLmxlbmd0aH08L3N0cm9uZz4gdG90YWwgcHV6emxlczwvcD5cbiAgICAgICAgPHA+RG9uZSB3aXRoIDxzdHJvbmc+e2NvbXBsZXRlZFB1enpsZXMubGVuZ3RofTwvc3Ryb25nPiBwdXp6bGVzPC9wPlxuICAgICAgICA8cD5cbiAgICAgICAgICBUYXJnZXQgc29sdmUgdGltZTogPHN0cm9uZz57KHRpbWVHb2FsIC8gMTAwMCkudG9GaXhlZCgxKX08L3N0cm9uZz4gc2Vjb25kc1xuICAgICAgICA8L3A+XG4gICAgICAgIDxwPlxuICAgICAgICAgIE11c3Qgc29sdmUgPHN0cm9uZz57bWluaW11bVNvbHZlc308L3N0cm9uZz4gdGltZXttaW5pbXVtU29sdmVzID4gMVxuICAgICAgICAgICAgPyBcInNcIlxuICAgICAgICAgICAgOiBcIlwifSBpbiBhIHJvd1xuICAgICAgICA8L3A+XG4gICAgICA8L2Rpdj5cbiAgICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgICA8Zm9ybSBvbjpzdWJtaXR8cHJldmVudERlZmF1bHQ9e2FkZFB1enpsZUlkVG9Xb3JrT259PlxuICAgICAgICAgIDxsYWJlbCBmb3I9XCJuZXdQdXp6bGVJZFwiPk5ldyBQdXp6bGUgSUQocyk6PC9sYWJlbD5cbiAgICAgICAgICA8aW5wdXRcbiAgICAgICAgICAgIHR5cGU9XCJ0ZXh0XCJcbiAgICAgICAgICAgIGlkPVwibmV3UHV6emxlSWRcIlxuICAgICAgICAgICAgYmluZDp2YWx1ZT17bmV3UHV6emxlSWRzfVxuICAgICAgICAgICAgcGxhY2Vob2xkZXI9XCJcIlxuICAgICAgICAgIC8+XG4gICAgICAgICAgPGJyIC8+XG4gICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCIgdHlwZT1cInN1Ym1pdFwiPkFkZDwvYnV0dG9uPlxuICAgICAgICA8L2Zvcm0+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgICA8Q29sbGFwc2libGVCb3ggdGl0bGU9XCJQdXp6bGUgSGlzdG9yeSBIZWxwZXJcIiB9PlxuICAgICAgPFB1enpsZUhpc3RvcnlQcm9jZXNzb3IgLz5cbiAgICA8L0NvbGxhcHNpYmxlQm94PlxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5wdXp6bGUtaWQge1xuICAgIGZvbnQtZmFtaWx5OiBtb25vc3BhY2U7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBeXJCRSx5QkFBVyxDQUNULFdBQVcsQ0FBRSxTQUNmIn0= */");
+	append_styles(target, "svelte-1oimmcd", ".puzzle-id.svelte-1oimmcd{font-family:monospace}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHV6emxlcy5zdmVsdGUiLCJzb3VyY2VzIjpbIlB1enpsZXMuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDaGVzc2JvYXJkIGZyb20gXCIuL2NvbXBvbmVudHMvQ2hlc3Nib2FyZC5zdmVsdGVcIjtcbiAgaW1wb3J0IHsgSU5JVElBTF9GRU4sIG1ha2VGZW4sIHBhcnNlRmVuIH0gZnJvbSBcImNoZXNzb3BzL2ZlblwiO1xuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSBcInN2ZWx0ZVwiO1xuICBpbXBvcnQgeyBmYWRlIH0gZnJvbSBcInN2ZWx0ZS90cmFuc2l0aW9uXCI7XG4gIGltcG9ydCB7IGZsaXAgfSBmcm9tIFwic3ZlbHRlL2FuaW1hdGVcIjtcbiAgaW1wb3J0IHsgVXRpbCB9IGZyb20gXCJzcmMvdXRpbFwiO1xuICBpbXBvcnQgeyBwYXJzZVBnbiwgc3RhcnRpbmdQb3NpdGlvbiB9IGZyb20gXCJjaGVzc29wcy9wZ25cIjtcbiAgaW1wb3J0IHsgcGFyc2VTYW4gfSBmcm9tIFwiY2hlc3NvcHMvc2FuXCI7XG4gIGltcG9ydCB7IENoZXNzLCBtYWtlVWNpLCBwYXJzZVVjaSB9IGZyb20gXCJjaGVzc29wc1wiO1xuICBpbXBvcnQgeyBtYWtlU3F1YXJlLCBwYXJzZVNxdWFyZSB9IGZyb20gXCJjaGVzc29wcy91dGlsXCI7XG4gIGltcG9ydCB7IHBlcnNpc3RlZCB9IGZyb20gXCJzdmVsdGUtcGVyc2lzdGVkLXN0b3JlXCI7XG4gIGltcG9ydCBQdXp6bGVIaXN0b3J5UHJvY2Vzc29yIGZyb20gXCIuL2NvbXBvbmVudHMvUHV6emxlSGlzdG9yeVByb2Nlc3Nvci5zdmVsdGVcIjtcbiAgaW1wb3J0IENvbGxhcHNpYmxlQm94IGZyb20gXCIuL2NvbXBvbmVudHMvQ29sbGFwc2libGVCb3guc3ZlbHRlXCI7XG5cbiAgY2xhc3MgUmVzdWx0IHtcbiAgICBjb25zdHJ1Y3RvcihwdXp6bGVJZCwgc2VlbkF0LCBza2lwcGVkLCBtYWRlTWlzdGFrZSA9IGZhbHNlLCBkb25lQXQgPSBudWxsKSB7XG4gICAgICB0aGlzLnB1enpsZUlkID0gcHV6emxlSWQ7XG4gICAgICB0aGlzLnNraXBwZWQgPSBza2lwcGVkO1xuICAgICAgdGhpcy5tYWRlTWlzdGFrZSA9IG1hZGVNaXN0YWtlO1xuICAgICAgdGhpcy5zZWVuQXQgPSBzZWVuQXQ7XG4gICAgICB0aGlzLmRvbmVBdCA9IGRvbmVBdDtcbiAgICB9XG5cbiAgICBnZXREdXJhdGlvbigpIHtcbiAgICAgIGlmICh0aGlzLmRvbmVBdCkge1xuICAgICAgICByZXR1cm4gdGhpcy5kb25lQXQgLSB0aGlzLnNlZW5BdDtcbiAgICAgIH1cbiAgICB9XG5cbiAgICB3YXNTdWNjZXNzZnVsKCkge1xuICAgICAgcmV0dXJuICF0aGlzLnNraXBwZWQgJiYgIXRoaXMubWFkZU1pc3Rha2UgJiYgdGhpcy5kb25lQXQ7XG4gICAgfVxuXG4gICAgd2FzRmFpbHVyZSgpIHtcbiAgICAgIHJldHVybiB0aGlzLm1hZGVNaXN0YWtlO1xuICAgIH1cbiAgfVxuXG4gIGNsYXNzIFB1enpsZSB7XG4gICAgY29uc3RydWN0b3IocHV6emxlSWQpIHtcbiAgICAgIHRoaXMucHV6emxlSWQgPSBwdXp6bGVJZDtcbiAgICB9XG5cbiAgICBsaWNoZXNzVXJsKCkge1xuICAgICAgcmV0dXJuIGBodHRwczovL2xpY2hlc3Mub3JnL3RyYWluaW5nLyR7dGhpcy5wdXp6bGVJZH1gO1xuICAgIH1cblxuICAgIGhhc1Jlc3VsdHMoKSB7XG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkubGVuZ3RoID49IDE7XG4gICAgfVxuXG4gICAgaGFzQmVlblNvbHZlZCgpIHtcbiAgICAgIGlmICghdGhpcy5oYXNSZXN1bHRzKCkpIHtcbiAgICAgICAgcmV0dXJuIGZhbHNlO1xuICAgICAgfVxuICAgICAgcmV0dXJuIHRoaXMuZ2V0UmVzdWx0cygpLnNvbWUoKHJlc3VsdCkgPT4ge1xuICAgICAgICByZXR1cm4gcmVzdWx0Lndhc1N1Y2Nlc3NmdWwoKTtcbiAgICAgIH0pO1xuICAgIH1cblxuICAgIGdldFJlc3VsdHMoKSB7XG4gICAgICByZXR1cm4gKCRyZXN1bHRzW3RoaXMucHV6emxlSWRdIHx8IFtdKS5tYXAoXG4gICAgICAgIChyZXN1bHREYXRhKSA9PlxuICAgICAgICAgIG5ldyBSZXN1bHQoXG4gICAgICAgICAgICByZXN1bHREYXRhLnB1enpsZUlkLFxuICAgICAgICAgICAgcmVzdWx0RGF0YS5zZWVuQXQsXG4gICAgICAgICAgICByZXN1bHREYXRhLnNraXBwZWQsXG4gICAgICAgICAgICByZXN1bHREYXRhLm1hZGVNaXN0YWtlLFxuICAgICAgICAgICAgcmVzdWx0RGF0YS5kb25lQXQsXG4gICAgICAgICAgKSxcbiAgICAgICk7XG4gICAgfVxuXG4gICAgZ2V0VG90YWxTb2x2ZXMoKSB7XG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkuZmlsdGVyKChyZXN1bHQpID0+IHJlc3VsdC53YXNTdWNjZXNzZnVsKCkpXG4gICAgICAgIC5sZW5ndGg7XG4gICAgfVxuXG4gICAgZ2V0RmFpbHVyZUNvdW50KCkge1xuICAgICAgcmV0dXJuIHRoaXMuZ2V0UmVzdWx0cygpLmZpbHRlcigocmVzdWx0KSA9PiByZXN1bHQud2FzRmFpbHVyZSgpKS5sZW5ndGg7XG4gICAgfVxuXG4gICAgZ2V0U29sdmVTdHJlYWsoKSB7XG4gICAgICBsZXQgc3RyZWFrID0gMDtcblxuICAgICAgaWYgKCF0aGlzLmhhc0JlZW5Tb2x2ZWQoKSkge1xuICAgICAgICByZXR1cm4gc3RyZWFrO1xuICAgICAgfVxuXG4gICAgICBjb25zdCByZXN1bHRzID0gdGhpcy5nZXRSZXN1bHRzKCk7XG5cbiAgICAgIGZvciAobGV0IGkgPSByZXN1bHRzLmxlbmd0aCAtIDE7IGkgPj0gMDsgaS0tKSB7XG4gICAgICAgIGlmIChyZXN1bHRzW2ldLndhc1N1Y2Nlc3NmdWwoKSkge1xuICAgICAgICAgIHN0cmVhaysrO1xuICAgICAgICB9IGVsc2Uge1xuICAgICAgICAgIGJyZWFrO1xuICAgICAgICB9XG4gICAgICB9XG5cbiAgICAgIHJldHVybiBzdHJlYWs7XG4gICAgfVxuXG4gICAgYXZlcmFnZVNvbHZlVGltZSgpIHtcbiAgICAgIGlmICghdGhpcy5oYXNCZWVuU29sdmVkKCkpIHtcbiAgICAgICAgcmV0dXJuIG51bGw7XG4gICAgICB9XG4gICAgICBjb25zdCBzdWNjZXNzZnVsUmVzdWx0cyA9IHRoaXMuZ2V0UmVzdWx0cygpLmZpbHRlcigocmVzdWx0KSA9PlxuICAgICAgICByZXN1bHQud2FzU3VjY2Vzc2Z1bCgpLFxuICAgICAgKTtcbiAgICAgIGNvbnN0IGxhc3RGZXcgPSBzdWNjZXNzZnVsUmVzdWx0cy5zbGljZShtaW5pbXVtU29sdmVzICogLTEpO1xuICAgICAgY29uc3QgZHVyYXRpb25zID0gbGFzdEZldy5tYXAoKHJlc3VsdCkgPT4gcmVzdWx0LmdldER1cmF0aW9uKCkpO1xuICAgICAgY29uc3Qgc3VtID0gZHVyYXRpb25zLnJlZHVjZSgoYSwgYikgPT4gYSArIGIsIDApO1xuICAgICAgY29uc3QgYXZlcmFnZSA9IHN1bSAvIChsYXN0RmV3Lmxlbmd0aCB8fCAxKTtcbiAgICAgIHJldHVybiBhdmVyYWdlO1xuICAgIH1cblxuICAgIGxhc3RTZWVuQXQoKSB7XG4gICAgICBpZiAoIXRoaXMuaGFzUmVzdWx0cygpKSB7XG4gICAgICAgIHJldHVybiBudWxsO1xuICAgICAgfVxuXG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkuc2xpY2UoLTEpLnNlZW5BdDtcbiAgICB9XG5cbiAgICBpc0NvbXBsZXRlKCkge1xuICAgICAgaWYgKCF0aGlzLmhhc0JlZW5Tb2x2ZWQoKSkge1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICB9XG4gICAgICBjb25zdCBsYXN0U29sdmVzID0gdGhpcy5nZXRSZXN1bHRzKCkuc2xpY2UoLTEgKiBtaW5pbXVtU29sdmVzKTtcblxuICAgICAgaWYgKGxhc3RTb2x2ZXMubGVuZ3RoIDwgbWluaW11bVNvbHZlcykge1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICB9XG5cbiAgICAgIGlmICghbGFzdFNvbHZlcy5ldmVyeSgocmVzdWx0KSA9PiByZXN1bHQud2FzU3VjY2Vzc2Z1bCgpKSkge1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICB9XG5cbiAgICAgIHJldHVybiB0aGlzLmF2ZXJhZ2VTb2x2ZVRpbWUoKSA8PSB0aW1lR29hbDtcbiAgICB9XG4gIH1cblxuICAvLyBDaGVzcyBib2FyZCBzdHVmZlxuICBsZXQgZmVuO1xuICBsZXQgY2hlc3Nncm91bmQ7XG4gIGxldCBvcmllbnRhdGlvbiA9IFwid2hpdGVcIjtcbiAgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge1xuICAgIGZlbjogSU5JVElBTF9GRU4sXG4gICAgY29vcmRpbmF0ZXM6IHRydWUsXG4gICAgYW5pbWF0aW9uOiB7XG4gICAgICBlbmFibGVkOiB0cnVlLFxuICAgIH0sXG4gICAgaGlnaGxpZ2h0OiB7XG4gICAgICBsYXN0TW92ZTogdHJ1ZSxcbiAgICAgIGNoZWNrOiB0cnVlLFxuICAgIH0sXG4gICAgZHJhZ2dhYmxlOiB7XG4gICAgICBlbmFibGVkOiB0cnVlLFxuICAgIH0sXG4gICAgc2VsZWN0YWJsZToge1xuICAgICAgZW5hYmxlZDogdHJ1ZSxcbiAgICB9LFxuICAgIG1vdmFibGU6IHtcbiAgICAgIGZyZWU6IGZhbHNlLFxuICAgICAgY29sb3I6IFwiYm90aFwiLFxuICAgICAgZGVzdHM6IG5ldyBNYXAoKSxcbiAgICAgIGV2ZW50czoge1xuICAgICAgICBhZnRlcjogaGFuZGxlVXNlck1vdmUsXG4gICAgICB9LFxuICAgIH0sXG4gICAgb3JpZW50YXRpb246IG9yaWVudGF0aW9uLFxuICB9O1xuXG4gIC8vIFB1enpsZSBEYXRhXG4gIGxldCBhbGxQdXp6bGVzID0gW107XG4gIGxldCBhY3RpdmVQdXp6bGVzID0gW107XG5cbiAgJDoge1xuICAgIGlmIChhY3RpdmVQdXp6bGVzLmxlbmd0aCA8IGJhdGNoU2l6ZSAmJiBhbGxQdXp6bGVzLmxlbmd0aCA+IDApIHtcbiAgICAgIGZpbGxBY3RpdmVQdXp6bGVzKCk7XG4gICAgfVxuICB9XG5cbiAgbGV0IGNvbXBsZXRlZFB1enpsZXMgPSBbXTtcbiAgbGV0IGN1cnJlbnRQdXp6bGU7XG4gIGxldCBwdXp6bGVTaG93bkF0O1xuXG4gIC8vIEJlaGF2aW9yYWwgQ29uZmlnXG4gIGxldCBiYXRjaFNpemUgPSAxMDtcbiAgbGV0IHRpbWVHb2FsID0gMTUwMDA7XG4gIGxldCBtaW5pbXVtU29sdmVzID0gMjtcbiAgbGV0IGFscmVhZHlDb21wbGV0ZU9kZHMgPSAwLjM7XG5cbiAgLy8gQ3VycmVudCBwdXp6bGUgc3RhdGVcbiAgbGV0IG1vdmVzO1xuICBsZXQgcG9zaXRpb247XG4gIGxldCBtYWRlTWlzdGFrZSA9IGZhbHNlO1xuICBsZXQgcHV6emxlQ29tcGxldGUgPSBmYWxzZTtcblxuICAvLyBET00gZWxlbWVudHNcbiAgbGV0IG5leHRCdXR0b247XG5cbiAgLy8gUGVyc2lzdGVkIGRhdGFcbiAgY29uc3QgcHV6emxlRGF0YVN0b3JlID0gcGVyc2lzdGVkKFwicHV6emxlcy5kYXRhXCIsIHt9KTtcbiAgY29uc3QgcHV6emxlSWRzVG9Xb3JrT24gPSBwZXJzaXN0ZWQoXCJwdXp6bGVzLmlkc1RvV29ya09uXCIsIFtdKTtcbiAgY29uc3QgcmVzdWx0cyA9IHBlcnNpc3RlZChcInB1enpsZXMucmVzdWx0c1wiLCB7fSk7XG5cbiAgZnVuY3Rpb24gZmlsbEFjdGl2ZVB1enpsZXMoKSB7XG4gICAgY29uc3QgY29tcGxldGVkID0gVXRpbC5zb3J0UmFuZG9tbHkoZ2V0Q29tcGxldGVkUHV6emxlcygpKTtcbiAgICBjb25zdCBpbmNvbXBsZXRlSW5hY3RpdmUgPSBVdGlsLnNvcnRSYW5kb21seShnZXRJbmFjdGl2ZUNvbXBsZXRlZFB1enpsZXMoKSk7XG4gICAgbGV0IHB1enpsZVR5cGU7XG4gICAgd2hpbGUgKGFsbFB1enpsZXMubGVuZ3RoID4gMCAmJiBhY3RpdmVQdXp6bGVzLmxlbmd0aCA8IGJhdGNoU2l6ZSkge1xuICAgICAgcHV6emxlVHlwZSA9IE1hdGgucmFuZG9tKCkgPCAwLjIgPyBcImNvbXBsZXRlZFwiIDogXCJpbmFjdGl2ZVwiO1xuICAgICAgaWYgKGluY29tcGxldGVJbmFjdGl2ZS5sZW5ndGggPCAxICYmIGNvbXBsZXRlZC5sZW5ndGggPCAxKSB7XG4gICAgICAgIGJyZWFrO1xuICAgICAgfVxuICAgICAgaWYgKHB1enpsZVR5cGUgPT09IFwiY29tcGxldGVkXCIgJiYgY29tcGxldGVkLmxlbmd0aCA+IDApIHtcbiAgICAgICAgYWRkQWN0aXZlUHV6emxlKGNvbXBsZXRlZC5wb3AoKSk7XG4gICAgICB9IGVsc2UgaWYgKGluY29tcGxldGVJbmFjdGl2ZS5sZW5ndGggPiAwKSB7XG4gICAgICAgIGFkZEFjdGl2ZVB1enpsZShpbmNvbXBsZXRlSW5hY3RpdmUucG9wKCkpO1xuICAgICAgfVxuICAgIH1cbiAgfVxuXG4gIC8vIFRoaXMgaXMgdGllZCB0byB0aGUgYWRkIG5ldyBwdXp6bGUgZm9ybVxuICBsZXQgbmV3UHV6emxlSWRzO1xuXG4gIGZ1bmN0aW9uIGFkZFB1enpsZUlkVG9Xb3JrT24oKSB7XG4gICAgaWYgKG5ld1B1enpsZUlkcy5sZW5ndGggPCAzKSB7XG4gICAgICBuZXdQdXp6bGVJZHMgPSBcIlwiO1xuICAgICAgcmV0dXJuO1xuICAgIH1cbiAgICBjb25zdCBpZHNUb0FkZCA9IG5ld1B1enpsZUlkcy5zcGxpdChcIixcIikubWFwKChpZCkgPT4gaWQudHJpbSgpKTtcbiAgICBjb25zdCBjdXJyZW50UHV6emxlSWRzID0gbmV3IFNldCgkcHV6emxlSWRzVG9Xb3JrT24pO1xuICAgIGlkc1RvQWRkLmZvckVhY2goKGlkKSA9PiBjdXJyZW50UHV6emxlSWRzLmFkZChpZCkpO1xuICAgIHB1enpsZUlkc1RvV29ya09uLnNldChbLi4uY3VycmVudFB1enpsZUlkc10pO1xuICAgIG5ld1B1enpsZUlkcyA9IFwiXCI7XG4gIH1cblxuICBmdW5jdGlvbiByZW1vdmVQdXp6bGVJZChwdXp6bGVJZCkge1xuICAgIGNvbnN0IGN1cnJlbnRQdXp6bGVJZHMgPSBuZXcgU2V0KCRwdXp6bGVJZHNUb1dvcmtPbik7XG4gICAgY3VycmVudFB1enpsZUlkcy5kZWxldGUocHV6emxlSWQudHJpbSgpKTtcbiAgICBwdXp6bGVJZHNUb1dvcmtPbi5zZXQoWy4uLmN1cnJlbnRQdXp6bGVJZHNdKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGFkZEFjdGl2ZVB1enpsZShwdXp6bGUpIHtcbiAgICBhY3RpdmVQdXp6bGVzID0gW1xuICAgICAgLi4ubmV3IFNldChbXG4gICAgICAgIC4uLmFjdGl2ZVB1enpsZXMubWFwKChwdXp6bGUpID0+IHB1enpsZS5wdXp6bGVJZCksXG4gICAgICAgIHB1enpsZS5wdXp6bGVJZCxcbiAgICAgIF0pLFxuICAgIF0ubWFwKChwdXp6bGVJZCkgPT4gbmV3IFB1enpsZShwdXp6bGVJZCkpO1xuICB9XG5cbiAgZnVuY3Rpb24gcmVtb3ZlQWN0aXZlUHV6emxlKHB1enpsZSkge1xuICAgIGFjdGl2ZVB1enpsZXMgPSBhY3RpdmVQdXp6bGVzLmZpbHRlcihcbiAgICAgIChhY3RpdmVQdXp6bGUpID0+IGFjdGl2ZVB1enpsZS5wdXp6bGVJZCAhPT0gcHV6emxlLnB1enpsZUlkLFxuICAgICk7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRDb21wbGV0ZWRQdXp6bGVzKCkge1xuICAgIHJldHVybiBhbGxQdXp6bGVzLmZpbHRlcigocHV6emxlKSA9PiBwdXp6bGUuaXNDb21wbGV0ZSgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldEluY29tcGxldGVQdXp6bGVzKCkge1xuICAgIHJldHVybiBhbGxQdXp6bGVzLmZpbHRlcigocHV6emxlKSA9PiAhcHV6emxlLmlzQ29tcGxldGUoKSk7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRJbmFjdGl2ZUNvbXBsZXRlZFB1enpsZXMoKSB7XG4gICAgcmV0dXJuIGdldEluY29tcGxldGVQdXp6bGVzKCkuZmlsdGVyKFxuICAgICAgKHB1enpsZSkgPT4gIWFjdGl2ZVB1enpsZXMuaW5jbHVkZXMocHV6emxlKSxcbiAgICApO1xuICB9XG5cbiAgZnVuY3Rpb24gc29ydFB1enpsZXNCeVNvbHZlVGltZShhLCBiKSB7XG4gICAgY29uc3QgYVRpbWUgPSBhLmF2ZXJhZ2VTb2x2ZVRpbWUoKTtcbiAgICBjb25zdCBiVGltZSA9IGIuYXZlcmFnZVNvbHZlVGltZSgpO1xuXG4gICAgaWYgKGFUaW1lID09PSBudWxsICYmIGJUaW1lID09PSBudWxsKSB7XG4gICAgICByZXR1cm4gMDtcbiAgICB9XG4gICAgaWYgKGFUaW1lID09PSBudWxsKSB7XG4gICAgICByZXR1cm4gMTtcbiAgICB9XG4gICAgaWYgKGJUaW1lID09PSBudWxsKSB7XG4gICAgICByZXR1cm4gLTE7XG4gICAgfVxuICAgIHJldHVybiBhVGltZSAtIGJUaW1lO1xuICB9XG5cbiAgYXN5bmMgZnVuY3Rpb24gZ2V0TmV4dFB1enpsZSgpIHtcbiAgICBjb25zdCBwcmV2aW91cyA9IGN1cnJlbnRQdXp6bGUgPyBjdXJyZW50UHV6emxlLnB1enpsZUlkIDogbnVsbDtcblxuICAgIGNvbnN0IHR5cGUgPSBnZXROZXh0UHV6emxlVHlwZSgpO1xuXG4gICAgY29uc3QgYWxyZWFkeUNvbXBsZXRlID0gYWN0aXZlUHV6emxlcy5maWx0ZXIoKHB1enpsZSkgPT5cbiAgICAgIHB1enpsZS5pc0NvbXBsZXRlKCksXG4gICAgKTtcbiAgICBjb25zdCBpbmNvbXBsZXRlID0gYWN0aXZlUHV6emxlcy5maWx0ZXIoKHB1enpsZSkgPT4gIXB1enpsZS5pc0NvbXBsZXRlKCkpO1xuXG4gICAgbGV0IGNhbmRpZGF0ZVB1enpsZTtcbiAgICBpZiAoXG4gICAgICAodHlwZSA9PT0gXCJhbHJlYWR5Q29tcGxldGVcIiAmJiBhbHJlYWR5Q29tcGxldGUubGVuZ3RoID4gMCkgfHxcbiAgICAgIGluY29tcGxldGUubGVuZ3RoIDwgMVxuICAgICkge1xuICAgICAgY2FuZGlkYXRlUHV6emxlID0gVXRpbC5nZXRSYW5kb21FbGVtZW50KGFjdGl2ZVB1enpsZXMpO1xuICAgIH0gZWxzZSB7XG4gICAgICBjYW5kaWRhdGVQdXp6bGUgPSBVdGlsLmdldFJhbmRvbUVsZW1lbnQoaW5jb21wbGV0ZSk7XG4gICAgfVxuXG4gICAgaWYgKGFjdGl2ZVB1enpsZXMubGVuZ3RoID4gMSAmJiBjYW5kaWRhdGVQdXp6bGUucHV6emxlSWQgPT09IHByZXZpb3VzKSB7XG4gICAgICByZXR1cm4gZ2V0TmV4dFB1enpsZSgpO1xuICAgIH1cblxuICAgIGN1cnJlbnRQdXp6bGUgPSBhbGxQdXp6bGVzLmZpbmQoXG4gICAgICAocHV6emxlKSA9PiBwdXp6bGUucHV6emxlSWQgPT09IGNhbmRpZGF0ZVB1enpsZS5wdXp6bGVJZCxcbiAgICApO1xuXG4gICAgY29uc3QgZGF0YSA9IGF3YWl0IGdldFB1enpsZURhdGEoY3VycmVudFB1enpsZS5wdXp6bGVJZCk7XG5cbiAgICBpZiAoZGF0YSA9PT0gbnVsbCkge1xuICAgICAgcmV0dXJuIGdldE5leHRQdXp6bGUoKTtcbiAgICB9XG5cbiAgICByZXR1cm4gZGF0YTtcbiAgfVxuXG4gIGFzeW5jIGZ1bmN0aW9uIGdldFB1enpsZURhdGEocHV6emxlSWQpIHtcbiAgICAvLyBDaGVjayBjYWNoZSBmaXJzdFxuICAgIGlmICgkcHV6emxlRGF0YVN0b3JlW3B1enpsZUlkXSkge1xuICAgICAgcmV0dXJuICRwdXp6bGVEYXRhU3RvcmVbcHV6emxlSWRdO1xuICAgIH1cblxuICAgIGNvbnN0IHJlc3BvbnNlID0gYXdhaXQgZmV0Y2goYGh0dHBzOi8vbGljaGVzcy5vcmcvYXBpL3B1enpsZS8ke3B1enpsZUlkfWApO1xuXG4gICAgaWYgKHJlc3BvbnNlLnN0YXR1cyA9PT0gNDA0KSB7XG4gICAgICAvLyBSZW1vdmUgaW52YWxpZFxuICAgICAgcmVtb3ZlUHV6emxlSWQocHV6emxlSWQpO1xuICAgICAgcmV0dXJuIG51bGw7XG4gICAgfVxuXG4gICAgY29uc3QgcHV6emxlRGF0YSA9IGF3YWl0IHJlc3BvbnNlLmpzb24oKTtcbiAgICBjb25zdCBkYXRhID0gJHB1enpsZURhdGFTdG9yZTtcbiAgICBkYXRhW2N1cnJlbnRQdXp6bGUucHV6emxlSWRdID0gcHV6emxlRGF0YTtcbiAgICBwdXp6bGVEYXRhU3RvcmUuc2V0KGRhdGEpO1xuICAgIHJldHVybiBwdXp6bGVEYXRhO1xuICB9XG5cbiAgZnVuY3Rpb24gZ2V0TmV4dFB1enpsZVR5cGUoKSB7XG4gICAgY29uc3QgcmFuZG9tVmFsdWUgPSBNYXRoLnJhbmRvbSgpO1xuICAgIGlmIChyYW5kb21WYWx1ZSA8IGFscmVhZHlDb21wbGV0ZU9kZHMpIHtcbiAgICAgIHJldHVybiBcImFscmVhZHlDb21wbGV0ZVwiO1xuICAgIH1cbiAgICByZXR1cm4gXCJpbmNvbXBsZXRlXCI7XG4gIH1cblxuICBhc3luYyBmdW5jdGlvbiBza2lwKCkge1xuICAgIGNvbnN0IHJlc3VsdCA9IG5ldyBSZXN1bHQoY3VycmVudFB1enpsZS5wdXp6bGVJZCwgcHV6emxlU2hvd25BdCwgdHJ1ZSk7XG4gICAgYWRkUmVzdWx0KGN1cnJlbnRQdXp6bGUucHV6emxlSWQsIHJlc3VsdCk7XG4gICAgYXdhaXQgbG9hZE5leHRQdXp6bGUoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGFkZFJlc3VsdChwdXp6bGVJZCwgcmVzdWx0KSB7XG4gICAgY29uc3QgYWxsUmVzdWx0cyA9ICRyZXN1bHRzO1xuICAgIGNvbnN0IGV4aXN0aW5nUmVzdWx0cyA9ICRyZXN1bHRzW3B1enpsZUlkXSB8fCBbXTtcbiAgICBleGlzdGluZ1Jlc3VsdHMucHVzaChyZXN1bHQpO1xuICAgIGFsbFJlc3VsdHNbcHV6emxlSWRdID0gZXhpc3RpbmdSZXN1bHRzO1xuICAgIHJlc3VsdHMuc2V0KGFsbFJlc3VsdHMpO1xuICB9XG5cbiAgZnVuY3Rpb24gYWRkQ29tcGxldGVkUHV6emxlKHB1enpsZVRvQWRkKSB7XG4gICAgY29tcGxldGVkUHV6emxlcyA9IFtcbiAgICAgIC4uLm5ldyBTZXQoW1xuICAgICAgICAuLi5nZXRDb21wbGV0ZWRQdXp6bGVzKCkubWFwKChwdXp6bGUpID0+IHB1enpsZS5wdXp6bGVJZCksXG4gICAgICAgIHB1enpsZVRvQWRkLnB1enpsZUlkLFxuICAgICAgXSksXG4gICAgXS5tYXAoKHB1enpsZUlkKSA9PiBuZXcgUHV6emxlKHB1enpsZUlkKSk7XG4gIH1cblxuICBmdW5jdGlvbiByZW1vdmVDb21wbGV0ZWRQdXp6bGUocHV6emxlVG9SZW1vdmUpIHtcbiAgICBjb21wbGV0ZWRQdXp6bGVzID0gY29tcGxldGVkUHV6emxlcy5maWx0ZXIoXG4gICAgICAocHV6emxlKSA9PiBwdXp6bGUucHV6emxlSWQgIT09IHB1enpsZVRvUmVtb3ZlLnB1enpsZUlkLFxuICAgICk7XG4gIH1cblxuICBhc3luYyBmdW5jdGlvbiBsb2FkTmV4dFB1enpsZSgpIHtcbiAgICBwdXp6bGVDb21wbGV0ZSA9IGZhbHNlO1xuICAgIG1hZGVNaXN0YWtlID0gZmFsc2U7XG5cbiAgICBpZiAoY3VycmVudFB1enpsZSAmJiBjdXJyZW50UHV6emxlLmlzQ29tcGxldGUoKSkge1xuICAgICAgcmVtb3ZlQWN0aXZlUHV6emxlKGN1cnJlbnRQdXp6bGUpO1xuICAgICAgYWRkQ29tcGxldGVkUHV6emxlKGN1cnJlbnRQdXp6bGUpO1xuICAgIH1cblxuICAgIGNvbnN0IG5leHQgPSBhd2FpdCBnZXROZXh0UHV6emxlKCk7XG4gICAgb3JpZW50YXRpb24gPSBVdGlsLndob3NlTW92ZUlzSXQobmV4dC5wdXp6bGUuaW5pdGlhbFBseSArIDEpO1xuICAgIC8vIENsb25lIHNvIHdlIGRvbid0IGNhY2hlIGEgdmFsdWUgdGhhdCBnZXRzIHNoaWZ0ZWQgbGF0ZXJcbiAgICBtb3ZlcyA9IFsuLi5uZXh0LnB1enpsZS5zb2x1dGlvbl07XG5cbiAgICBjb25zdCBwZ24gPSBwYXJzZVBnbihuZXh0LmdhbWUucGduKVswXTtcblxuICAgIHBvc2l0aW9uID0gc3RhcnRpbmdQb3NpdGlvbihwZ24uaGVhZGVycykudW53cmFwKCk7XG4gICAgY29uc3QgYWxsTm9kZXMgPSBbLi4ucGduLm1vdmVzLm1haW5saW5lTm9kZXMoKV07XG5cbiAgICBmb3IgKGxldCBpID0gMDsgaSA8IGFsbE5vZGVzLmxlbmd0aCAtIDE7IGkrKykge1xuICAgICAgY29uc3Qgbm9kZSA9IGFsbE5vZGVzW2ldO1xuICAgICAgY29uc3QgbW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBub2RlLmRhdGEuc2FuKTtcbiAgICAgIHBvc2l0aW9uLnBsYXkobW92ZSk7XG4gICAgfVxuXG4gICAgY29uc3QgbGFzdE1vdmUgPSBwYXJzZVNhbihwb3NpdGlvbiwgYWxsTm9kZXNbYWxsTm9kZXMubGVuZ3RoIC0gMV0uZGF0YS5zYW4pO1xuXG4gICAgc2V0Q2hlc3Nncm91bmRGcm9tUG9zaXRpb24oKTtcblxuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgcG9zaXRpb24ucGxheShsYXN0TW92ZSk7XG4gICAgICBjaGVzc2dyb3VuZC5tb3ZlKG1ha2VTcXVhcmUobGFzdE1vdmUuZnJvbSksIG1ha2VTcXVhcmUobGFzdE1vdmUudG8pKTtcbiAgICAgIHVwZGF0ZUxlZ2FsTW92ZXMoKTtcbiAgICAgIHB1enpsZVNob3duQXQgPSBVdGlsLmN1cnJlbnRNaWNyb3RpbWUoKTtcbiAgICB9LCAzMDApO1xuICB9XG5cbiAgZnVuY3Rpb24gc2V0Q2hlc3Nncm91bmRGcm9tUG9zaXRpb24oKSB7XG4gICAgZmVuID0gbWFrZUZlbihwb3NpdGlvbi50b1NldHVwKCkpO1xuICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICBmZW46IGZlbixcbiAgICB9KTtcbiAgICB1cGRhdGVMZWdhbE1vdmVzKCk7XG4gIH1cblxuICBmdW5jdGlvbiB1cGRhdGVMZWdhbE1vdmVzKCkge1xuICAgIGZlbiA9IG1ha2VGZW4ocG9zaXRpb24udG9TZXR1cCgpKTtcbiAgICBjb25zdCBsZWdhbE1vdmVzID0gZ2V0TGVnYWxNb3Zlc0ZvckZlbihmZW4pO1xuICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICBtb3ZhYmxlOiB7XG4gICAgICAgIGRlc3RzOiBsZWdhbE1vdmVzLFxuICAgICAgfSxcbiAgICB9KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldExlZ2FsTW92ZXNGb3JGZW4oZmVuKSB7XG4gICAgY29uc3Qgc2V0dXAgPSBwYXJzZUZlbihmZW4pLnVud3JhcCgpO1xuICAgIGNvbnN0IGNoZXNzID0gQ2hlc3MuZnJvbVNldHVwKHNldHVwKS51bndyYXAoKTtcbiAgICBjb25zdCBkZXN0c01hcCA9IGNoZXNzLmFsbERlc3RzKCk7XG5cbiAgICBjb25zdCBkZXN0c01hcEluU2FuID0gbmV3IE1hcCgpO1xuXG4gICAgZm9yIChjb25zdCBba2V5LCB2YWx1ZV0gb2YgZGVzdHNNYXAuZW50cmllcygpKSB7XG4gICAgICBjb25zdCBkZXN0c0FycmF5ID0gQXJyYXkuZnJvbSh2YWx1ZSkubWFwKChzcSkgPT4gbWFrZVNxdWFyZShzcSkpO1xuICAgICAgZGVzdHNNYXBJblNhbi5zZXQobWFrZVNxdWFyZShrZXkpLCBkZXN0c0FycmF5KTtcbiAgICB9XG5cbiAgICByZXR1cm4gZGVzdHNNYXBJblNhbjtcbiAgfVxuXG4gIGZ1bmN0aW9uIGhhbmRsZVVzZXJNb3ZlKG9yaWcsIGRlc3QpIHtcbiAgICBjb25zdCBjb3JyZWN0TW92ZSA9IG1vdmVzWzBdO1xuICAgIGNvbnN0IG9yaWdTcXVhcmUgPSBwYXJzZVNxdWFyZShvcmlnKTtcbiAgICBjb25zdCBkZXN0U3F1YXJlID0gcGFyc2VTcXVhcmUoZGVzdCk7XG4gICAgbGV0IG1vdmUgPSB7IGZyb206IG9yaWdTcXVhcmUsIHRvOiBkZXN0U3F1YXJlIH07XG4gICAgaWYgKFxuICAgICAgY2hlc3Nncm91bmQuc3RhdGUucGllY2VzLmdldChkZXN0KT8ucm9sZSA9PT0gXCJwYXduXCIgJiZcbiAgICAgIChkZXN0WzFdID09PSBcIjFcIiB8fCBkZXN0WzFdID09PSBcIjhcIilcbiAgICApIHtcbiAgICAgIG1vdmUgPSB7IC4uLm1vdmUsIHByb21vdGlvbjogXCJxdWVlblwiIH07XG4gICAgICBjaGVzc2dyb3VuZC5zZXRQaWVjZXMoXG4gICAgICAgIG5ldyBNYXAoW1tkZXN0LCB7IGNvbG9yOiBvcmllbnRhdGlvbiwgcm9sZTogXCJxdWVlblwiIH1dXSksXG4gICAgICApO1xuICAgIH1cbiAgICBjb25zdCB1Y2lNb3ZlID0gbWFrZVVjaShtb3ZlKTtcbiAgICBpZiAod291bGRCZUNoZWNrbWF0ZShvcmlnLCBkZXN0KSkge1xuICAgICAgcmV0dXJuIGhhbmRsZVB1enpsZUNvbXBsZXRlKCk7XG4gICAgfVxuICAgIGlmICh1Y2lNb3ZlID09PSBjb3JyZWN0TW92ZSkge1xuICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICAgIG1vdmVzLnNoaWZ0KCk7IC8vIHJlbW92ZSB0aGUgdXNlciBtb3ZlIGZpcnN0XG4gICAgICBjb25zdCBjb21wdXRlck1vdmUgPSBtb3Zlcy5zaGlmdCgpO1xuICAgICAgaWYgKGNvbXB1dGVyTW92ZSkge1xuICAgICAgICBjb25zdCBtb3ZlID0gcGFyc2VVY2koY29tcHV0ZXJNb3ZlKTtcbiAgICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICAgICAgY2hlc3Nncm91bmQubW92ZShtYWtlU3F1YXJlKG1vdmUuZnJvbSksIG1ha2VTcXVhcmUobW92ZS50bykpO1xuICAgICAgICB1cGRhdGVMZWdhbE1vdmVzKCk7XG4gICAgICB9IGVsc2Uge1xuICAgICAgICByZXR1cm4gaGFuZGxlUHV6emxlQ29tcGxldGUoKTtcbiAgICAgIH1cbiAgICB9IGVsc2Uge1xuICAgICAgbWFkZU1pc3Rha2UgPSB0cnVlO1xuICAgICAgc2hvd0ZhaWx1cmUoXCJOb3BlIVwiKTtcbiAgICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgICBzZXRDaGVzc2dyb3VuZEZyb21Qb3NpdGlvbigpO1xuICAgICAgfSwgMjAwKTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiB3b3VsZEJlQ2hlY2ttYXRlKG9yaWcsIGRlc3QpIHtcbiAgICBjb25zdCBvcmlnU3F1YXJlID0gcGFyc2VTcXVhcmUob3JpZyk7XG4gICAgY29uc3QgZGVzdFNxdWFyZSA9IHBhcnNlU3F1YXJlKGRlc3QpO1xuICAgIGNvbnN0IGNsb25lZFBvc2l0aW9uID0gcG9zaXRpb24uY2xvbmUoKTtcbiAgICBjbG9uZWRQb3NpdGlvbi5wbGF5KHsgZnJvbTogb3JpZ1NxdWFyZSwgdG86IGRlc3RTcXVhcmUgfSk7XG4gICAgcmV0dXJuIGNsb25lZFBvc2l0aW9uLmlzQ2hlY2ttYXRlKCk7XG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVQdXp6bGVDb21wbGV0ZSgpIHtcbiAgICBwdXp6bGVDb21wbGV0ZSA9IHRydWU7XG4gICAgY29uc3QgcmVzdWx0ID0gbmV3IFJlc3VsdChcbiAgICAgIGN1cnJlbnRQdXp6bGUucHV6emxlSWQsXG4gICAgICBwdXp6bGVTaG93bkF0LFxuICAgICAgZmFsc2UsXG4gICAgICBtYWRlTWlzdGFrZSxcbiAgICAgIFV0aWwuY3VycmVudE1pY3JvdGltZSgpLFxuICAgICk7XG4gICAgYWRkUmVzdWx0KGN1cnJlbnRQdXp6bGUucHV6emxlSWQsIHJlc3VsdCk7XG4gICAgaWYgKG1hZGVNaXN0YWtlKSB7XG4gICAgICByZW1vdmVDb21wbGV0ZWRQdXp6bGUoY3VycmVudFB1enpsZSk7XG4gICAgfVxuICAgIC8vIFRyaWdnZXIgcmVhY3Rpdml0eVxuICAgIGFjdGl2ZVB1enpsZXMgPSBhY3RpdmVQdXp6bGVzO1xuICAgIHNob3dTdWNjZXNzKFwiQ29ycmVjdCFcIik7XG4gIH1cblxuICBsZXQgc3VjY2Vzc01lc3NhZ2UgPSBudWxsO1xuXG4gIGZ1bmN0aW9uIHNob3dTdWNjZXNzKG1lc3NhZ2UsIGR1cmF0aW9uID0gMTUwMCkge1xuICAgIGZhaWx1cmVNZXNzYWdlID0gbnVsbDtcbiAgICBzdWNjZXNzTWVzc2FnZSA9IG1lc3NhZ2U7XG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBzdWNjZXNzTWVzc2FnZSA9IG51bGw7XG4gICAgfSwgZHVyYXRpb24pO1xuICB9XG5cbiAgbGV0IGZhaWx1cmVNZXNzYWdlID0gbnVsbDtcblxuICBmdW5jdGlvbiBzaG93RmFpbHVyZShtZXNzYWdlLCBkdXJhdGlvbiA9IDEwMDApIHtcbiAgICBzdWNjZXNzTWVzc2FnZSA9IG51bGw7XG4gICAgZmFpbHVyZU1lc3NhZ2UgPSBtZXNzYWdlO1xuICAgIHNldFRpbWVvdXQoKCkgPT4ge1xuICAgICAgZmFpbHVyZU1lc3NhZ2UgPSBudWxsO1xuICAgIH0sIGR1cmF0aW9uKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGluaXRpYWxpemVQdXp6bGVzKCkge1xuICAgIGFsbFB1enpsZXMgPSBbXTtcbiAgICAkcHV6emxlSWRzVG9Xb3JrT24uZm9yRWFjaCgocHV6emxlSWQpID0+IHtcbiAgICAgIGFsbFB1enpsZXMucHVzaChuZXcgUHV6emxlKHB1enpsZUlkKSk7XG4gICAgfSk7XG4gICAgY29tcGxldGVkUHV6emxlcyA9IGdldENvbXBsZXRlZFB1enpsZXMoKTtcbiAgICBmaWxsQWN0aXZlUHV6emxlcygpO1xuICB9XG5cbiAgb25Nb3VudChhc3luYyAoKSA9PiB7XG4gICAgaW5pdGlhbGl6ZVB1enpsZXMoKTtcbiAgICBkb2N1bWVudC5hZGRFdmVudExpc3RlbmVyKFwia2V5ZG93blwiLCBmdW5jdGlvbiAoZXZlbnQpIHtcbiAgICAgIGlmIChbXCJFbnRlclwiLCBcIiBcIl0uaW5jbHVkZXMoZXZlbnQua2V5KSAmJiBuZXh0QnV0dG9uKSB7XG4gICAgICAgIGV2ZW50LnByZXZlbnREZWZhdWx0KCk7XG4gICAgICAgIG5leHRCdXR0b24uY2xpY2soKTtcbiAgICAgIH1cbiAgICB9KTtcbiAgICBhd2FpdCBsb2FkTmV4dFB1enpsZSgpO1xuICB9KTtcbjwvc2NyaXB0PlxuXG48ZGl2IGNsYXNzPVwiY29sdW1ucyBpcy1jZW50ZXJlZFwiPlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGlzLTYtZGVza3RvcFwiPlxuICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgeyNpZiBhY3RpdmVQdXp6bGVzLmxlbmd0aCA+IDAgJiYgY3VycmVudFB1enpsZX1cbiAgICAgICAgPENoZXNzYm9hcmQge2NoZXNzZ3JvdW5kQ29uZmlnfSB7b3JpZW50YXRpb259IGJpbmQ6Y2hlc3Nncm91bmQ+XG4gICAgICAgICAgPGRpdiBzbG90PVwiY2VudGVyZWQtY29udGVudFwiPlxuICAgICAgICAgICAgeyNpZiBzdWNjZXNzTWVzc2FnZX1cbiAgICAgICAgICAgICAgPHNwYW4gdHJhbnNpdGlvbjpmYWRlIGNsYXNzPVwidGFnIGlzLXN1Y2Nlc3MgaXMtc2l6ZS00XCI+XG4gICAgICAgICAgICAgICAge3N1Y2Nlc3NNZXNzYWdlfVxuICAgICAgICAgICAgICA8L3NwYW4+XG4gICAgICAgICAgICB7L2lmfVxuICAgICAgICAgICAgeyNpZiBmYWlsdXJlTWVzc2FnZX1cbiAgICAgICAgICAgICAgPHNwYW4gdHJhbnNpdGlvbjpmYWRlIGNsYXNzPVwidGFnIGlzLWRhbmdlciBpcy1zaXplLTRcIj5cbiAgICAgICAgICAgICAgICB7ZmFpbHVyZU1lc3NhZ2V9XG4gICAgICAgICAgICAgIDwvc3Bhbj5cbiAgICAgICAgICAgIHsvaWZ9XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgPGRpdiBzbG90PVwiYmVsb3ctYm9hcmRcIj5cbiAgICAgICAgICAgIHsjaWYgcHV6emxlQ29tcGxldGV9XG4gICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9jayBpcy1mbGV4IGlzLWp1c3RpZnktY29udGVudC1jZW50ZXJcIj5cbiAgICAgICAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICAgICAgICBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCJcbiAgICAgICAgICAgICAgICAgIGJpbmQ6dGhpcz17bmV4dEJ1dHRvbn1cbiAgICAgICAgICAgICAgICAgIG9uOmNsaWNrPXthc3luYyAoKSA9PiB7XG4gICAgICAgICAgICAgICAgICAgIGF3YWl0IGxvYWROZXh0UHV6emxlKCk7XG4gICAgICAgICAgICAgICAgICB9fVxuICAgICAgICAgICAgICAgICAgPk5leHRcbiAgICAgICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICB7L2lmfVxuICAgICAgICAgICAgeyNpZiAhcHV6emxlQ29tcGxldGV9XG4gICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJibG9jayBpcy1mbGV4IGlzLWp1c3RpZnktY29udGVudC1jZW50ZXJcIj5cbiAgICAgICAgICAgICAgICA8c3BhbiBjbGFzcz1cInRhZyBpcy17b3JpZW50YXRpb259IGlzLXNpemUtNFwiXG4gICAgICAgICAgICAgICAgICA+e29yaWVudGF0aW9ufSB0byBwbGF5PC9zcGFuXG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDxidXR0b24gY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiIG9uOmNsaWNrPXtza2lwfT5Ta2lwPC9idXR0b24+XG4gICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgey9pZn1cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9DaGVzc2JvYXJkPlxuICAgICAgezplbHNlfVxuICAgICAgICA8cD5BbGwgcHV6emxlcyBjb21wbGV0ZSwgYWRkIHNvbWUgbW9yZSE8L3A+XG4gICAgICB7L2lmfVxuICAgIDwvZGl2PlxuICA8L2Rpdj5cbiAgPGRpdiBjbGFzcz1cImNvbHVtbiBpcy00LWRlc2t0b3BcIj5cbiAgICB7I2lmIGFjdGl2ZVB1enpsZXMubGVuZ3RoID49IDEgJiYgY3VycmVudFB1enpsZX1cbiAgICAgIDxkaXYgY2xhc3M9XCJib3hcIj5cbiAgICAgICAgPGgzPkN1cnJlbnQgUHV6emxlczwvaDM+XG4gICAgICAgIDx0YWJsZSBjbGFzcz1cInRhYmxlIGlzLWZ1bGx3aWR0aCBpcy1uYXJyb3cgaXMtc3RyaXBlZFwiPlxuICAgICAgICAgIDx0aGVhZD5cbiAgICAgICAgICAgIDx0cj5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiTGljaGVzcyBQdXp6bGUgSURcIj5JRDwvYWJicj48L3RoPlxuICAgICAgICAgICAgICA8dGg+PGFiYnIgdGl0bGU9XCJBdmVyYWdlIHNvbHZlIHRpbWVcIj5Bdmc8L2FiYnI+PC90aD5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiQ29ycmVjdCBzb2x2ZXMgaW4gYSByb3dcIj5TdHJlYWs8L2FiYnI+PC90aD5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiVG90YWwgY29ycmVjdCBzb2x2ZXNcIj5Tb2x2ZXM8L2FiYnI+PC90aD5cbiAgICAgICAgICAgICAgPHRoPjxhYmJyIHRpdGxlPVwiRmFpbHVyZSBDb3VudFwiPkZhaWxzPC9hYmJyPjwvdGg+XG4gICAgICAgICAgICA8L3RyPlxuICAgICAgICAgIDwvdGhlYWQ+XG4gICAgICAgICAgPHRib2R5PlxuICAgICAgICAgICAgeyNlYWNoIGFjdGl2ZVB1enpsZXMuc29ydChzb3J0UHV6emxlc0J5U29sdmVUaW1lKSBhcyBwdXp6bGUgKHB1enpsZSl9XG4gICAgICAgICAgICAgIDx0clxuICAgICAgICAgICAgICAgIGFuaW1hdGU6ZmxpcD17eyBkdXJhdGlvbjogNDAwIH19XG4gICAgICAgICAgICAgICAgY2xhc3M6aXMtc2VsZWN0ZWQ9e2N1cnJlbnRQdXp6bGUucHV6emxlSWQgPT09IHB1enpsZS5wdXp6bGVJZH1cbiAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDx0ZCBjbGFzcz1cInB1enpsZS1pZFwiXG4gICAgICAgICAgICAgICAgICA+PGFcbiAgICAgICAgICAgICAgICAgICAgaHJlZj17cHV6emxlLmxpY2hlc3NVcmwoKX1cbiAgICAgICAgICAgICAgICAgICAgdGFyZ2V0PVwiX2JsYW5rXCJcbiAgICAgICAgICAgICAgICAgICAgdGl0bGU9XCJWaWV3IG9uIGxpY2hlc3Mub3JnXCI+e3B1enpsZS5wdXp6bGVJZH08L2FcbiAgICAgICAgICAgICAgICAgID48L3RkXG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDx0ZFxuICAgICAgICAgICAgICAgICAgY2xhc3M6aGFzLXRleHQtd2FybmluZz17cHV6emxlLmF2ZXJhZ2VTb2x2ZVRpbWUoKSA+IHRpbWVHb2FsfVxuICAgICAgICAgICAgICAgICAgY2xhc3M6aGFzLXRleHQtc3VjY2Vzcz17cHV6emxlLmF2ZXJhZ2VTb2x2ZVRpbWUoKSA8PVxuICAgICAgICAgICAgICAgICAgICB0aW1lR29hbCAmJiBwdXp6bGUuYXZlcmFnZVNvbHZlVGltZSgpID4gMH1cbiAgICAgICAgICAgICAgICA+XG4gICAgICAgICAgICAgICAgICB7cHV6emxlLmF2ZXJhZ2VTb2x2ZVRpbWUoKVxuICAgICAgICAgICAgICAgICAgICA/IGAkeyhwdXp6bGUuYXZlcmFnZVNvbHZlVGltZSgpIC8gMTAwMCkudG9GaXhlZCgyKX1zYFxuICAgICAgICAgICAgICAgICAgICA6IFwiP1wifVxuICAgICAgICAgICAgICAgIDwvdGQ+XG4gICAgICAgICAgICAgICAgPHRkXG4gICAgICAgICAgICAgICAgICBjbGFzczpoYXMtdGV4dC13YXJuaW5nPXtwdXp6bGUuZ2V0U29sdmVTdHJlYWsoKSA8XG4gICAgICAgICAgICAgICAgICAgIG1pbmltdW1Tb2x2ZXN9XG4gICAgICAgICAgICAgICAgICBjbGFzczpoYXMtdGV4dC1zdWNjZXNzPXtwdXp6bGUuZ2V0U29sdmVTdHJlYWsoKSA+PVxuICAgICAgICAgICAgICAgICAgICBtaW5pbXVtU29sdmVzfVxuICAgICAgICAgICAgICAgID5cbiAgICAgICAgICAgICAgICAgIHtwdXp6bGUuZ2V0U29sdmVTdHJlYWsoKX0gLyB7bWluaW11bVNvbHZlc31cbiAgICAgICAgICAgICAgICA8L3RkPlxuICAgICAgICAgICAgICAgIDx0ZD5cbiAgICAgICAgICAgICAgICAgIHtwdXp6bGUuZ2V0VG90YWxTb2x2ZXMoKX1cbiAgICAgICAgICAgICAgICA8L3RkPlxuICAgICAgICAgICAgICAgIDx0ZD5cbiAgICAgICAgICAgICAgICAgIHtwdXp6bGUuZ2V0RmFpbHVyZUNvdW50KCl9XG4gICAgICAgICAgICAgICAgPC90ZD5cbiAgICAgICAgICAgICAgPC90cj5cbiAgICAgICAgICAgIHsvZWFjaH1cbiAgICAgICAgICA8L3Rib2R5PlxuICAgICAgICA8L3RhYmxlPlxuICAgICAgPC9kaXY+XG4gICAgey9pZn1cbiAgICA8ZGl2IGNsYXNzPVwiYm94XCI+XG4gICAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgICAgPHA+PHN0cm9uZz57JHB1enpsZUlkc1RvV29ya09uLmxlbmd0aH08L3N0cm9uZz4gdG90YWwgcHV6emxlczwvcD5cbiAgICAgICAgPHA+RG9uZSB3aXRoIDxzdHJvbmc+e2NvbXBsZXRlZFB1enpsZXMubGVuZ3RofTwvc3Ryb25nPiBwdXp6bGVzPC9wPlxuICAgICAgICA8cD5cbiAgICAgICAgICBUYXJnZXQgc29sdmUgdGltZTogPHN0cm9uZz57KHRpbWVHb2FsIC8gMTAwMCkudG9GaXhlZCgxKX08L3N0cm9uZz4gc2Vjb25kc1xuICAgICAgICA8L3A+XG4gICAgICAgIDxwPlxuICAgICAgICAgIE11c3Qgc29sdmUgPHN0cm9uZz57bWluaW11bVNvbHZlc308L3N0cm9uZz4gdGltZXttaW5pbXVtU29sdmVzID4gMVxuICAgICAgICAgICAgPyBcInNcIlxuICAgICAgICAgICAgOiBcIlwifSBpbiBhIHJvd1xuICAgICAgICA8L3A+XG4gICAgICA8L2Rpdj5cbiAgICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgICA8Zm9ybSBvbjpzdWJtaXR8cHJldmVudERlZmF1bHQ9e2FkZFB1enpsZUlkVG9Xb3JrT259PlxuICAgICAgICAgIDxsYWJlbCBmb3I9XCJuZXdQdXp6bGVJZFwiPk5ldyBQdXp6bGUgSUQocyk6PC9sYWJlbD5cbiAgICAgICAgICA8aW5wdXRcbiAgICAgICAgICAgIHR5cGU9XCJ0ZXh0XCJcbiAgICAgICAgICAgIGlkPVwibmV3UHV6emxlSWRcIlxuICAgICAgICAgICAgYmluZDp2YWx1ZT17bmV3UHV6emxlSWRzfVxuICAgICAgICAgICAgcGxhY2Vob2xkZXI9XCJcIlxuICAgICAgICAgIC8+XG4gICAgICAgICAgPGJyIC8+XG4gICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCIgdHlwZT1cInN1Ym1pdFwiPkFkZDwvYnV0dG9uPlxuICAgICAgICA8L2Zvcm0+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgICA8Q29sbGFwc2libGVCb3ggdGl0bGU9XCJQdXp6bGUgSGlzdG9yeSBIZWxwZXJcIiA+XG4gICAgICA8UHV6emxlSGlzdG9yeVByb2Nlc3NvciAvPlxuICAgIDwvQ29sbGFwc2libGVCb3g+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLnB1enpsZS1pZCB7XG4gICAgZm9udC1mYW1pbHk6IG1vbm9zcGFjZTtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUF5ckJFLHlCQUFXLENBQ1QsV0FBVyxDQUFFLFNBQ2YifQ== */");
 }
 
 function get_each_context$2(ctx, list, i) {
@@ -9503,7 +11402,7 @@ function create_each_block$2(key_1, ctx) {
 	return block;
 }
 
-// (691:4) <CollapsibleBox title="Puzzle History Helper" }>
+// (691:4) <CollapsibleBox title="Puzzle History Helper" >
 function create_default_slot$1(ctx) {
 	let puzzlehistoryprocessor;
 	let current;
@@ -9535,7 +11434,7 @@ function create_default_slot$1(ctx) {
 		block,
 		id: create_default_slot$1.name,
 		type: "slot",
-		source: "(691:4) <CollapsibleBox title=\\\"Puzzle History Helper\\\" }>",
+		source: "(691:4) <CollapsibleBox title=\\\"Puzzle History Helper\\\" >",
 		ctx
 	});
 
@@ -9608,7 +11507,6 @@ function create_fragment$a(ctx) {
 	collapsiblebox = new CollapsibleBox({
 			props: {
 				title: "Puzzle History Helper",
-				"}": true,
 				$$slots: { default: [create_default_slot$1] },
 				$$scope: { ctx }
 			},

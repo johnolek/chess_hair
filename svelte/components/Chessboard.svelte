@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { Chessground } from "chessground";
+  import { Chess } from "chess.js";
   import { pieceSet } from "../stores";
 
   let boardContainer;
@@ -22,6 +23,7 @@
   }
 
   export let chessground;
+  export let chess;
   export let size;
 
   export let pieceSetOverride = null;

@@ -11,6 +11,9 @@ importers:
       bulma:
         specifier: ^1.0.1
         version: 1.0.1
+      chess.js:
+        specifier: 1.0.0-beta.8
+        version: 1.0.0-beta.8
       chessground:
         specifier: ^9.1.1
         version: 9.1.1
@@ -213,6 +216,9 @@ packages:
 
   bulma@1.0.1:
     resolution: {integrity: sha512-+xv/BIAEQakHkR0QVz+s+RjNqfC53Mx9ZYexyaFNFo9wx5i76HXArNdwW7bccyJxa5mgV/T5DcVGqsAB19nBJQ==}
+
+  chess.js@1.0.0-beta.8:
+    resolution: {integrity: sha512-UngzUMXmexcQaQA/UEJuJj5vatEy34awYMD5YMOp/FW3HM7lqspp7ymYs5JAmquDq0WROtURRfSffoa/vrCCyw==}
 
   chessground@9.1.1:
     resolution: {integrity: sha512-X4xrBICrixaLATCn+jGEzk58UXcas+9QqJnwVq9nT7AaX2M1CJLMA0vC7noG0s6Tr2zoAHZ1FOviE5b05MgduQ==}
@@ -525,6 +531,8 @@ snapshots:
   builtin-modules@3.3.0: {}
 
   bulma@1.0.1: {}
+
+  chess.js@1.0.0-beta.8: {}
 
   chessground@9.1.1: {}
 

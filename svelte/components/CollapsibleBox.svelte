@@ -2,7 +2,7 @@
   import { slide } from "svelte/transition";
   import { writable } from "svelte/store";
   import { tweened } from "svelte/motion";
-  import { cubicIn, cubicOut, linear } from "svelte/easing";
+  import { linear } from "svelte/easing";
 
   export let defaultOpen = false;
   export let title = "";
