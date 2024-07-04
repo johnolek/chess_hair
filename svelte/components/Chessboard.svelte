@@ -105,6 +105,16 @@
     updateChessground();
   }
 
+  export function reset() {
+    chessInstance.reset();
+    updateChessground();
+  }
+
+  export function clear() {
+    chessInstance.clear();
+    updateChessground();
+  }
+
   export function move(move) {
     chessInstance.move(move);
     updateChessground();

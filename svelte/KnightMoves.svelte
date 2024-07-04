@@ -3,6 +3,7 @@
 
   import Chessboard from "./components/Chessboard.svelte";
   import ProgressTimer from "./components/ProgressTimer.svelte";
+  import { Chess } from "chess.js";
 
   import { knightMovesData } from "src/knight_moves_data";
   import Config from "src/local_config";
@@ -10,6 +11,8 @@
   import { Util } from "src/util";
 
   let chessground;
+  let chessboard;
+  let fen;
   let jsonData = knightMovesData;
   let positionData = null;
   let correctCount = 0;
@@ -189,21 +192,12 @@
     return Math.floor(Math.random() * max);
   }
 
-  function getRandomElement(array) {
-    const index = getRandomIndex(array.length);
-    return array[index];
-  }
-
   function sortRandomly(array) {
     return array.sort(() => Math.random() - 0.5);
   }
 
   function getMinimumMovesForCurrentPosition() {
     return positionData.min_length;
-  }
-
-  function getPathsForCurrentPosition() {
-    return positionData.paths;
   }
 
   function processButton(id) {
@@ -372,6 +366,7 @@
   }
 
   function newPosition() {
+    chessboard.clear();
     clearDrawings();
     answerShown = false;
     const keys = Object.keys(jsonData);
@@ -435,7 +430,13 @@
 <div class="columns">
   <div class="column column2 is-6-desktop">
     <div class="block">
-      <Chessboard {chessgroundConfig} bind:chessground bind:size={boardWidth} />
+      <Chessboard
+        {chessgroundConfig}
+        bind:fen
+        bind:chessground
+        bind:this={chessboard}
+        bind:size={boardWidth}
+      />
     </div>
 
     {#if gameRunning}
