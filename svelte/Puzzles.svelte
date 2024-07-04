@@ -539,6 +539,9 @@
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
         <h3>Current Puzzles</h3>
+        {#await getPuzzleData(currentPuzzle.puzzleId) then data}
+          Rating: {data.puzzle.rating}
+        {/await}
         <table class="table is-fullwidth is-narrow is-striped">
           <thead>
             <tr>
