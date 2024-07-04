@@ -3,31 +3,21 @@
   import { Chessground } from "chessground";
   import { Chess } from "chess.js";
   import { pieceSet } from "../stores";
+  import { createEventDispatcher } from "svelte";
 
   let boardContainer;
   export let chessgroundConfig = {};
   export let orientation = "white";
 
-  export let fen = null;
-
-  $: {
-    if (chessground && fen) {
-      chessground.set({
-        fen: fen,
-        highlight: {
-          lastMove: false,
-          check: false,
-        },
-      });
-    }
-  }
-
+  export let fen;
   export let chessground;
-  export let chess;
   export let size;
 
+  let chessInstance = new Chess();
   export let pieceSetOverride = null;
   export let boardStyleOverride = null;
+
+  const dispatch = createEventDispatcher();
 
   let maxWidth = "70vh";
 
@@ -37,8 +27,61 @@
     }
   }
 
+  $: {
+    if (fen && chessground) {
+      chessInstance.load(fen);
+      updateChessground();
+    }
+  }
+
+  function getLegalMoves() {
+    const moves = chessInstance.moves({ verbose: true });
+    const dests = new Map();
+    moves.forEach((move) => {
+      if (!dests.has(move.from)) dests.set(move.from, []);
+      dests.get(move.from).push(move.to);
+    });
+    return dests;
+  }
+
+  function updateChessground() {
+    const legalMoves = getLegalMoves();
+    chessground.set({
+      fen: chessInstance.fen(),
+      movable: {
+        dests: legalMoves,
+      },
+    });
+  }
+
+  function handleMove(from, to) {
+    const move = chessInstance.move({ from, to, promotion: "q" }); // default to queen for simplicity
+    if (move) {
+      updateChessground();
+      dispatch("move", { move });
+    }
+  }
+
+  export function undo() {
+    chessInstance.undo();
+    updateChessground();
+  }
+
+  export function move(move) {
+    chessInstance.move(move);
+    updateChessground();
+  }
+
   onMount(() => {
-    chessground = Chessground(boardContainer, chessgroundConfig);
+    chessground = Chessground(boardContainer, {
+      ...chessgroundConfig,
+      fen: chessInstance.fen(),
+      movable: {
+        events: {
+          after: handleMove,
+        },
+      },
+    });
   });
 </script>
 
@@ -75,6 +118,7 @@
     position: relative;
     width: 100%;
   }
+
   .centered-content {
     position: absolute;
     top: 50%;

@@ -1,15 +1,11 @@
 <script>
   import Chessboard from "./components/Chessboard.svelte";
-  import { INITIAL_FEN, makeFen, parseFen } from "chessops/fen";
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { Util } from "src/util";
-  import { parsePgn, startingPosition } from "chessops/pgn";
-  import { parseSan } from "chessops/san";
-  import { Chess, makeUci, parseUci } from "chessops";
-  import { makeSquare, parseSquare } from "chessops/util";
   import { persisted } from "svelte-persisted-store";
+  import { Chess } from "chess.js";
   import PuzzleHistoryProcessor from "./components/PuzzleHistoryProcessor.svelte";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
 
@@ -143,10 +139,9 @@
 
   // Chess board stuff
   let fen;
-  let chessground;
+  let chessboard;
   let orientation = "white";
   let chessgroundConfig = {
-    fen: INITIAL_FEN,
     coordinates: true,
     animation: {
       enabled: true,
@@ -165,9 +160,6 @@
       free: false,
       color: "both",
       dests: new Map(),
-      events: {
-        after: handleUserMove,
-      },
     },
     orientation: orientation,
   };
@@ -398,89 +390,23 @@
     // Clone so we don't cache a value that gets shifted later
     moves = [...next.puzzle.solution];
 
-    const pgn = parsePgn(next.game.pgn)[0];
-
-    position = startingPosition(pgn.headers).unwrap();
-    const allNodes = [...pgn.moves.mainlineNodes()];
-
-    for (let i = 0; i < allNodes.length - 1; i++) {
-      const node = allNodes[i];
-      const move = parseSan(position, node.data.san);
-      position.play(move);
-    }
-
-    const lastMove = parseSan(position, allNodes[allNodes.length - 1].data.san);
-
-    setChessgroundFromPosition();
+    const chessInstance = new Chess();
+    chessInstance.loadPgn(next.game.pgn);
+    fen = chessInstance.fen();
 
     setTimeout(() => {
-      position.play(lastMove);
-      chessground.move(makeSquare(lastMove.from), makeSquare(lastMove.to));
-      updateLegalMoves();
       puzzleShownAt = Util.currentMicrotime();
     }, 300);
   }
 
-  function setChessgroundFromPosition() {
-    fen = makeFen(position.toSetup());
-    chessground.set({
-      fen: fen,
-    });
-    updateLegalMoves();
-  }
-
-  function updateLegalMoves() {
-    fen = makeFen(position.toSetup());
-    const legalMoves = getLegalMovesForFen(fen);
-    chessground.set({
-      movable: {
-        dests: legalMoves,
-      },
-    });
-  }
-
-  function getLegalMovesForFen(fen) {
-    const setup = parseFen(fen).unwrap();
-    const chess = Chess.fromSetup(setup).unwrap();
-    const destsMap = chess.allDests();
-
-    const destsMapInSan = new Map();
-
-    for (const [key, value] of destsMap.entries()) {
-      const destsArray = Array.from(value).map((sq) => makeSquare(sq));
-      destsMapInSan.set(makeSquare(key), destsArray);
-    }
-
-    return destsMapInSan;
-  }
-
-  function handleUserMove(orig, dest) {
+  function handleUserMove(moveEvent) {
+    const move = moveEvent.detail.move;
     const correctMove = moves[0];
-    const origSquare = parseSquare(orig);
-    const destSquare = parseSquare(dest);
-    let move = { from: origSquare, to: destSquare };
-    if (
-      chessground.state.pieces.get(dest)?.role === "pawn" &&
-      (dest[1] === "1" || dest[1] === "8")
-    ) {
-      move = { ...move, promotion: "queen" };
-      chessground.setPieces(
-        new Map([[dest, { color: orientation, role: "queen" }]]),
-      );
-    }
-    const uciMove = makeUci(move);
-    if (wouldBeCheckmate(orig, dest)) {
-      return handlePuzzleComplete();
-    }
-    if (uciMove === correctMove) {
-      position.play(move);
+    if (move.lan === correctMove) {
       moves.shift(); // remove the user move first
       const computerMove = moves.shift();
       if (computerMove) {
-        const move = parseUci(computerMove);
-        position.play(move);
-        chessground.move(makeSquare(move.from), makeSquare(move.to));
-        updateLegalMoves();
+        chessboard.move(computerMove);
       } else {
         return handlePuzzleComplete();
       }
@@ -488,17 +414,9 @@
       madeMistake = true;
       showFailure("Nope!");
       setTimeout(() => {
-        setChessgroundFromPosition();
-      }, 200);
+        chessboard.undo();
+      }, 300);
     }
-  }
-
-  function wouldBeCheckmate(orig, dest) {
-    const origSquare = parseSquare(orig);
-    const destSquare = parseSquare(dest);
-    const clonedPosition = position.clone();
-    clonedPosition.play({ from: origSquare, to: destSquare });
-    return clonedPosition.isCheckmate();
   }
 
   function handlePuzzleComplete() {
@@ -564,7 +482,13 @@
   <div class="column is-6-desktop">
     <div class="block">
       {#if activePuzzles.length > 0 && currentPuzzle}
-        <Chessboard {chessgroundConfig} {orientation} bind:chessground>
+        <Chessboard
+          {fen}
+          {chessgroundConfig}
+          {orientation}
+          bind:this={chessboard}
+          on:move={handleUserMove}
+        >
           <div slot="centered-content">
             {#if successMessage}
               <span transition:fade class="tag is-success is-size-4">
