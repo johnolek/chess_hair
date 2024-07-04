@@ -409,7 +409,9 @@
       moves.shift(); // remove the user move first
       const computerMove = moves.shift();
       if (computerMove) {
-        chessboard.move(computerMove);
+        setTimeout(() => {
+          chessboard.move(computerMove);
+        }, 300);
       } else {
         return handlePuzzleComplete();
       }

@@ -55,8 +55,16 @@
 
   function updateChessground() {
     const legalMoves = getLegalMoves();
+    const history = chessInstance.history({ verbose: true });
+    let lastMove = null;
+    if (history && history[history.length - 1]) {
+      lastMove = history[history.length - 1];
+    }
     chessground.set({
+      check: chessInstance.inCheck(),
       fen: chessInstance.fen(),
+      lastMove: lastMove ? [lastMove.from, lastMove.to] : null,
+      turnColor: chessInstance.turn() === "w" ? "white" : "black",
       movable: {
         free: false,
         dests: legalMoves,
