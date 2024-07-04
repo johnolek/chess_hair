@@ -2,17 +2,13 @@
   import { onMount } from "svelte";
   import Chessboard from "./components/Chessboard.svelte";
 
-  import { parsePgn, startingPosition } from "chessops/pgn";
   import { Util } from "src/util";
   import { getRandomGame } from "src/random_games";
-  import { makeSan, parseSan } from "chessops/san";
-  import { makeFen, parseFen } from "chessops/fen";
-  import { makeSquare, parseSquare } from "chessops/util";
   import { persisted } from "svelte-persisted-store";
   import ProgressTimer from "./components/ProgressTimer.svelte";
-  import { Chess } from "chessops";
   import Counter from "./components/Counter.svelte";
   import DisappearingContent from "./components/DisappearingContent.svelte";
+  import { Chess } from "chess.js";
 
   const orientation = persisted("notation.orientation", "white");
   const highScoreBlack = persisted("notation.highScoreBlack", 0);
@@ -81,30 +77,21 @@
   let correctBonus = 0;
   let incorrectPenalty = 10;
 
-  function handleUserMove(orig, dest) {
-    const setup = parseFen(fen).unwrap();
-    const chess = Chess.fromSetup(setup).unwrap();
-
-    const origSquare = parseSquare(orig);
-    const destSquare = parseSquare(dest);
-
-    const move = { from: origSquare, to: destSquare };
-
-    const san = makeSan(chess, move);
-    handleAnswer(san, nextMove);
+  function handleUserMove(moveEvent) {
+    const move = moveEvent.detail.move;
+    handleAnswer(move.san, nextMove);
   }
 
   function newPosition() {
-    const game = getRandomGame();
-    const pgnGame = parsePgn(game.pgn)[0];
-    const totalPlies = [...pgnGame.moves.mainline()].length;
-
-    const random = Util.getRandomIntBetween(1, totalPlies - 1);
-    const positionResult = startingPosition(pgnGame.headers);
-    const position = positionResult.unwrap();
-    const allNodes = [...pgnGame.moves.mainlineNodes()];
     const previousMove = nextMove;
-    const candidateMove = allNodes[random].data.san;
+
+    const game = getRandomGame();
+    const chess = new Chess();
+    chess.loadPgn(game.pgn);
+    const history = chess.history({ verbose: true });
+    const moveCount = history.length;
+    const random = Util.getRandomIntBetween(1, moveCount - 1);
+    const candidateMove = history[random].san;
 
     if (
       candidateMove.includes("=") || // no promotions
@@ -115,28 +102,9 @@
       return newPosition();
     }
 
+    fen = history[random - 1].after;
     nextMove = candidateMove;
-
     colorToMove = whoseMoveIsIt(random);
-
-    let i;
-    let move;
-
-    for (i = 0; i < random; i++) {
-      const node = allNodes[i];
-      move = parseSan(position, node.data.san);
-      position.play(move);
-    }
-
-    // Bound to Chessboard, automatically updates
-    fen = makeFen(position.toSetup());
-    const legalMoves = getLegalMovesForFen(fen);
-
-    chessground.set({
-      movable: {
-        dests: legalMoves,
-      },
-    });
     positionShownAt = new Date().getTime();
   }
 
@@ -185,21 +153,6 @@
     }
   }
 
-  function getLegalMovesForFen(fen) {
-    const setup = parseFen(fen).unwrap();
-    const chess = Chess.fromSetup(setup).unwrap();
-    const destsMap = chess.allDests();
-
-    const destsMapInSan = new Map();
-
-    for (const [key, value] of destsMap.entries()) {
-      const destsArray = Array.from(value).map((sq) => makeSquare(sq));
-      destsMapInSan.set(makeSquare(key), destsArray);
-    }
-
-    return destsMapInSan;
-  }
-
   onMount(() => {
     newPosition();
   });
@@ -214,6 +167,7 @@
         bind:chessground
         orientation={$orientation}
         bind:size={boardSize}
+        on:move={handleUserMove}
       >
         <DisappearingContent key={nextMove} slot="centered-content">
           <span class="tag is-size-3 is-{colorToMove}">
