@@ -1,4 +1,8 @@
 import { Util } from 'src/util';
+import Config, { ConfigForm } from 'src/local_config';
+import { boardOptions, pieceSetOptions } from 'src/board/options';
+import { knightMovesData } from 'src/knight_moves_data';
+import { getRandomGame } from 'src/random_games';
 
 /** @returns {void} */
 function noop() {}
@@ -138,6 +142,14 @@ function get_all_dirty_from_scope($$scope) {
 		return dirty;
 	}
 	return -1;
+}
+
+/** @param {number | string} value
+ * @returns {[number, string]}
+ */
+function split_css_unit(value) {
+	const split = typeof value === 'string' && value.match(/^\s*(-?[\d.]+)([^\s]*)\s*$/);
+	return split ? [parseFloat(split[1]), split[2] || 'px'] : [/** @type {number} */ (value), 'px'];
 }
 
 const is_client = typeof window !== 'undefined';
@@ -286,6 +298,15 @@ function element(name) {
 }
 
 /**
+ * @template {keyof SVGElementTagNameMap} K
+ * @param {K} name
+ * @returns {SVGElement}
+ */
+function svg_element(name) {
+	return document.createElementNS('http://www.w3.org/2000/svg', name);
+}
+
+/**
  * @param {string} data
  * @returns {Text}
  */
@@ -336,6 +357,25 @@ function prevent_default(fn) {
 function attr(node, attribute, value) {
 	if (value == null) node.removeAttribute(attribute);
 	else if (node.getAttribute(attribute) !== value) node.setAttribute(attribute, value);
+}
+
+/**
+ * @param {HTMLInputElement[]} group
+ * @returns {{ p(...inputs: HTMLInputElement[]): void; r(): void; }}
+ */
+function init_binding_group(group) {
+	/**
+	 * @type {HTMLInputElement[]} */
+	let _inputs;
+	return {
+		/* push */ p(...inputs) {
+			_inputs = inputs;
+			_inputs.forEach((input) => group.push(input));
+		},
+		/* remove */ r() {
+			_inputs.forEach((input) => group.splice(group.indexOf(input), 1));
+		}
+	};
 }
 
 /** @returns {number} */
@@ -705,6 +745,73 @@ function onMount(fn) {
 	get_current_component().$$.on_mount.push(fn);
 }
 
+/**
+ * Schedules a callback to run immediately after the component has been updated.
+ *
+ * The first time the callback runs will be after the initial `onMount`
+ *
+ * https://svelte.dev/docs/svelte#afterupdate
+ * @param {() => any} fn
+ * @returns {void}
+ */
+function afterUpdate(fn) {
+	get_current_component().$$.after_update.push(fn);
+}
+
+/**
+ * Schedules a callback to run immediately before the component is unmounted.
+ *
+ * Out of `onMount`, `beforeUpdate`, `afterUpdate` and `onDestroy`, this is the
+ * only one that runs inside a server-side component.
+ *
+ * https://svelte.dev/docs/svelte#ondestroy
+ * @param {() => any} fn
+ * @returns {void}
+ */
+function onDestroy(fn) {
+	get_current_component().$$.on_destroy.push(fn);
+}
+
+/**
+ * Creates an event dispatcher that can be used to dispatch [component events](https://svelte.dev/docs#template-syntax-component-directives-on-eventname).
+ * Event dispatchers are functions that can take two arguments: `name` and `detail`.
+ *
+ * Component events created with `createEventDispatcher` create a
+ * [CustomEvent](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent).
+ * These events do not [bubble](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#Event_bubbling_and_capture).
+ * The `detail` argument corresponds to the [CustomEvent.detail](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/detail)
+ * property and can contain any type of data.
+ *
+ * The event dispatcher can be typed to narrow the allowed event names and the type of the `detail` argument:
+ * ```ts
+ * const dispatch = createEventDispatcher<{
+ *  loaded: never; // does not take a detail argument
+ *  change: string; // takes a detail argument of type string, which is required
+ *  optional: number | null; // takes an optional detail argument of type number
+ * }>();
+ * ```
+ *
+ * https://svelte.dev/docs/svelte#createeventdispatcher
+ * @template {Record<string, any>} [EventMap=any]
+ * @returns {import('./public.js').EventDispatcher<EventMap>}
+ */
+function createEventDispatcher() {
+	const component = get_current_component();
+	return (type, detail, { cancelable = false } = {}) => {
+		const callbacks = component.$$.callbacks[type];
+		if (callbacks) {
+			// TODO are there situations where events could be dispatched
+			// in a server (non-DOM) environment?
+			const event = custom_event(/** @type {string} */ (type), detail, { cancelable });
+			callbacks.slice().forEach((fn) => {
+				fn.call(component, event);
+			});
+			return !event.defaultPrevented;
+		}
+		return true;
+	};
+}
+
 const dirty_components = [];
 const binding_callbacks = [];
 
@@ -930,6 +1037,86 @@ const null_transition = { duration: 0 };
  * @param {Element & ElementCSSInlineStyle} node
  * @param {TransitionFn} fn
  * @param {any} params
+ * @returns {{ start(): void; invalidate(): void; end(): void; }}
+ */
+function create_in_transition(node, fn, params) {
+	/**
+	 * @type {TransitionOptions} */
+	const options = { direction: 'in' };
+	let config = fn(node, params, options);
+	let running = false;
+	let animation_name;
+	let task;
+	let uid = 0;
+
+	/**
+	 * @returns {void} */
+	function cleanup() {
+		if (animation_name) delete_rule(node, animation_name);
+	}
+
+	/**
+	 * @returns {void} */
+	function go() {
+		const {
+			delay = 0,
+			duration = 300,
+			easing = identity,
+			tick = noop,
+			css
+		} = config || null_transition;
+		if (css) animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+		tick(0, 1);
+		const start_time = now() + delay;
+		const end_time = start_time + duration;
+		if (task) task.abort();
+		running = true;
+		add_render_callback(() => dispatch(node, true, 'start'));
+		task = loop((now) => {
+			if (running) {
+				if (now >= end_time) {
+					tick(1, 0);
+					dispatch(node, true, 'end');
+					cleanup();
+					return (running = false);
+				}
+				if (now >= start_time) {
+					const t = easing((now - start_time) / duration);
+					tick(t, 1 - t);
+				}
+			}
+			return running;
+		});
+	}
+	let started = false;
+	return {
+		start() {
+			if (started) return;
+			started = true;
+			delete_rule(node);
+			if (is_function(config)) {
+				config = config(options);
+				wait().then(go);
+			} else {
+				go();
+			}
+		},
+		invalidate() {
+			started = false;
+		},
+		end() {
+			if (running) {
+				cleanup();
+				running = false;
+			}
+		}
+	};
+}
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {TransitionFn} fn
+ * @param {any} params
  * @param {boolean} intro
  * @returns {{ run(b: 0 | 1): void; end(): void; }}
  */
@@ -1137,9 +1324,22 @@ function destroy_block(block, lookup) {
 }
 
 /** @returns {void} */
+function outro_and_destroy_block(block, lookup) {
+	transition_out(block, 1, 1, () => {
+		lookup.delete(block.key);
+	});
+}
+
+/** @returns {void} */
 function fix_and_destroy_block(block, lookup) {
 	block.f();
 	destroy_block(block, lookup);
+}
+
+/** @returns {void} */
+function fix_and_outro_and_destroy_block(block, lookup) {
+	block.f();
+	outro_and_destroy_block(block, lookup);
 }
 
 /** @returns {any[]} */
@@ -3902,9 +4102,9 @@ boardStyle.subscribe((value) => {
 });
 
 /* svelte/components/Chessboard.svelte generated by Svelte v4.2.18 */
-const file$2 = "svelte/components/Chessboard.svelte";
+const file$b = "svelte/components/Chessboard.svelte";
 
-function add_css$1(target) {
+function add_css$4(target) {
 	append_styles(target, "svelte-iagpad", ".board-wrapper.svelte-iagpad{position:relative;width:100%}.centered-content.svelte-iagpad{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuXG4gIGxldCBib2FyZENvbnRhaW5lcjtcbiAgZXhwb3J0IGxldCBjaGVzc2dyb3VuZENvbmZpZyA9IHt9O1xuICBleHBvcnQgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuXG4gIGV4cG9ydCBsZXQgZmVuID0gbnVsbDtcblxuICAkOiB7XG4gICAgaWYgKGNoZXNzZ3JvdW5kICYmIGZlbikge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgICAgZmVuOiBmZW4sXG4gICAgICAgIGhpZ2hsaWdodDoge1xuICAgICAgICAgIGxhc3RNb3ZlOiBmYWxzZSxcbiAgICAgICAgICBjaGVjazogZmFsc2UsXG4gICAgICAgIH0sXG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGxldCBtYXhXaWR0aCA9IFwiNzB2aFwiO1xuXG4gICQ6IHtcbiAgICBpZiAob3JpZW50YXRpb24gJiYgY2hlc3Nncm91bmQpIHtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldCh7IG9yaWVudGF0aW9uOiBvcmllbnRhdGlvbiB9KTtcbiAgICB9XG4gIH1cblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBjaGVzc2dyb3VuZCA9IENoZXNzZ3JvdW5kKGJvYXJkQ29udGFpbmVyLCBjaGVzc2dyb3VuZENvbmZpZyk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbnsjaWYgcGllY2VTZXRPdmVycmlkZX1cbiAgPGxpbmtcbiAgICBpZD1cInBpZWNlLXNwcml0ZVwiXG4gICAgaHJlZj1cIi9waWVjZS1jc3Mve3BpZWNlU2V0T3ZlcnJpZGV9LmNzc1wiXG4gICAgcmVsPVwic3R5bGVzaGVldFwiXG4gIC8+XG57OmVsc2V9XG4gIDxsaW5rIGlkPVwicGllY2Utc3ByaXRlXCIgaHJlZj1cIi9waWVjZS1jc3MveyRwaWVjZVNldH0uY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG57L2lmfVxuXG48ZGl2XG4gIGNsYXNzPVwiYm9hcmQtd3JhcHBlclwiXG4gIHN0eWxlPVwibWF4LXdpZHRoOiB7bWF4V2lkdGh9XCJcbiAgYmluZDpjbGllbnRXaWR0aD17c2l6ZX1cbj5cbiAgPGRpdiBjbGFzcz1cImNlbnRlcmVkLWNvbnRlbnRcIj5cbiAgICA8c2xvdCBuYW1lPVwiY2VudGVyZWQtY29udGVudFwiPjwvc2xvdD5cbiAgPC9kaXY+XG4gIDxkaXZcbiAgICBjbGFzcz1cImlzMmQge2JvYXJkU3R5bGVPdmVycmlkZSA/IGJvYXJkU3R5bGVPdmVycmlkZSA6ICcnfVwiXG4gICAgYmluZDp0aGlzPXtib2FyZENvbnRhaW5lcn1cbiAgICBzdHlsZT1cInBvc2l0aW9uOiByZWxhdGl2ZTt3aWR0aDoge3NpemV9cHg7IGhlaWdodDoge3NpemV9cHhcIlxuICA+PC9kaXY+XG4gIDxkaXYgY2xhc3M9XCJibG9jayBtdC0yXCI+XG4gICAgPHNsb3QgbmFtZT1cImJlbG93LWJvYXJkXCI+PC9zbG90PlxuICA8L2Rpdj5cbjwvZGl2PlxuXG48c3R5bGU+XG4gIC5ib2FyZC13cmFwcGVyIHtcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7XG4gICAgd2lkdGg6IDEwMCU7XG4gIH1cbiAgLmNlbnRlcmVkLWNvbnRlbnQge1xuICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTtcbiAgICB0b3A6IDUwJTtcbiAgICBsZWZ0OiA1MCU7XG4gICAgdHJhbnNmb3JtOiB0cmFuc2xhdGUoLTUwJSwgLTUwJSk7XG4gICAgei1pbmRleDogMzsgLyogcmVxdWlyZWQgdG8gYXBwZWFyIGluIGZyb250IG9mIHBpZWNlcyAqL1xuICAgIG9wYWNpdHk6IDAuODtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUF1RUUsNEJBQWUsQ0FDYixRQUFRLENBQUUsUUFBUSxDQUNsQixLQUFLLENBQUUsSUFDVCxDQUNBLCtCQUFrQixDQUNoQixRQUFRLENBQUUsUUFBUSxDQUNsQixHQUFHLENBQUUsR0FBRyxDQUNSLElBQUksQ0FBRSxHQUFHLENBQ1QsU0FBUyxDQUFFLFVBQVUsSUFBSSxDQUFDLENBQUMsSUFBSSxDQUFDLENBQ2hDLE9BQU8sQ0FBRSxDQUFDLENBQ1YsT0FBTyxDQUFFLEdBQ1gifQ== */");
 }
 
@@ -3914,7 +4114,7 @@ const get_centered_content_slot_changes = dirty => ({});
 const get_centered_content_slot_context = ctx => ({});
 
 // (49:0) {:else}
-function create_else_block$2(ctx) {
+function create_else_block$4(ctx) {
 	let link;
 	let link_href_value;
 
@@ -3924,7 +4124,7 @@ function create_else_block$2(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[4] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$2, 49, 2, 931);
+			add_location(link, file$b, 49, 2, 931);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -3943,7 +4143,7 @@ function create_else_block$2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_else_block$2.name,
+		id: create_else_block$4.name,
 		type: "else",
 		source: "(49:0) {:else}",
 		ctx
@@ -3953,7 +4153,7 @@ function create_else_block$2(ctx) {
 }
 
 // (43:0) {#if pieceSetOverride}
-function create_if_block$2(ctx) {
+function create_if_block$6(ctx) {
 	let link;
 	let link_href_value;
 
@@ -3963,7 +4163,7 @@ function create_if_block$2(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSetOverride*/ ctx[1] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$2, 43, 2, 822);
+			add_location(link, file$b, 43, 2, 822);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -3982,7 +4182,7 @@ function create_if_block$2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block$2.name,
+		id: create_if_block$6.name,
 		type: "if",
 		source: "(43:0) {#if pieceSetOverride}",
 		ctx
@@ -3991,7 +4191,7 @@ function create_if_block$2(ctx) {
 	return block;
 }
 
-function create_fragment$2(ctx) {
+function create_fragment$c(ctx) {
 	let t0;
 	let div3;
 	let div0;
@@ -4004,8 +4204,8 @@ function create_fragment$2(ctx) {
 	let current;
 
 	function select_block_type(ctx, dirty) {
-		if (/*pieceSetOverride*/ ctx[1]) return create_if_block$2;
-		return create_else_block$2;
+		if (/*pieceSetOverride*/ ctx[1]) return create_if_block$6;
+		return create_else_block$4;
 	}
 
 	let current_block_type = select_block_type(ctx);
@@ -4028,7 +4228,7 @@ function create_fragment$2(ctx) {
 			div2 = element("div");
 			if (below_board_slot) below_board_slot.c();
 			attr_dev(div0, "class", "centered-content svelte-iagpad");
-			add_location(div0, file$2, 57, 2, 1107);
+			add_location(div0, file$b, 57, 2, 1107);
 
 			attr_dev(div1, "class", div1_class_value = "is2d " + (/*boardStyleOverride*/ ctx[2]
 			? /*boardStyleOverride*/ ctx[2]
@@ -4037,13 +4237,13 @@ function create_fragment$2(ctx) {
 			set_style(div1, "position", "relative");
 			set_style(div1, "width", /*size*/ ctx[0] + "px");
 			set_style(div1, "height", /*size*/ ctx[0] + "px");
-			add_location(div1, file$2, 60, 2, 1191);
+			add_location(div1, file$b, 60, 2, 1191);
 			attr_dev(div2, "class", "block mt-2");
-			add_location(div2, file$2, 65, 2, 1368);
+			add_location(div2, file$b, 65, 2, 1368);
 			attr_dev(div3, "class", "board-wrapper svelte-iagpad");
 			set_style(div3, "max-width", /*maxWidth*/ ctx[5]);
 			add_render_callback(() => /*div3_elementresize_handler*/ ctx[13].call(div3));
-			add_location(div3, file$2, 52, 0, 1016);
+			add_location(div3, file$b, 52, 0, 1016);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -4155,7 +4355,7 @@ function create_fragment$2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_fragment$2.name,
+		id: create_fragment$c.name,
 		type: "component",
 		source: "",
 		ctx
@@ -4164,7 +4364,7 @@ function create_fragment$2(ctx) {
 	return block;
 }
 
-function instance$2($$self, $$props, $$invalidate) {
+function instance$c($$self, $$props, $$invalidate) {
 	let $pieceSet;
 	validate_store(pieceSet, 'pieceSet');
 	component_subscribe($$self, pieceSet, $$value => $$invalidate(4, $pieceSet = $$value));
@@ -4309,8 +4509,8 @@ class Chessboard extends SvelteComponentDev {
 		init(
 			this,
 			options,
-			instance$2,
-			create_fragment$2,
+			instance$c,
+			create_fragment$c,
 			safe_not_equal,
 			{
 				chessgroundConfig: 7,
@@ -4321,14 +4521,14 @@ class Chessboard extends SvelteComponentDev {
 				pieceSetOverride: 1,
 				boardStyleOverride: 2
 			},
-			add_css$1
+			add_css$4
 		);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
 			tagName: "Chessboard",
 			options,
-			id: create_fragment$2.name
+			id: create_fragment$c.name
 		});
 	}
 
@@ -5196,9 +5396,43 @@ Distributed under MIT License https://github.com/mattdesl/eases/blob/master/LICE
  * @param {number} t
  * @returns {number}
  */
+function cubicInOut(t) {
+	return t < 0.5 ? 4.0 * t * t * t : 0.5 * Math.pow(2.0 * t - 2.0, 3.0) + 1.0;
+}
+
+/**
+ * https://svelte.dev/docs/svelte-easing
+ * @param {number} t
+ * @returns {number}
+ */
 function cubicOut(t) {
 	const f = t - 1.0;
 	return f * f * f + 1.0;
+}
+
+/**
+ * Animates a `blur` filter alongside an element's opacity.
+ *
+ * https://svelte.dev/docs/svelte-transition#blur
+ * @param {Element} node
+ * @param {import('./public').BlurParams} [params]
+ * @returns {import('./public').TransitionConfig}
+ */
+function blur(
+	node,
+	{ delay = 0, duration = 400, easing = cubicInOut, amount = 5, opacity = 0 } = {}
+) {
+	const style = getComputedStyle(node);
+	const target_opacity = +style.opacity;
+	const f = style.filter === 'none' ? '' : style.filter;
+	const od = target_opacity * (1 - opacity);
+	const [value, unit] = split_css_unit(amount);
+	return {
+		delay,
+		duration,
+		easing,
+		css: (_t, u) => `opacity: ${target_opacity - od * u}; filter: ${f} blur(${u * value}${unit});`
+	};
 }
 
 /**
@@ -5216,6 +5450,34 @@ function fade(node, { delay = 0, duration = 400, easing = identity } = {}) {
 		duration,
 		easing,
 		css: (t) => `opacity: ${t * o}`
+	};
+}
+
+/**
+ * Animates the x and y positions and the opacity of an element. `in` transitions animate from the provided values, passed as parameters to the element's default values. `out` transitions animate from the element's default values to the provided values.
+ *
+ * https://svelte.dev/docs/svelte-transition#fly
+ * @param {Element} node
+ * @param {import('./public').FlyParams} [params]
+ * @returns {import('./public').TransitionConfig}
+ */
+function fly(
+	node,
+	{ delay = 0, duration = 400, easing = cubicOut, x = 0, y = 0, opacity = 0 } = {}
+) {
+	const style = getComputedStyle(node);
+	const target_opacity = +style.opacity;
+	const transform = style.transform === 'none' ? '' : style.transform;
+	const od = target_opacity * (1 - opacity);
+	const [xValue, xUnit] = split_css_unit(x);
+	const [yValue, yUnit] = split_css_unit(y);
+	return {
+		delay,
+		duration,
+		easing,
+		css: (t, u) => `
+			transform: ${transform} translate(${(1 - t) * xValue}${xUnit}, ${(1 - t) * yValue}${yUnit});
+			opacity: ${target_opacity - od * u}`
 	};
 }
 
@@ -7143,6 +7405,80 @@ const startingPosition = (headers) => {
         return n.ok(defaultPosition(rules));
 };
 
+const makeSanWithoutSuffix = (pos, move) => {
+    let san = '';
+    if (isDrop(move)) {
+        if (move.role !== 'pawn')
+            san = roleToChar(move.role).toUpperCase();
+        san += '@' + makeSquare(move.to);
+    }
+    else {
+        const role = pos.board.getRole(move.from);
+        if (!role)
+            return '--';
+        if (role === 'king' && (pos.board[pos.turn].has(move.to) || Math.abs(move.to - move.from) === 2)) {
+            san = move.to > move.from ? 'O-O' : 'O-O-O';
+        }
+        else {
+            const capture = pos.board.occupied.has(move.to)
+                || (role === 'pawn' && squareFile(move.from) !== squareFile(move.to));
+            if (role !== 'pawn') {
+                san = roleToChar(role).toUpperCase();
+                // Disambiguation
+                let others;
+                if (role === 'king')
+                    others = kingAttacks(move.to).intersect(pos.board.king);
+                else if (role === 'queen')
+                    others = queenAttacks(move.to, pos.board.occupied).intersect(pos.board.queen);
+                else if (role === 'rook')
+                    others = rookAttacks(move.to, pos.board.occupied).intersect(pos.board.rook);
+                else if (role === 'bishop')
+                    others = bishopAttacks(move.to, pos.board.occupied).intersect(pos.board.bishop);
+                else
+                    others = knightAttacks(move.to).intersect(pos.board.knight);
+                others = others.intersect(pos.board[pos.turn]).without(move.from);
+                if (others.nonEmpty()) {
+                    const ctx = pos.ctx();
+                    for (const from of others) {
+                        if (!pos.dests(from, ctx).has(move.to))
+                            others = others.without(from);
+                    }
+                    if (others.nonEmpty()) {
+                        let row = false;
+                        let column = others.intersects(SquareSet.fromRank(squareRank(move.from)));
+                        if (others.intersects(SquareSet.fromFile(squareFile(move.from))))
+                            row = true;
+                        else
+                            column = true;
+                        if (column)
+                            san += FILE_NAMES[squareFile(move.from)];
+                        if (row)
+                            san += RANK_NAMES[squareRank(move.from)];
+                    }
+                }
+            }
+            else if (capture)
+                san = FILE_NAMES[squareFile(move.from)];
+            if (capture)
+                san += 'x';
+            san += makeSquare(move.to);
+            if (move.promotion)
+                san += '=' + roleToChar(move.promotion).toUpperCase();
+        }
+    }
+    return san;
+};
+const makeSanAndPlay = (pos, move) => {
+    var _a;
+    const san = makeSanWithoutSuffix(pos, move);
+    pos.play(move);
+    if ((_a = pos.outcome()) === null || _a === void 0 ? void 0 : _a.winner)
+        return san + '#';
+    if (pos.isCheck())
+        return san + '+';
+    return san;
+};
+const makeSan = (pos, move) => makeSanAndPlay(pos.clone(), move);
 const parseSan = (pos, san) => {
     const ctx = pos.ctx();
     // Normal move
@@ -7209,10 +7545,10 @@ const parseSan = (pos, san) => {
 };
 
 /* svelte/components/PuzzleHistoryProcessor.svelte generated by Svelte v4.2.18 */
-const file$1 = "svelte/components/PuzzleHistoryProcessor.svelte";
+const file$a = "svelte/components/PuzzleHistoryProcessor.svelte";
 
 // (53:0) {:else}
-function create_else_block$1(ctx) {
+function create_else_block$3(ctx) {
 	let p;
 	let strong;
 	let t0_value = /*uniquePuzzleIds*/ ctx[7].length + "";
@@ -7225,8 +7561,8 @@ function create_else_block$1(ctx) {
 			strong = element("strong");
 			t0 = text(t0_value);
 			t1 = text(" puzzles loaded.");
-			add_location(strong, file$1, 53, 5, 1302);
-			add_location(p, file$1, 53, 2, 1299);
+			add_location(strong, file$a, 53, 5, 1302);
+			add_location(p, file$a, 53, 2, 1299);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, p, anchor);
@@ -7246,7 +7582,7 @@ function create_else_block$1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_else_block$1.name,
+		id: create_else_block$3.name,
 		type: "else",
 		source: "(53:0) {:else}",
 		ctx
@@ -7256,7 +7592,7 @@ function create_else_block$1(ctx) {
 }
 
 // (44:0) {#if uniquePuzzleIds.length === 0}
-function create_if_block_1$1(ctx) {
+function create_if_block_1$3(ctx) {
 	let div1;
 	let div0;
 	let textarea;
@@ -7274,13 +7610,13 @@ function create_if_block_1$1(ctx) {
 			button = element("button");
 			button.textContent = "Load Data";
 			attr_dev(textarea, "class", "textarea");
-			add_location(textarea, file$1, 46, 6, 1114);
+			add_location(textarea, file$a, 46, 6, 1114);
 			attr_dev(div0, "class", "control");
-			add_location(div0, file$1, 45, 4, 1086);
+			add_location(div0, file$a, 45, 4, 1086);
 			attr_dev(div1, "class", "field");
-			add_location(div1, file$1, 44, 2, 1062);
+			add_location(div1, file$a, 44, 2, 1062);
 			attr_dev(button, "class", "button is-primary");
-			add_location(button, file$1, 49, 2, 1199);
+			add_location(button, file$a, 49, 2, 1199);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div1, anchor);
@@ -7318,7 +7654,7 @@ function create_if_block_1$1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_1$1.name,
+		id: create_if_block_1$3.name,
 		type: "if",
 		source: "(44:0) {#if uniquePuzzleIds.length === 0}",
 		ctx
@@ -7328,7 +7664,7 @@ function create_if_block_1$1(ctx) {
 }
 
 // (99:0) {#if filterSubmitted}
-function create_if_block$1(ctx) {
+function create_if_block$5(ctx) {
 	let p;
 	let t0;
 	let strong;
@@ -7354,17 +7690,17 @@ function create_if_block$1(ctx) {
 			div1 = element("div");
 			div0 = element("div");
 			input = element("input");
-			add_location(strong, file$1, 100, 10, 2504);
-			add_location(p, file$1, 99, 2, 2490);
+			add_location(strong, file$a, 100, 10, 2504);
+			add_location(p, file$a, 99, 2, 2490);
 			attr_dev(input, "class", "input");
 			attr_dev(input, "type", "text");
 			input.readOnly = true;
 			input.value = input_value_value = /*uniqueFilteredPuzzleIds*/ ctx[6].join(",");
-			add_location(input, file$1, 104, 6, 2632);
+			add_location(input, file$a, 104, 6, 2632);
 			attr_dev(div0, "class", "control");
-			add_location(div0, file$1, 103, 4, 2604);
+			add_location(div0, file$a, 103, 4, 2604);
 			attr_dev(div1, "class", "field");
-			add_location(div1, file$1, 102, 2, 2580);
+			add_location(div1, file$a, 102, 2, 2580);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, p, anchor);
@@ -7405,7 +7741,7 @@ function create_if_block$1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block$1.name,
+		id: create_if_block$5.name,
 		type: "if",
 		source: "(99:0) {#if filterSubmitted}",
 		ctx
@@ -7414,7 +7750,7 @@ function create_if_block$1(ctx) {
 	return block;
 }
 
-function create_fragment$1(ctx) {
+function create_fragment$b(ctx) {
 	let t0;
 	let form;
 	let div1;
@@ -7447,13 +7783,13 @@ function create_fragment$1(ctx) {
 	let dispose;
 
 	function select_block_type(ctx, dirty) {
-		if (/*uniquePuzzleIds*/ ctx[7].length === 0) return create_if_block_1$1;
-		return create_else_block$1;
+		if (/*uniquePuzzleIds*/ ctx[7].length === 0) return create_if_block_1$3;
+		return create_else_block$3;
 	}
 
 	let current_block_type = select_block_type(ctx);
 	let if_block0 = current_block_type(ctx);
-	let if_block1 = /*filterSubmitted*/ ctx[5] && create_if_block$1(ctx);
+	let if_block1 = /*filterSubmitted*/ ctx[5] && create_if_block$5(ctx);
 
 	const block = {
 		c: function create() {
@@ -7493,50 +7829,50 @@ function create_fragment$1(ctx) {
 			if_block1_anchor = empty();
 			attr_dev(label0, "class", "label");
 			attr_dev(label0, "for", "minRating");
-			add_location(label0, file$1, 58, 4, 1445);
+			add_location(label0, file$a, 58, 4, 1445);
 			attr_dev(input0, "class", "input");
 			attr_dev(input0, "type", "number");
 			attr_dev(input0, "id", "minRating");
 			attr_dev(input0, "min", "0");
 			attr_dev(input0, "max", "4999");
-			add_location(input0, file$1, 60, 6, 1534);
+			add_location(input0, file$a, 60, 6, 1534);
 			attr_dev(div0, "class", "control");
-			add_location(div0, file$1, 59, 4, 1506);
+			add_location(div0, file$a, 59, 4, 1506);
 			attr_dev(div1, "class", "field");
-			add_location(div1, file$1, 57, 2, 1421);
+			add_location(div1, file$a, 57, 2, 1421);
 			attr_dev(label1, "class", "label");
 			attr_dev(label1, "for", "maxRating");
-			add_location(label1, file$1, 71, 4, 1729);
+			add_location(label1, file$a, 71, 4, 1729);
 			attr_dev(input1, "class", "input");
 			attr_dev(input1, "type", "number");
 			attr_dev(input1, "id", "maxRating");
 			attr_dev(input1, "min", input1_min_value = /*minRating*/ ctx[1] + 1);
 			attr_dev(input1, "max", "5000");
-			add_location(input1, file$1, 73, 6, 1818);
+			add_location(input1, file$a, 73, 6, 1818);
 			attr_dev(div2, "class", "control");
-			add_location(div2, file$1, 72, 4, 1790);
+			add_location(div2, file$a, 72, 4, 1790);
 			attr_dev(div3, "class", "field");
-			add_location(div3, file$1, 70, 2, 1705);
+			add_location(div3, file$a, 70, 2, 1705);
 			attr_dev(label2, "class", "checkbox");
 			attr_dev(label2, "for", "correctSolves");
-			add_location(label2, file$1, 84, 4, 2025);
+			add_location(label2, file$a, 84, 4, 2025);
 			attr_dev(input2, "type", "checkbox");
 			attr_dev(input2, "id", "correctSolves");
-			add_location(input2, file$1, 85, 4, 2097);
+			add_location(input2, file$a, 85, 4, 2097);
 			attr_dev(div4, "class", "field");
-			add_location(div4, file$1, 83, 2, 2001);
+			add_location(div4, file$a, 83, 2, 2001);
 			attr_dev(label3, "class", "checkbox");
 			attr_dev(label3, "for", "incorrectSolves");
-			add_location(label3, file$1, 88, 4, 2206);
+			add_location(label3, file$a, 88, 4, 2206);
 			attr_dev(input3, "type", "checkbox");
 			attr_dev(input3, "id", "incorrectSolves");
-			add_location(input3, file$1, 89, 4, 2282);
+			add_location(input3, file$a, 89, 4, 2282);
 			attr_dev(div5, "class", "field");
-			add_location(div5, file$1, 87, 2, 2182);
+			add_location(div5, file$a, 87, 2, 2182);
 			attr_dev(button, "class", "button is-primary");
 			attr_dev(button, "type", "submit");
-			add_location(button, file$1, 95, 2, 2393);
-			add_location(form, file$1, 56, 0, 1371);
+			add_location(button, file$a, 95, 2, 2393);
+			add_location(form, file$a, 56, 0, 1371);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7625,7 +7961,7 @@ function create_fragment$1(ctx) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 				} else {
-					if_block1 = create_if_block$1(ctx);
+					if_block1 = create_if_block$5(ctx);
 					if_block1.c();
 					if_block1.m(if_block1_anchor.parentNode, if_block1_anchor);
 				}
@@ -7653,7 +7989,7 @@ function create_fragment$1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_fragment$1.name,
+		id: create_fragment$b.name,
 		type: "component",
 		source: "",
 		ctx
@@ -7662,7 +7998,7 @@ function create_fragment$1(ctx) {
 	return block;
 }
 
-function instance$1($$self, $$props, $$invalidate) {
+function instance$b($$self, $$props, $$invalidate) {
 	let { $$slots: slots = {}, $$scope } = $$props;
 	validate_slots('PuzzleHistoryProcessor', slots, []);
 	let puzzleData = "";
@@ -7810,13 +8146,13 @@ function instance$1($$self, $$props, $$invalidate) {
 class PuzzleHistoryProcessor extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+		init(this, options, instance$b, create_fragment$b, safe_not_equal, {});
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
 			tagName: "PuzzleHistoryProcessor",
 			options,
-			id: create_fragment$1.name
+			id: create_fragment$b.name
 		});
 	}
 }
@@ -7824,27 +8160,27 @@ class PuzzleHistoryProcessor extends SvelteComponentDev {
 /* svelte/Puzzles.svelte generated by Svelte v4.2.18 */
 
 const { Map: Map_1 } = globals;
-const file = "svelte/Puzzles.svelte";
+const file$9 = "svelte/Puzzles.svelte";
 
-function add_css(target) {
+function add_css$3(target) {
 	append_styles(target, "svelte-1oimmcd", ".puzzle-id.svelte-1oimmcd{font-family:monospace}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHV6emxlcy5zdmVsdGUiLCJzb3VyY2VzIjpbIlB1enpsZXMuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDaGVzc2JvYXJkIGZyb20gXCIuL2NvbXBvbmVudHMvQ2hlc3Nib2FyZC5zdmVsdGVcIjtcbiAgaW1wb3J0IHsgSU5JVElBTF9GRU4sIG1ha2VGZW4sIHBhcnNlRmVuIH0gZnJvbSBcImNoZXNzb3BzL2ZlblwiO1xuICBpbXBvcnQgeyBvbk1vdW50IH0gZnJvbSBcInN2ZWx0ZVwiO1xuICBpbXBvcnQgeyBmYWRlIH0gZnJvbSBcInN2ZWx0ZS90cmFuc2l0aW9uXCI7XG4gIGltcG9ydCB7IGZsaXAgfSBmcm9tIFwic3ZlbHRlL2FuaW1hdGVcIjtcbiAgaW1wb3J0IHsgVXRpbCB9IGZyb20gXCJzcmMvdXRpbFwiO1xuICBpbXBvcnQgeyBwYXJzZVBnbiwgc3RhcnRpbmdQb3NpdGlvbiB9IGZyb20gXCJjaGVzc29wcy9wZ25cIjtcbiAgaW1wb3J0IHsgcGFyc2VTYW4gfSBmcm9tIFwiY2hlc3NvcHMvc2FuXCI7XG4gIGltcG9ydCB7IENoZXNzLCBtYWtlVWNpLCBwYXJzZVVjaSB9IGZyb20gXCJjaGVzc29wc1wiO1xuICBpbXBvcnQgeyBtYWtlU3F1YXJlLCBwYXJzZVNxdWFyZSB9IGZyb20gXCJjaGVzc29wcy91dGlsXCI7XG4gIGltcG9ydCB7IHBlcnNpc3RlZCB9IGZyb20gXCJzdmVsdGUtcGVyc2lzdGVkLXN0b3JlXCI7XG4gIGltcG9ydCBQdXp6bGVIaXN0b3J5UHJvY2Vzc29yIGZyb20gXCIuL2NvbXBvbmVudHMvUHV6emxlSGlzdG9yeVByb2Nlc3Nvci5zdmVsdGVcIjtcblxuICBjbGFzcyBSZXN1bHQge1xuICAgIGNvbnN0cnVjdG9yKHB1enpsZUlkLCBzZWVuQXQsIHNraXBwZWQsIG1hZGVNaXN0YWtlID0gZmFsc2UsIGRvbmVBdCA9IG51bGwpIHtcbiAgICAgIHRoaXMucHV6emxlSWQgPSBwdXp6bGVJZDtcbiAgICAgIHRoaXMuc2tpcHBlZCA9IHNraXBwZWQ7XG4gICAgICB0aGlzLm1hZGVNaXN0YWtlID0gbWFkZU1pc3Rha2U7XG4gICAgICB0aGlzLnNlZW5BdCA9IHNlZW5BdDtcbiAgICAgIHRoaXMuZG9uZUF0ID0gZG9uZUF0O1xuICAgIH1cblxuICAgIGdldER1cmF0aW9uKCkge1xuICAgICAgaWYgKHRoaXMuZG9uZUF0KSB7XG4gICAgICAgIHJldHVybiB0aGlzLmRvbmVBdCAtIHRoaXMuc2VlbkF0O1xuICAgICAgfVxuICAgIH1cblxuICAgIHdhc1N1Y2Nlc3NmdWwoKSB7XG4gICAgICByZXR1cm4gIXRoaXMuc2tpcHBlZCAmJiAhdGhpcy5tYWRlTWlzdGFrZSAmJiB0aGlzLmRvbmVBdDtcbiAgICB9XG5cbiAgICB3YXNGYWlsdXJlKCkge1xuICAgICAgcmV0dXJuIHRoaXMubWFkZU1pc3Rha2U7XG4gICAgfVxuICB9XG5cbiAgY2xhc3MgUHV6emxlIHtcbiAgICBjb25zdHJ1Y3RvcihwdXp6bGVJZCkge1xuICAgICAgdGhpcy5wdXp6bGVJZCA9IHB1enpsZUlkO1xuICAgIH1cblxuICAgIGxpY2hlc3NVcmwoKSB7XG4gICAgICByZXR1cm4gYGh0dHBzOi8vbGljaGVzcy5vcmcvdHJhaW5pbmcvJHt0aGlzLnB1enpsZUlkfWA7XG4gICAgfVxuXG4gICAgaGFzUmVzdWx0cygpIHtcbiAgICAgIHJldHVybiB0aGlzLmdldFJlc3VsdHMoKS5sZW5ndGggPj0gMTtcbiAgICB9XG5cbiAgICBoYXNCZWVuU29sdmVkKCkge1xuICAgICAgaWYgKCF0aGlzLmhhc1Jlc3VsdHMoKSkge1xuICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICB9XG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkuc29tZSgocmVzdWx0KSA9PiB7XG4gICAgICAgIHJldHVybiByZXN1bHQud2FzU3VjY2Vzc2Z1bCgpO1xuICAgICAgfSk7XG4gICAgfVxuXG4gICAgZ2V0UmVzdWx0cygpIHtcbiAgICAgIHJldHVybiAoJHJlc3VsdHNbdGhpcy5wdXp6bGVJZF0gfHwgW10pLm1hcChcbiAgICAgICAgKHJlc3VsdERhdGEpID0+XG4gICAgICAgICAgbmV3IFJlc3VsdChcbiAgICAgICAgICAgIHJlc3VsdERhdGEucHV6emxlSWQsXG4gICAgICAgICAgICByZXN1bHREYXRhLnNlZW5BdCxcbiAgICAgICAgICAgIHJlc3VsdERhdGEuc2tpcHBlZCxcbiAgICAgICAgICAgIHJlc3VsdERhdGEubWFkZU1pc3Rha2UsXG4gICAgICAgICAgICByZXN1bHREYXRhLmRvbmVBdCxcbiAgICAgICAgICApLFxuICAgICAgKTtcbiAgICB9XG5cbiAgICBnZXRUb3RhbFNvbHZlcygpIHtcbiAgICAgIHJldHVybiB0aGlzLmdldFJlc3VsdHMoKS5maWx0ZXIoKHJlc3VsdCkgPT4gcmVzdWx0Lndhc1N1Y2Nlc3NmdWwoKSlcbiAgICAgICAgLmxlbmd0aDtcbiAgICB9XG5cbiAgICBnZXRGYWlsdXJlQ291bnQoKSB7XG4gICAgICByZXR1cm4gdGhpcy5nZXRSZXN1bHRzKCkuZmlsdGVyKChyZXN1bHQpID0+IHJlc3VsdC53YXNGYWlsdXJlKCkpLmxlbmd0aDtcbiAgICB9XG5cbiAgICBnZXRTb2x2ZVN0cmVhaygpIHtcbiAgICAgIGxldCBzdHJlYWsgPSAwO1xuXG4gICAgICBpZiAoIXRoaXMuaGFzQmVlblNvbHZlZCgpKSB7XG4gICAgICAgIHJldHVybiBzdHJlYWs7XG4gICAgICB9XG5cbiAgICAgIGNvbnN0IHJlc3VsdHMgPSB0aGlzLmdldFJlc3VsdHMoKTtcblxuICAgICAgZm9yIChsZXQgaSA9IHJlc3VsdHMubGVuZ3RoIC0gMTsgaSA+PSAwOyBpLS0pIHtcbiAgICAgICAgaWYgKHJlc3VsdHNbaV0ud2FzU3VjY2Vzc2Z1bCgpKSB7XG4gICAgICAgICAgc3RyZWFrKys7XG4gICAgICAgIH0gZWxzZSB7XG4gICAgICAgICAgYnJlYWs7XG4gICAgICAgIH1cbiAgICAgIH1cblxuICAgICAgcmV0dXJuIHN0cmVhaztcbiAgICB9XG5cbiAgICBhdmVyYWdlU29sdmVUaW1lKCkge1xuICAgICAgaWYgKCF0aGlzLmhhc0JlZW5Tb2x2ZWQoKSkge1xuICAgICAgICByZXR1cm4gbnVsbDtcbiAgICAgIH1cbiAgICAgIGNvbnN0IHN1Y2Nlc3NmdWxSZXN1bHRzID0gdGhpcy5nZXRSZXN1bHRzKCkuZmlsdGVyKChyZXN1bHQpID0+XG4gICAgICAgIHJlc3VsdC53YXNTdWNjZXNzZnVsKCksXG4gICAgICApO1xuICAgICAgY29uc3QgbGFzdEZldyA9IHN1Y2Nlc3NmdWxSZXN1bHRzLnNsaWNlKG1pbmltdW1Tb2x2ZXMgKiAtMSk7XG4gICAgICBjb25zdCBkdXJhdGlvbnMgPSBsYXN0RmV3Lm1hcCgocmVzdWx0KSA9PiByZXN1bHQuZ2V0RHVyYXRpb24oKSk7XG4gICAgICBjb25zdCBzdW0gPSBkdXJhdGlvbnMucmVkdWNlKChhLCBiKSA9PiBhICsgYiwgMCk7XG4gICAgICBjb25zdCBhdmVyYWdlID0gc3VtIC8gKGxhc3RGZXcubGVuZ3RoIHx8IDEpO1xuICAgICAgcmV0dXJuIGF2ZXJhZ2U7XG4gICAgfVxuXG4gICAgbGFzdFNlZW5BdCgpIHtcbiAgICAgIGlmICghdGhpcy5oYXNSZXN1bHRzKCkpIHtcbiAgICAgICAgcmV0dXJuIG51bGw7XG4gICAgICB9XG5cbiAgICAgIHJldHVybiB0aGlzLmdldFJlc3VsdHMoKS5zbGljZSgtMSkuc2VlbkF0O1xuICAgIH1cblxuICAgIGlzQ29tcGxldGUoKSB7XG4gICAgICBpZiAoIXRoaXMuaGFzQmVlblNvbHZlZCgpKSB7XG4gICAgICAgIHJldHVybiBmYWxzZTtcbiAgICAgIH1cbiAgICAgIGNvbnN0IGxhc3RTb2x2ZXMgPSB0aGlzLmdldFJlc3VsdHMoKS5zbGljZSgtMSAqIG1pbmltdW1Tb2x2ZXMpO1xuXG4gICAgICBpZiAobGFzdFNvbHZlcy5sZW5ndGggPCBtaW5pbXVtU29sdmVzKSB7XG4gICAgICAgIHJldHVybiBmYWxzZTtcbiAgICAgIH1cblxuICAgICAgaWYgKCFsYXN0U29sdmVzLmV2ZXJ5KChyZXN1bHQpID0+IHJlc3VsdC53YXNTdWNjZXNzZnVsKCkpKSB7XG4gICAgICAgIHJldHVybiBmYWxzZTtcbiAgICAgIH1cblxuICAgICAgcmV0dXJuIHRoaXMuYXZlcmFnZVNvbHZlVGltZSgpIDw9IHRpbWVHb2FsO1xuICAgIH1cbiAgfVxuXG4gIC8vIENoZXNzIGJvYXJkIHN0dWZmXG4gIGxldCBmZW47XG4gIGxldCBjaGVzc2dyb3VuZDtcbiAgbGV0IG9yaWVudGF0aW9uID0gXCJ3aGl0ZVwiO1xuICBsZXQgY2hlc3Nncm91bmRDb25maWcgPSB7XG4gICAgZmVuOiBJTklUSUFMX0ZFTixcbiAgICBjb29yZGluYXRlczogdHJ1ZSxcbiAgICBhbmltYXRpb246IHtcbiAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgfSxcbiAgICBoaWdobGlnaHQ6IHtcbiAgICAgIGxhc3RNb3ZlOiB0cnVlLFxuICAgICAgY2hlY2s6IHRydWUsXG4gICAgfSxcbiAgICBkcmFnZ2FibGU6IHtcbiAgICAgIGVuYWJsZWQ6IHRydWUsXG4gICAgfSxcbiAgICBzZWxlY3RhYmxlOiB7XG4gICAgICBlbmFibGVkOiB0cnVlLFxuICAgIH0sXG4gICAgbW92YWJsZToge1xuICAgICAgZnJlZTogZmFsc2UsXG4gICAgICBjb2xvcjogXCJib3RoXCIsXG4gICAgICBkZXN0czogbmV3IE1hcCgpLFxuICAgICAgZXZlbnRzOiB7XG4gICAgICAgIGFmdGVyOiBoYW5kbGVVc2VyTW92ZSxcbiAgICAgIH0sXG4gICAgfSxcbiAgICBvcmllbnRhdGlvbjogb3JpZW50YXRpb24sXG4gIH07XG5cbiAgLy8gUHV6emxlIERhdGFcbiAgbGV0IGFsbFB1enpsZXMgPSBbXTtcbiAgbGV0IGFjdGl2ZVB1enpsZXMgPSBbXTtcblxuICAkOiB7XG4gICAgaWYgKGFjdGl2ZVB1enpsZXMubGVuZ3RoIDwgYmF0Y2hTaXplICYmIGFsbFB1enpsZXMubGVuZ3RoID4gMCkge1xuICAgICAgZmlsbEFjdGl2ZVB1enpsZXMoKTtcbiAgICB9XG4gIH1cblxuICBsZXQgY29tcGxldGVkUHV6emxlcyA9IFtdO1xuICBsZXQgY3VycmVudFB1enpsZTtcbiAgbGV0IHB1enpsZVNob3duQXQ7XG5cbiAgLy8gQmVoYXZpb3JhbCBDb25maWdcbiAgbGV0IGJhdGNoU2l6ZSA9IDEwO1xuICBsZXQgdGltZUdvYWwgPSAxNTAwMDtcbiAgbGV0IG1pbmltdW1Tb2x2ZXMgPSAyO1xuICBsZXQgYWxyZWFkeUNvbXBsZXRlT2RkcyA9IDAuMztcblxuICAvLyBDdXJyZW50IHB1enpsZSBzdGF0ZVxuICBsZXQgbW92ZXM7XG4gIGxldCBwb3NpdGlvbjtcbiAgbGV0IG1hZGVNaXN0YWtlID0gZmFsc2U7XG4gIGxldCBwdXp6bGVDb21wbGV0ZSA9IGZhbHNlO1xuXG4gIC8vIERPTSBlbGVtZW50c1xuICBsZXQgbmV4dEJ1dHRvbjtcblxuICAvLyBQZXJzaXN0ZWQgZGF0YVxuICBjb25zdCBwdXp6bGVEYXRhU3RvcmUgPSBwZXJzaXN0ZWQoXCJwdXp6bGVzLmRhdGFcIiwge30pO1xuICBjb25zdCBwdXp6bGVJZHNUb1dvcmtPbiA9IHBlcnNpc3RlZChcInB1enpsZXMuaWRzVG9Xb3JrT25cIiwgW10pO1xuICBjb25zdCByZXN1bHRzID0gcGVyc2lzdGVkKFwicHV6emxlcy5yZXN1bHRzXCIsIHt9KTtcblxuICBmdW5jdGlvbiBmaWxsQWN0aXZlUHV6emxlcygpIHtcbiAgICBjb25zdCBjb21wbGV0ZWQgPSBVdGlsLnNvcnRSYW5kb21seShnZXRDb21wbGV0ZWRQdXp6bGVzKCkpO1xuICAgIGNvbnN0IGluY29tcGxldGVJbmFjdGl2ZSA9IFV0aWwuc29ydFJhbmRvbWx5KGdldEluYWN0aXZlQ29tcGxldGVkUHV6emxlcygpKTtcbiAgICBsZXQgcHV6emxlVHlwZTtcbiAgICB3aGlsZSAoYWxsUHV6emxlcy5sZW5ndGggPiAwICYmIGFjdGl2ZVB1enpsZXMubGVuZ3RoIDwgYmF0Y2hTaXplKSB7XG4gICAgICBwdXp6bGVUeXBlID0gTWF0aC5yYW5kb20oKSA8IDAuMiA/IFwiY29tcGxldGVkXCIgOiBcImluYWN0aXZlXCI7XG4gICAgICBpZiAoaW5jb21wbGV0ZUluYWN0aXZlLmxlbmd0aCA8IDEgJiYgY29tcGxldGVkLmxlbmd0aCA8IDEpIHtcbiAgICAgICAgYnJlYWs7XG4gICAgICB9XG4gICAgICBpZiAocHV6emxlVHlwZSA9PT0gXCJjb21wbGV0ZWRcIiAmJiBjb21wbGV0ZWQubGVuZ3RoID4gMCkge1xuICAgICAgICBhZGRBY3RpdmVQdXp6bGUoY29tcGxldGVkLnBvcCgpKTtcbiAgICAgIH0gZWxzZSBpZiAoaW5jb21wbGV0ZUluYWN0aXZlLmxlbmd0aCA+IDApIHtcbiAgICAgICAgYWRkQWN0aXZlUHV6emxlKGluY29tcGxldGVJbmFjdGl2ZS5wb3AoKSk7XG4gICAgICB9XG4gICAgfVxuICB9XG5cbiAgLy8gVGhpcyBpcyB0aWVkIHRvIHRoZSBhZGQgbmV3IHB1enpsZSBmb3JtXG4gIGxldCBuZXdQdXp6bGVJZHM7XG5cbiAgZnVuY3Rpb24gYWRkUHV6emxlSWRUb1dvcmtPbigpIHtcbiAgICBpZiAobmV3UHV6emxlSWRzLmxlbmd0aCA8IDMpIHtcbiAgICAgIG5ld1B1enpsZUlkcyA9IFwiXCI7XG4gICAgICByZXR1cm47XG4gICAgfVxuICAgIGNvbnN0IGlkc1RvQWRkID0gbmV3UHV6emxlSWRzLnNwbGl0KFwiLFwiKS5tYXAoKGlkKSA9PiBpZC50cmltKCkpO1xuICAgIGNvbnN0IGN1cnJlbnRQdXp6bGVJZHMgPSBuZXcgU2V0KCRwdXp6bGVJZHNUb1dvcmtPbik7XG4gICAgaWRzVG9BZGQuZm9yRWFjaCgoaWQpID0+IGN1cnJlbnRQdXp6bGVJZHMuYWRkKGlkKSk7XG4gICAgcHV6emxlSWRzVG9Xb3JrT24uc2V0KFsuLi5jdXJyZW50UHV6emxlSWRzXSk7XG4gICAgbmV3UHV6emxlSWRzID0gXCJcIjtcbiAgfVxuXG4gIGZ1bmN0aW9uIHJlbW92ZVB1enpsZUlkKHB1enpsZUlkKSB7XG4gICAgY29uc3QgY3VycmVudFB1enpsZUlkcyA9IG5ldyBTZXQoJHB1enpsZUlkc1RvV29ya09uKTtcbiAgICBjdXJyZW50UHV6emxlSWRzLmRlbGV0ZShwdXp6bGVJZC50cmltKCkpO1xuICAgIHB1enpsZUlkc1RvV29ya09uLnNldChbLi4uY3VycmVudFB1enpsZUlkc10pO1xuICB9XG5cbiAgZnVuY3Rpb24gYWRkQWN0aXZlUHV6emxlKHB1enpsZSkge1xuICAgIGFjdGl2ZVB1enpsZXMgPSBbXG4gICAgICAuLi5uZXcgU2V0KFtcbiAgICAgICAgLi4uYWN0aXZlUHV6emxlcy5tYXAoKHB1enpsZSkgPT4gcHV6emxlLnB1enpsZUlkKSxcbiAgICAgICAgcHV6emxlLnB1enpsZUlkLFxuICAgICAgXSksXG4gICAgXS5tYXAoKHB1enpsZUlkKSA9PiBuZXcgUHV6emxlKHB1enpsZUlkKSk7XG4gIH1cblxuICBmdW5jdGlvbiByZW1vdmVBY3RpdmVQdXp6bGUocHV6emxlKSB7XG4gICAgYWN0aXZlUHV6emxlcyA9IGFjdGl2ZVB1enpsZXMuZmlsdGVyKFxuICAgICAgKGFjdGl2ZVB1enpsZSkgPT4gYWN0aXZlUHV6emxlLnB1enpsZUlkICE9PSBwdXp6bGUucHV6emxlSWQsXG4gICAgKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldENvbXBsZXRlZFB1enpsZXMoKSB7XG4gICAgcmV0dXJuIGFsbFB1enpsZXMuZmlsdGVyKChwdXp6bGUpID0+IHB1enpsZS5pc0NvbXBsZXRlKCkpO1xuICB9XG5cbiAgZnVuY3Rpb24gZ2V0SW5jb21wbGV0ZVB1enpsZXMoKSB7XG4gICAgcmV0dXJuIGFsbFB1enpsZXMuZmlsdGVyKChwdXp6bGUpID0+ICFwdXp6bGUuaXNDb21wbGV0ZSgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldEluYWN0aXZlQ29tcGxldGVkUHV6emxlcygpIHtcbiAgICByZXR1cm4gZ2V0SW5jb21wbGV0ZVB1enpsZXMoKS5maWx0ZXIoXG4gICAgICAocHV6emxlKSA9PiAhYWN0aXZlUHV6emxlcy5pbmNsdWRlcyhwdXp6bGUpLFxuICAgICk7XG4gIH1cblxuICBmdW5jdGlvbiBzb3J0UHV6emxlc0J5U29sdmVUaW1lKGEsIGIpIHtcbiAgICBjb25zdCBhVGltZSA9IGEuYXZlcmFnZVNvbHZlVGltZSgpO1xuICAgIGNvbnN0IGJUaW1lID0gYi5hdmVyYWdlU29sdmVUaW1lKCk7XG5cbiAgICBpZiAoYVRpbWUgPT09IG51bGwgJiYgYlRpbWUgPT09IG51bGwpIHtcbiAgICAgIHJldHVybiAwO1xuICAgIH1cbiAgICBpZiAoYVRpbWUgPT09IG51bGwpIHtcbiAgICAgIHJldHVybiAxO1xuICAgIH1cbiAgICBpZiAoYlRpbWUgPT09IG51bGwpIHtcbiAgICAgIHJldHVybiAtMTtcbiAgICB9XG4gICAgcmV0dXJuIGFUaW1lIC0gYlRpbWU7XG4gIH1cblxuICBhc3luYyBmdW5jdGlvbiBnZXROZXh0UHV6emxlKCkge1xuICAgIGNvbnN0IHByZXZpb3VzID0gY3VycmVudFB1enpsZSA/IGN1cnJlbnRQdXp6bGUucHV6emxlSWQgOiBudWxsO1xuXG4gICAgY29uc3QgdHlwZSA9IGdldE5leHRQdXp6bGVUeXBlKCk7XG5cbiAgICBjb25zdCBhbHJlYWR5Q29tcGxldGUgPSBhY3RpdmVQdXp6bGVzLmZpbHRlcigocHV6emxlKSA9PlxuICAgICAgcHV6emxlLmlzQ29tcGxldGUoKSxcbiAgICApO1xuICAgIGNvbnN0IGluY29tcGxldGUgPSBhY3RpdmVQdXp6bGVzLmZpbHRlcigocHV6emxlKSA9PiAhcHV6emxlLmlzQ29tcGxldGUoKSk7XG5cbiAgICBsZXQgY2FuZGlkYXRlUHV6emxlO1xuICAgIGlmIChcbiAgICAgICh0eXBlID09PSBcImFscmVhZHlDb21wbGV0ZVwiICYmIGFscmVhZHlDb21wbGV0ZS5sZW5ndGggPiAwKSB8fFxuICAgICAgaW5jb21wbGV0ZS5sZW5ndGggPCAxXG4gICAgKSB7XG4gICAgICBjYW5kaWRhdGVQdXp6bGUgPSBVdGlsLmdldFJhbmRvbUVsZW1lbnQoYWN0aXZlUHV6emxlcyk7XG4gICAgfSBlbHNlIHtcbiAgICAgIGNhbmRpZGF0ZVB1enpsZSA9IFV0aWwuZ2V0UmFuZG9tRWxlbWVudChpbmNvbXBsZXRlKTtcbiAgICB9XG5cbiAgICBpZiAoYWN0aXZlUHV6emxlcy5sZW5ndGggPiAxICYmIGNhbmRpZGF0ZVB1enpsZS5wdXp6bGVJZCA9PT0gcHJldmlvdXMpIHtcbiAgICAgIHJldHVybiBnZXROZXh0UHV6emxlKCk7XG4gICAgfVxuXG4gICAgY3VycmVudFB1enpsZSA9IGFsbFB1enpsZXMuZmluZChcbiAgICAgIChwdXp6bGUpID0+IHB1enpsZS5wdXp6bGVJZCA9PT0gY2FuZGlkYXRlUHV6emxlLnB1enpsZUlkLFxuICAgICk7XG5cbiAgICBjb25zdCBkYXRhID0gYXdhaXQgZ2V0UHV6emxlRGF0YShjdXJyZW50UHV6emxlLnB1enpsZUlkKTtcblxuICAgIGlmIChkYXRhID09PSBudWxsKSB7XG4gICAgICByZXR1cm4gZ2V0TmV4dFB1enpsZSgpO1xuICAgIH1cblxuICAgIHJldHVybiBkYXRhO1xuICB9XG5cbiAgYXN5bmMgZnVuY3Rpb24gZ2V0UHV6emxlRGF0YShwdXp6bGVJZCkge1xuICAgIC8vIENoZWNrIGNhY2hlIGZpcnN0XG4gICAgaWYgKCRwdXp6bGVEYXRhU3RvcmVbcHV6emxlSWRdKSB7XG4gICAgICByZXR1cm4gJHB1enpsZURhdGFTdG9yZVtwdXp6bGVJZF07XG4gICAgfVxuXG4gICAgY29uc3QgcmVzcG9uc2UgPSBhd2FpdCBmZXRjaChgaHR0cHM6Ly9saWNoZXNzLm9yZy9hcGkvcHV6emxlLyR7cHV6emxlSWR9YCk7XG5cbiAgICBpZiAocmVzcG9uc2Uuc3RhdHVzID09PSA0MDQpIHtcbiAgICAgIC8vIFJlbW92ZSBpbnZhbGlkXG4gICAgICByZW1vdmVQdXp6bGVJZChwdXp6bGVJZCk7XG4gICAgICByZXR1cm4gbnVsbDtcbiAgICB9XG5cbiAgICBjb25zdCBwdXp6bGVEYXRhID0gYXdhaXQgcmVzcG9uc2UuanNvbigpO1xuICAgIGNvbnN0IGRhdGEgPSAkcHV6emxlRGF0YVN0b3JlO1xuICAgIGRhdGFbY3VycmVudFB1enpsZS5wdXp6bGVJZF0gPSBwdXp6bGVEYXRhO1xuICAgIHB1enpsZURhdGFTdG9yZS5zZXQoZGF0YSk7XG4gICAgcmV0dXJuIHB1enpsZURhdGE7XG4gIH1cblxuICBmdW5jdGlvbiBnZXROZXh0UHV6emxlVHlwZSgpIHtcbiAgICBjb25zdCByYW5kb21WYWx1ZSA9IE1hdGgucmFuZG9tKCk7XG4gICAgaWYgKHJhbmRvbVZhbHVlIDwgYWxyZWFkeUNvbXBsZXRlT2Rkcykge1xuICAgICAgcmV0dXJuIFwiYWxyZWFkeUNvbXBsZXRlXCI7XG4gICAgfVxuICAgIHJldHVybiBcImluY29tcGxldGVcIjtcbiAgfVxuXG4gIGFzeW5jIGZ1bmN0aW9uIHNraXAoKSB7XG4gICAgY29uc3QgcmVzdWx0ID0gbmV3IFJlc3VsdChjdXJyZW50UHV6emxlLnB1enpsZUlkLCBwdXp6bGVTaG93bkF0LCB0cnVlKTtcbiAgICBhZGRSZXN1bHQoY3VycmVudFB1enpsZS5wdXp6bGVJZCwgcmVzdWx0KTtcbiAgICBhd2FpdCBsb2FkTmV4dFB1enpsZSgpO1xuICB9XG5cbiAgZnVuY3Rpb24gYWRkUmVzdWx0KHB1enpsZUlkLCByZXN1bHQpIHtcbiAgICBjb25zdCBhbGxSZXN1bHRzID0gJHJlc3VsdHM7XG4gICAgY29uc3QgZXhpc3RpbmdSZXN1bHRzID0gJHJlc3VsdHNbcHV6emxlSWRdIHx8IFtdO1xuICAgIGV4aXN0aW5nUmVzdWx0cy5wdXNoKHJlc3VsdCk7XG4gICAgYWxsUmVzdWx0c1twdXp6bGVJZF0gPSBleGlzdGluZ1Jlc3VsdHM7XG4gICAgcmVzdWx0cy5zZXQoYWxsUmVzdWx0cyk7XG4gIH1cblxuICBmdW5jdGlvbiBhZGRDb21wbGV0ZWRQdXp6bGUocHV6emxlVG9BZGQpIHtcbiAgICBjb21wbGV0ZWRQdXp6bGVzID0gW1xuICAgICAgLi4ubmV3IFNldChbXG4gICAgICAgIC4uLmdldENvbXBsZXRlZFB1enpsZXMoKS5tYXAoKHB1enpsZSkgPT4gcHV6emxlLnB1enpsZUlkKSxcbiAgICAgICAgcHV6emxlVG9BZGQucHV6emxlSWQsXG4gICAgICBdKSxcbiAgICBdLm1hcCgocHV6emxlSWQpID0+IG5ldyBQdXp6bGUocHV6emxlSWQpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIHJlbW92ZUNvbXBsZXRlZFB1enpsZShwdXp6bGVUb1JlbW92ZSkge1xuICAgIGNvbXBsZXRlZFB1enpsZXMgPSBjb21wbGV0ZWRQdXp6bGVzLmZpbHRlcihcbiAgICAgIChwdXp6bGUpID0+IHB1enpsZS5wdXp6bGVJZCAhPT0gcHV6emxlVG9SZW1vdmUucHV6emxlSWQsXG4gICAgKTtcbiAgfVxuXG4gIGFzeW5jIGZ1bmN0aW9uIGxvYWROZXh0UHV6emxlKCkge1xuICAgIHB1enpsZUNvbXBsZXRlID0gZmFsc2U7XG4gICAgbWFkZU1pc3Rha2UgPSBmYWxzZTtcblxuICAgIGlmIChjdXJyZW50UHV6emxlICYmIGN1cnJlbnRQdXp6bGUuaXNDb21wbGV0ZSgpKSB7XG4gICAgICByZW1vdmVBY3RpdmVQdXp6bGUoY3VycmVudFB1enpsZSk7XG4gICAgICBhZGRDb21wbGV0ZWRQdXp6bGUoY3VycmVudFB1enpsZSk7XG4gICAgfVxuXG4gICAgY29uc3QgbmV4dCA9IGF3YWl0IGdldE5leHRQdXp6bGUoKTtcbiAgICBvcmllbnRhdGlvbiA9IFV0aWwud2hvc2VNb3ZlSXNJdChuZXh0LnB1enpsZS5pbml0aWFsUGx5ICsgMSk7XG4gICAgLy8gQ2xvbmUgc28gd2UgZG9uJ3QgY2FjaGUgYSB2YWx1ZSB0aGF0IGdldHMgc2hpZnRlZCBsYXRlclxuICAgIG1vdmVzID0gWy4uLm5leHQucHV6emxlLnNvbHV0aW9uXTtcblxuICAgIGNvbnN0IHBnbiA9IHBhcnNlUGduKG5leHQuZ2FtZS5wZ24pWzBdO1xuXG4gICAgcG9zaXRpb24gPSBzdGFydGluZ1Bvc2l0aW9uKHBnbi5oZWFkZXJzKS51bndyYXAoKTtcbiAgICBjb25zdCBhbGxOb2RlcyA9IFsuLi5wZ24ubW92ZXMubWFpbmxpbmVOb2RlcygpXTtcblxuICAgIGZvciAobGV0IGkgPSAwOyBpIDwgYWxsTm9kZXMubGVuZ3RoIC0gMTsgaSsrKSB7XG4gICAgICBjb25zdCBub2RlID0gYWxsTm9kZXNbaV07XG4gICAgICBjb25zdCBtb3ZlID0gcGFyc2VTYW4ocG9zaXRpb24sIG5vZGUuZGF0YS5zYW4pO1xuICAgICAgcG9zaXRpb24ucGxheShtb3ZlKTtcbiAgICB9XG5cbiAgICBjb25zdCBsYXN0TW92ZSA9IHBhcnNlU2FuKHBvc2l0aW9uLCBhbGxOb2Rlc1thbGxOb2Rlcy5sZW5ndGggLSAxXS5kYXRhLnNhbik7XG5cbiAgICBzZXRDaGVzc2dyb3VuZEZyb21Qb3NpdGlvbigpO1xuXG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBwb3NpdGlvbi5wbGF5KGxhc3RNb3ZlKTtcbiAgICAgIGNoZXNzZ3JvdW5kLm1vdmUobWFrZVNxdWFyZShsYXN0TW92ZS5mcm9tKSwgbWFrZVNxdWFyZShsYXN0TW92ZS50bykpO1xuICAgICAgdXBkYXRlTGVnYWxNb3ZlcygpO1xuICAgICAgcHV6emxlU2hvd25BdCA9IFV0aWwuY3VycmVudE1pY3JvdGltZSgpO1xuICAgIH0sIDMwMCk7XG4gIH1cblxuICBmdW5jdGlvbiBzZXRDaGVzc2dyb3VuZEZyb21Qb3NpdGlvbigpIHtcbiAgICBmZW4gPSBtYWtlRmVuKHBvc2l0aW9uLnRvU2V0dXAoKSk7XG4gICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgIGZlbjogZmVuLFxuICAgIH0pO1xuICAgIHVwZGF0ZUxlZ2FsTW92ZXMoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIHVwZGF0ZUxlZ2FsTW92ZXMoKSB7XG4gICAgZmVuID0gbWFrZUZlbihwb3NpdGlvbi50b1NldHVwKCkpO1xuICAgIGNvbnN0IGxlZ2FsTW92ZXMgPSBnZXRMZWdhbE1vdmVzRm9yRmVuKGZlbik7XG4gICAgY2hlc3Nncm91bmQuc2V0KHtcbiAgICAgIG1vdmFibGU6IHtcbiAgICAgICAgZGVzdHM6IGxlZ2FsTW92ZXMsXG4gICAgICB9LFxuICAgIH0pO1xuICB9XG5cbiAgZnVuY3Rpb24gZ2V0TGVnYWxNb3Zlc0ZvckZlbihmZW4pIHtcbiAgICBjb25zdCBzZXR1cCA9IHBhcnNlRmVuKGZlbikudW53cmFwKCk7XG4gICAgY29uc3QgY2hlc3MgPSBDaGVzcy5mcm9tU2V0dXAoc2V0dXApLnVud3JhcCgpO1xuICAgIGNvbnN0IGRlc3RzTWFwID0gY2hlc3MuYWxsRGVzdHMoKTtcblxuICAgIGNvbnN0IGRlc3RzTWFwSW5TYW4gPSBuZXcgTWFwKCk7XG5cbiAgICBmb3IgKGNvbnN0IFtrZXksIHZhbHVlXSBvZiBkZXN0c01hcC5lbnRyaWVzKCkpIHtcbiAgICAgIGNvbnN0IGRlc3RzQXJyYXkgPSBBcnJheS5mcm9tKHZhbHVlKS5tYXAoKHNxKSA9PiBtYWtlU3F1YXJlKHNxKSk7XG4gICAgICBkZXN0c01hcEluU2FuLnNldChtYWtlU3F1YXJlKGtleSksIGRlc3RzQXJyYXkpO1xuICAgIH1cblxuICAgIHJldHVybiBkZXN0c01hcEluU2FuO1xuICB9XG5cbiAgZnVuY3Rpb24gaGFuZGxlVXNlck1vdmUob3JpZywgZGVzdCkge1xuICAgIGNvbnN0IGNvcnJlY3RNb3ZlID0gbW92ZXNbMF07XG4gICAgY29uc3Qgb3JpZ1NxdWFyZSA9IHBhcnNlU3F1YXJlKG9yaWcpO1xuICAgIGNvbnN0IGRlc3RTcXVhcmUgPSBwYXJzZVNxdWFyZShkZXN0KTtcbiAgICBsZXQgbW92ZSA9IHsgZnJvbTogb3JpZ1NxdWFyZSwgdG86IGRlc3RTcXVhcmUgfTtcbiAgICBpZiAoXG4gICAgICBjaGVzc2dyb3VuZC5zdGF0ZS5waWVjZXMuZ2V0KGRlc3QpPy5yb2xlID09PSBcInBhd25cIiAmJlxuICAgICAgKGRlc3RbMV0gPT09IFwiMVwiIHx8IGRlc3RbMV0gPT09IFwiOFwiKVxuICAgICkge1xuICAgICAgbW92ZSA9IHsgLi4ubW92ZSwgcHJvbW90aW9uOiBcInF1ZWVuXCIgfTtcbiAgICAgIGNoZXNzZ3JvdW5kLnNldFBpZWNlcyhcbiAgICAgICAgbmV3IE1hcChbW2Rlc3QsIHsgY29sb3I6IG9yaWVudGF0aW9uLCByb2xlOiBcInF1ZWVuXCIgfV1dKSxcbiAgICAgICk7XG4gICAgfVxuICAgIGNvbnN0IHVjaU1vdmUgPSBtYWtlVWNpKG1vdmUpO1xuICAgIGlmICh3b3VsZEJlQ2hlY2ttYXRlKG9yaWcsIGRlc3QpKSB7XG4gICAgICByZXR1cm4gaGFuZGxlUHV6emxlQ29tcGxldGUoKTtcbiAgICB9XG4gICAgaWYgKHVjaU1vdmUgPT09IGNvcnJlY3RNb3ZlKSB7XG4gICAgICBwb3NpdGlvbi5wbGF5KG1vdmUpO1xuICAgICAgbW92ZXMuc2hpZnQoKTsgLy8gcmVtb3ZlIHRoZSB1c2VyIG1vdmUgZmlyc3RcbiAgICAgIGNvbnN0IGNvbXB1dGVyTW92ZSA9IG1vdmVzLnNoaWZ0KCk7XG4gICAgICBpZiAoY29tcHV0ZXJNb3ZlKSB7XG4gICAgICAgIGNvbnN0IG1vdmUgPSBwYXJzZVVjaShjb21wdXRlck1vdmUpO1xuICAgICAgICBwb3NpdGlvbi5wbGF5KG1vdmUpO1xuICAgICAgICBjaGVzc2dyb3VuZC5tb3ZlKG1ha2VTcXVhcmUobW92ZS5mcm9tKSwgbWFrZVNxdWFyZShtb3ZlLnRvKSk7XG4gICAgICAgIHVwZGF0ZUxlZ2FsTW92ZXMoKTtcbiAgICAgIH0gZWxzZSB7XG4gICAgICAgIHJldHVybiBoYW5kbGVQdXp6bGVDb21wbGV0ZSgpO1xuICAgICAgfVxuICAgIH0gZWxzZSB7XG4gICAgICBtYWRlTWlzdGFrZSA9IHRydWU7XG4gICAgICBzaG93RmFpbHVyZShcIk5vcGUhXCIpO1xuICAgICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICAgIHNldENoZXNzZ3JvdW5kRnJvbVBvc2l0aW9uKCk7XG4gICAgICB9LCAyMDApO1xuICAgIH1cbiAgfVxuXG4gIGZ1bmN0aW9uIHdvdWxkQmVDaGVja21hdGUob3JpZywgZGVzdCkge1xuICAgIGNvbnN0IG9yaWdTcXVhcmUgPSBwYXJzZVNxdWFyZShvcmlnKTtcbiAgICBjb25zdCBkZXN0U3F1YXJlID0gcGFyc2VTcXVhcmUoZGVzdCk7XG4gICAgY29uc3QgY2xvbmVkUG9zaXRpb24gPSBwb3NpdGlvbi5jbG9uZSgpO1xuICAgIGNsb25lZFBvc2l0aW9uLnBsYXkoeyBmcm9tOiBvcmlnU3F1YXJlLCB0bzogZGVzdFNxdWFyZSB9KTtcbiAgICByZXR1cm4gY2xvbmVkUG9zaXRpb24uaXNDaGVja21hdGUoKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGhhbmRsZVB1enpsZUNvbXBsZXRlKCkge1xuICAgIHB1enpsZUNvbXBsZXRlID0gdHJ1ZTtcbiAgICBjb25zdCByZXN1bHQgPSBuZXcgUmVzdWx0KFxuICAgICAgY3VycmVudFB1enpsZS5wdXp6bGVJZCxcbiAgICAgIHB1enpsZVNob3duQXQsXG4gICAgICBmYWxzZSxcbiAgICAgIG1hZGVNaXN0YWtlLFxuICAgICAgVXRpbC5jdXJyZW50TWljcm90aW1lKCksXG4gICAgKTtcbiAgICBhZGRSZXN1bHQoY3VycmVudFB1enpsZS5wdXp6bGVJZCwgcmVzdWx0KTtcbiAgICBpZiAobWFkZU1pc3Rha2UpIHtcbiAgICAgIHJlbW92ZUNvbXBsZXRlZFB1enpsZShjdXJyZW50UHV6emxlKTtcbiAgICB9XG4gICAgLy8gVHJpZ2dlciByZWFjdGl2aXR5XG4gICAgYWN0aXZlUHV6emxlcyA9IGFjdGl2ZVB1enpsZXM7XG4gICAgc2hvd1N1Y2Nlc3MoXCJDb3JyZWN0IVwiKTtcbiAgfVxuXG4gIGxldCBzdWNjZXNzTWVzc2FnZSA9IG51bGw7XG5cbiAgZnVuY3Rpb24gc2hvd1N1Y2Nlc3MobWVzc2FnZSwgZHVyYXRpb24gPSAxNTAwKSB7XG4gICAgZmFpbHVyZU1lc3NhZ2UgPSBudWxsO1xuICAgIHN1Y2Nlc3NNZXNzYWdlID0gbWVzc2FnZTtcbiAgICBzZXRUaW1lb3V0KCgpID0+IHtcbiAgICAgIHN1Y2Nlc3NNZXNzYWdlID0gbnVsbDtcbiAgICB9LCBkdXJhdGlvbik7XG4gIH1cblxuICBsZXQgZmFpbHVyZU1lc3NhZ2UgPSBudWxsO1xuXG4gIGZ1bmN0aW9uIHNob3dGYWlsdXJlKG1lc3NhZ2UsIGR1cmF0aW9uID0gMTAwMCkge1xuICAgIHN1Y2Nlc3NNZXNzYWdlID0gbnVsbDtcbiAgICBmYWlsdXJlTWVzc2FnZSA9IG1lc3NhZ2U7XG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBmYWlsdXJlTWVzc2FnZSA9IG51bGw7XG4gICAgfSwgZHVyYXRpb24pO1xuICB9XG5cbiAgZnVuY3Rpb24gaW5pdGlhbGl6ZVB1enpsZXMoKSB7XG4gICAgYWxsUHV6emxlcyA9IFtdO1xuICAgICRwdXp6bGVJZHNUb1dvcmtPbi5mb3JFYWNoKChwdXp6bGVJZCkgPT4ge1xuICAgICAgYWxsUHV6emxlcy5wdXNoKG5ldyBQdXp6bGUocHV6emxlSWQpKTtcbiAgICB9KTtcbiAgICBjb21wbGV0ZWRQdXp6bGVzID0gZ2V0Q29tcGxldGVkUHV6emxlcygpO1xuICAgIGZpbGxBY3RpdmVQdXp6bGVzKCk7XG4gIH1cblxuICBvbk1vdW50KGFzeW5jICgpID0+IHtcbiAgICBpbml0aWFsaXplUHV6emxlcygpO1xuICAgIGRvY3VtZW50LmFkZEV2ZW50TGlzdGVuZXIoXCJrZXlkb3duXCIsIGZ1bmN0aW9uIChldmVudCkge1xuICAgICAgaWYgKFtcIkVudGVyXCIsIFwiIFwiXS5pbmNsdWRlcyhldmVudC5rZXkpICYmIG5leHRCdXR0b24pIHtcbiAgICAgICAgZXZlbnQucHJldmVudERlZmF1bHQoKTtcbiAgICAgICAgbmV4dEJ1dHRvbi5jbGljaygpO1xuICAgICAgfVxuICAgIH0pO1xuICAgIGF3YWl0IGxvYWROZXh0UHV6emxlKCk7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXYgY2xhc3M9XCJjb2x1bW5zIGlzLWNlbnRlcmVkXCI+XG4gIDxkaXYgY2xhc3M9XCJjb2x1bW4gaXMtNi1kZXNrdG9wXCI+XG4gICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICB7I2lmIGFjdGl2ZVB1enpsZXMubGVuZ3RoID4gMCAmJiBjdXJyZW50UHV6emxlfVxuICAgICAgICA8Q2hlc3Nib2FyZCB7Y2hlc3Nncm91bmRDb25maWd9IHtvcmllbnRhdGlvbn0gYmluZDpjaGVzc2dyb3VuZD5cbiAgICAgICAgICA8ZGl2IHNsb3Q9XCJjZW50ZXJlZC1jb250ZW50XCI+XG4gICAgICAgICAgICB7I2lmIHN1Y2Nlc3NNZXNzYWdlfVxuICAgICAgICAgICAgICA8c3BhbiB0cmFuc2l0aW9uOmZhZGUgY2xhc3M9XCJ0YWcgaXMtc3VjY2VzcyBpcy1zaXplLTRcIj5cbiAgICAgICAgICAgICAgICB7c3VjY2Vzc01lc3NhZ2V9XG4gICAgICAgICAgICAgIDwvc3Bhbj5cbiAgICAgICAgICAgIHsvaWZ9XG4gICAgICAgICAgICB7I2lmIGZhaWx1cmVNZXNzYWdlfVxuICAgICAgICAgICAgICA8c3BhbiB0cmFuc2l0aW9uOmZhZGUgY2xhc3M9XCJ0YWcgaXMtZGFuZ2VyIGlzLXNpemUtNFwiPlxuICAgICAgICAgICAgICAgIHtmYWlsdXJlTWVzc2FnZX1cbiAgICAgICAgICAgICAgPC9zcGFuPlxuICAgICAgICAgICAgey9pZn1cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8ZGl2IHNsb3Q9XCJiZWxvdy1ib2FyZFwiPlxuICAgICAgICAgICAgeyNpZiBwdXp6bGVDb21wbGV0ZX1cbiAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrIGlzLWZsZXggaXMtanVzdGlmeS1jb250ZW50LWNlbnRlclwiPlxuICAgICAgICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgICAgICAgIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIlxuICAgICAgICAgICAgICAgICAgYmluZDp0aGlzPXtuZXh0QnV0dG9ufVxuICAgICAgICAgICAgICAgICAgb246Y2xpY2s9e2FzeW5jICgpID0+IHtcbiAgICAgICAgICAgICAgICAgICAgYXdhaXQgbG9hZE5leHRQdXp6bGUoKTtcbiAgICAgICAgICAgICAgICAgIH19XG4gICAgICAgICAgICAgICAgICA+TmV4dFxuICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIHsvaWZ9XG4gICAgICAgICAgICB7I2lmICFwdXp6bGVDb21wbGV0ZX1cbiAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrIGlzLWZsZXggaXMtanVzdGlmeS1jb250ZW50LWNlbnRlclwiPlxuICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzPVwidGFnIGlzLXtvcmllbnRhdGlvbn0gaXMtc2l6ZS00XCJcbiAgICAgICAgICAgICAgICAgID57b3JpZW50YXRpb259IHRvIHBsYXk8L3NwYW5cbiAgICAgICAgICAgICAgICA+XG4gICAgICAgICAgICAgICAgPGJ1dHRvbiBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCIgb246Y2xpY2s9e3NraXB9PlNraXA8L2J1dHRvbj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICB7L2lmfVxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L0NoZXNzYm9hcmQ+XG4gICAgICB7OmVsc2V9XG4gICAgICAgIDxwPkFsbCBwdXp6bGVzIGNvbXBsZXRlLCBhZGQgc29tZSBtb3JlITwvcD5cbiAgICAgIHsvaWZ9XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGlzLTQtZGVza3RvcFwiPlxuICAgIHsjaWYgYWN0aXZlUHV6emxlcy5sZW5ndGggPj0gMSAmJiBjdXJyZW50UHV6emxlfVxuICAgICAgPGRpdiBjbGFzcz1cImJveFwiPlxuICAgICAgICA8aDM+Q3VycmVudCBQdXp6bGVzPC9oMz5cbiAgICAgICAgPHRhYmxlIGNsYXNzPVwidGFibGUgaXMtZnVsbHdpZHRoIGlzLW5hcnJvdyBpcy1zdHJpcGVkXCI+XG4gICAgICAgICAgPHRoZWFkPlxuICAgICAgICAgICAgPHRyPlxuICAgICAgICAgICAgICA8dGg+PGFiYnIgdGl0bGU9XCJMaWNoZXNzIFB1enpsZSBJRFwiPklEPC9hYmJyPjwvdGg+XG4gICAgICAgICAgICAgIDx0aD48YWJiciB0aXRsZT1cIkF2ZXJhZ2Ugc29sdmUgdGltZVwiPkF2ZzwvYWJicj48L3RoPlxuICAgICAgICAgICAgICA8dGg+PGFiYnIgdGl0bGU9XCJDb3JyZWN0IHNvbHZlcyBpbiBhIHJvd1wiPlN0cmVhazwvYWJicj48L3RoPlxuICAgICAgICAgICAgICA8dGg+PGFiYnIgdGl0bGU9XCJUb3RhbCBjb3JyZWN0IHNvbHZlc1wiPlNvbHZlczwvYWJicj48L3RoPlxuICAgICAgICAgICAgICA8dGg+PGFiYnIgdGl0bGU9XCJGYWlsdXJlIENvdW50XCI+RmFpbHM8L2FiYnI+PC90aD5cbiAgICAgICAgICAgIDwvdHI+XG4gICAgICAgICAgPC90aGVhZD5cbiAgICAgICAgICA8dGJvZHk+XG4gICAgICAgICAgICB7I2VhY2ggYWN0aXZlUHV6emxlcy5zb3J0KHNvcnRQdXp6bGVzQnlTb2x2ZVRpbWUpIGFzIHB1enpsZSAocHV6emxlKX1cbiAgICAgICAgICAgICAgPHRyXG4gICAgICAgICAgICAgICAgYW5pbWF0ZTpmbGlwPXt7IGR1cmF0aW9uOiA0MDAgfX1cbiAgICAgICAgICAgICAgICBjbGFzczppcy1zZWxlY3RlZD17Y3VycmVudFB1enpsZS5wdXp6bGVJZCA9PT0gcHV6emxlLnB1enpsZUlkfVxuICAgICAgICAgICAgICA+XG4gICAgICAgICAgICAgICAgPHRkIGNsYXNzPVwicHV6emxlLWlkXCJcbiAgICAgICAgICAgICAgICAgID48YVxuICAgICAgICAgICAgICAgICAgICBocmVmPXtwdXp6bGUubGljaGVzc1VybCgpfVxuICAgICAgICAgICAgICAgICAgICB0YXJnZXQ9XCJfYmxhbmtcIlxuICAgICAgICAgICAgICAgICAgICB0aXRsZT1cIlZpZXcgb24gbGljaGVzcy5vcmdcIj57cHV6emxlLnB1enpsZUlkfTwvYVxuICAgICAgICAgICAgICAgICAgPjwvdGRcbiAgICAgICAgICAgICAgICA+XG4gICAgICAgICAgICAgICAgPHRkXG4gICAgICAgICAgICAgICAgICBjbGFzczpoYXMtdGV4dC13YXJuaW5nPXtwdXp6bGUuYXZlcmFnZVNvbHZlVGltZSgpID4gdGltZUdvYWx9XG4gICAgICAgICAgICAgICAgICBjbGFzczpoYXMtdGV4dC1zdWNjZXNzPXtwdXp6bGUuYXZlcmFnZVNvbHZlVGltZSgpIDw9XG4gICAgICAgICAgICAgICAgICAgIHRpbWVHb2FsICYmIHB1enpsZS5hdmVyYWdlU29sdmVUaW1lKCkgPiAwfVxuICAgICAgICAgICAgICAgID5cbiAgICAgICAgICAgICAgICAgIHtwdXp6bGUuYXZlcmFnZVNvbHZlVGltZSgpXG4gICAgICAgICAgICAgICAgICAgID8gYCR7KHB1enpsZS5hdmVyYWdlU29sdmVUaW1lKCkgLyAxMDAwKS50b0ZpeGVkKDIpfXNgXG4gICAgICAgICAgICAgICAgICAgIDogXCI/XCJ9XG4gICAgICAgICAgICAgICAgPC90ZD5cbiAgICAgICAgICAgICAgICA8dGRcbiAgICAgICAgICAgICAgICAgIGNsYXNzOmhhcy10ZXh0LXdhcm5pbmc9e3B1enpsZS5nZXRTb2x2ZVN0cmVhaygpIDxcbiAgICAgICAgICAgICAgICAgICAgbWluaW11bVNvbHZlc31cbiAgICAgICAgICAgICAgICAgIGNsYXNzOmhhcy10ZXh0LXN1Y2Nlc3M9e3B1enpsZS5nZXRTb2x2ZVN0cmVhaygpID49XG4gICAgICAgICAgICAgICAgICAgIG1pbmltdW1Tb2x2ZXN9XG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgICAge3B1enpsZS5nZXRTb2x2ZVN0cmVhaygpfSAvIHttaW5pbXVtU29sdmVzfVxuICAgICAgICAgICAgICAgIDwvdGQ+XG4gICAgICAgICAgICAgICAgPHRkPlxuICAgICAgICAgICAgICAgICAge3B1enpsZS5nZXRUb3RhbFNvbHZlcygpfVxuICAgICAgICAgICAgICAgIDwvdGQ+XG4gICAgICAgICAgICAgICAgPHRkPlxuICAgICAgICAgICAgICAgICAge3B1enpsZS5nZXRGYWlsdXJlQ291bnQoKX1cbiAgICAgICAgICAgICAgICA8L3RkPlxuICAgICAgICAgICAgICA8L3RyPlxuICAgICAgICAgICAgey9lYWNofVxuICAgICAgICAgIDwvdGJvZHk+XG4gICAgICAgIDwvdGFibGU+XG4gICAgICA8L2Rpdj5cbiAgICB7L2lmfVxuICAgIDxkaXYgY2xhc3M9XCJib3hcIj5cbiAgICAgIDxkaXYgY2xhc3M9XCJibG9ja1wiPlxuICAgICAgICA8cD48c3Ryb25nPnskcHV6emxlSWRzVG9Xb3JrT24ubGVuZ3RofTwvc3Ryb25nPiB0b3RhbCBwdXp6bGVzPC9wPlxuICAgICAgICA8cD5Eb25lIHdpdGggPHN0cm9uZz57Y29tcGxldGVkUHV6emxlcy5sZW5ndGh9PC9zdHJvbmc+IHB1enpsZXM8L3A+XG4gICAgICAgIDxwPlxuICAgICAgICAgIFRhcmdldCBzb2x2ZSB0aW1lOiA8c3Ryb25nPnsodGltZUdvYWwgLyAxMDAwKS50b0ZpeGVkKDEpfTwvc3Ryb25nPiBzZWNvbmRzXG4gICAgICAgIDwvcD5cbiAgICAgICAgPHA+XG4gICAgICAgICAgTXVzdCBzb2x2ZSA8c3Ryb25nPnttaW5pbXVtU29sdmVzfTwvc3Ryb25nPiB0aW1le21pbmltdW1Tb2x2ZXMgPiAxXG4gICAgICAgICAgICA/IFwic1wiXG4gICAgICAgICAgICA6IFwiXCJ9IGluIGEgcm93XG4gICAgICAgIDwvcD5cbiAgICAgIDwvZGl2PlxuICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgIDxmb3JtIG9uOnN1Ym1pdHxwcmV2ZW50RGVmYXVsdD17YWRkUHV6emxlSWRUb1dvcmtPbn0+XG4gICAgICAgICAgPGxhYmVsIGZvcj1cIm5ld1B1enpsZUlkXCI+TmV3IFB1enpsZSBJRChzKTo8L2xhYmVsPlxuICAgICAgICAgIDxpbnB1dFxuICAgICAgICAgICAgdHlwZT1cInRleHRcIlxuICAgICAgICAgICAgaWQ9XCJuZXdQdXp6bGVJZFwiXG4gICAgICAgICAgICBiaW5kOnZhbHVlPXtuZXdQdXp6bGVJZHN9XG4gICAgICAgICAgICBwbGFjZWhvbGRlcj1cIlwiXG4gICAgICAgICAgLz5cbiAgICAgICAgICA8YnIgLz5cbiAgICAgICAgICA8YnV0dG9uIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIiB0eXBlPVwic3VibWl0XCI+QWRkPC9idXR0b24+XG4gICAgICAgIDwvZm9ybT5cbiAgICAgIDwvZGl2PlxuICAgIDwvZGl2PlxuICAgIDxkaXYgY2xhc3M9XCJib3hcIj5cbiAgICAgIDxQdXp6bGVIaXN0b3J5UHJvY2Vzc29yIC8+XG4gICAgPC9kaXY+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLnB1enpsZS1pZCB7XG4gICAgZm9udC1mYW1pbHk6IG1vbm9zcGFjZTtcbiAgfVxuPC9zdHlsZT5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUF3ckJFLHlCQUFXLENBQ1QsV0FBVyxDQUFFLFNBQ2YifQ== */");
 }
 
-function get_each_context(ctx, list, i) {
+function get_each_context$2(ctx, list, i) {
 	const child_ctx = ctx.slice();
 	child_ctx[58] = list[i];
 	return child_ctx;
 }
 
 // (602:6) {:else}
-function create_else_block(ctx) {
+function create_else_block$2(ctx) {
 	let p;
 
 	const block = {
 		c: function create() {
 			p = element("p");
 			p.textContent = "All puzzles complete, add some more!";
-			add_location(p, file, 602, 8, 15841);
+			add_location(p, file$9, 602, 8, 15841);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, p, anchor);
@@ -7861,7 +8197,7 @@ function create_else_block(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_else_block.name,
+		id: create_else_block$2.name,
 		type: "else",
 		source: "(602:6) {:else}",
 		ctx
@@ -7871,7 +8207,7 @@ function create_else_block(ctx) {
 }
 
 // (565:6) {#if activePuzzles.length > 0 && currentPuzzle}
-function create_if_block_1(ctx) {
+function create_if_block_1$2(ctx) {
 	let chessboard;
 	let updating_chessground;
 	let current;
@@ -7885,7 +8221,7 @@ function create_if_block_1(ctx) {
 		orientation: /*orientation*/ ctx[2],
 		$$slots: {
 			"below-board": [create_below_board_slot],
-			"centered-content": [create_centered_content_slot]
+			"centered-content": [create_centered_content_slot$1]
 		},
 		$$scope: { ctx }
 	};
@@ -7937,7 +8273,7 @@ function create_if_block_1(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_1.name,
+		id: create_if_block_1$2.name,
 		type: "if",
 		source: "(565:6) {#if activePuzzles.length > 0 && currentPuzzle}",
 		ctx
@@ -7958,7 +8294,7 @@ function create_if_block_5(ctx) {
 			span = element("span");
 			t = text(/*successMessage*/ ctx[8]);
 			attr_dev(span, "class", "tag is-success is-size-4");
-			add_location(span, file, 568, 14, 14671);
+			add_location(span, file$9, 568, 14, 14671);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, span, anchor);
@@ -8010,7 +8346,7 @@ function create_if_block_5(ctx) {
 }
 
 // (573:12) {#if failureMessage}
-function create_if_block_4(ctx) {
+function create_if_block_4$1(ctx) {
 	let span;
 	let t;
 	let span_transition;
@@ -8021,7 +8357,7 @@ function create_if_block_4(ctx) {
 			span = element("span");
 			t = text(/*failureMessage*/ ctx[9]);
 			attr_dev(span, "class", "tag is-danger is-size-4");
-			add_location(span, file, 573, 14, 14847);
+			add_location(span, file$9, 573, 14, 14847);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, span, anchor);
@@ -8063,7 +8399,7 @@ function create_if_block_4(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_4.name,
+		id: create_if_block_4$1.name,
 		type: "if",
 		source: "(573:12) {#if failureMessage}",
 		ctx
@@ -8073,11 +8409,11 @@ function create_if_block_4(ctx) {
 }
 
 // (567:10) 
-function create_centered_content_slot(ctx) {
+function create_centered_content_slot$1(ctx) {
 	let div;
 	let t;
 	let if_block0 = /*successMessage*/ ctx[8] && create_if_block_5(ctx);
-	let if_block1 = /*failureMessage*/ ctx[9] && create_if_block_4(ctx);
+	let if_block1 = /*failureMessage*/ ctx[9] && create_if_block_4$1(ctx);
 
 	const block = {
 		c: function create() {
@@ -8086,7 +8422,7 @@ function create_centered_content_slot(ctx) {
 			t = space();
 			if (if_block1) if_block1.c();
 			attr_dev(div, "slot", "centered-content");
-			add_location(div, file, 566, 10, 14594);
+			add_location(div, file$9, 566, 10, 14594);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -8126,7 +8462,7 @@ function create_centered_content_slot(ctx) {
 						transition_in(if_block1, 1);
 					}
 				} else {
-					if_block1 = create_if_block_4(ctx);
+					if_block1 = create_if_block_4$1(ctx);
 					if_block1.c();
 					transition_in(if_block1, 1);
 					if_block1.m(div, null);
@@ -8153,7 +8489,7 @@ function create_centered_content_slot(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_centered_content_slot.name,
+		id: create_centered_content_slot$1.name,
 		type: "slot",
 		source: "(567:10) ",
 		ctx
@@ -8163,7 +8499,7 @@ function create_centered_content_slot(ctx) {
 }
 
 // (580:12) {#if puzzleComplete}
-function create_if_block_3(ctx) {
+function create_if_block_3$1(ctx) {
 	let div;
 	let button;
 	let mounted;
@@ -8175,9 +8511,9 @@ function create_if_block_3(ctx) {
 			button = element("button");
 			button.textContent = "Next";
 			attr_dev(button, "class", "button is-primary");
-			add_location(button, file, 581, 16, 15144);
+			add_location(button, file$9, 581, 16, 15144);
 			attr_dev(div, "class", "block is-flex is-justify-content-center");
-			add_location(div, file, 580, 14, 15074);
+			add_location(div, file$9, 580, 14, 15074);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -8203,7 +8539,7 @@ function create_if_block_3(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_3.name,
+		id: create_if_block_3$1.name,
 		type: "if",
 		source: "(580:12) {#if puzzleComplete}",
 		ctx
@@ -8213,7 +8549,7 @@ function create_if_block_3(ctx) {
 }
 
 // (592:12) {#if !puzzleComplete}
-function create_if_block_2(ctx) {
+function create_if_block_2$2(ctx) {
 	let div;
 	let span;
 	let t0;
@@ -8234,11 +8570,11 @@ function create_if_block_2(ctx) {
 			button = element("button");
 			button.textContent = "Skip";
 			attr_dev(span, "class", span_class_value = "tag is-" + /*orientation*/ ctx[2] + " is-size-4" + " svelte-1oimmcd");
-			add_location(span, file, 593, 16, 15551);
+			add_location(span, file$9, 593, 16, 15551);
 			attr_dev(button, "class", "button is-primary");
-			add_location(button, file, 596, 16, 15677);
+			add_location(button, file$9, 596, 16, 15677);
 			attr_dev(div, "class", "block is-flex is-justify-content-center");
-			add_location(div, file, 592, 14, 15481);
+			add_location(div, file$9, 592, 14, 15481);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -8272,7 +8608,7 @@ function create_if_block_2(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block_2.name,
+		id: create_if_block_2$2.name,
 		type: "if",
 		source: "(592:12) {#if !puzzleComplete}",
 		ctx
@@ -8285,8 +8621,8 @@ function create_if_block_2(ctx) {
 function create_below_board_slot(ctx) {
 	let div;
 	let t;
-	let if_block0 = /*puzzleComplete*/ ctx[5] && create_if_block_3(ctx);
-	let if_block1 = !/*puzzleComplete*/ ctx[5] && create_if_block_2(ctx);
+	let if_block0 = /*puzzleComplete*/ ctx[5] && create_if_block_3$1(ctx);
+	let if_block1 = !/*puzzleComplete*/ ctx[5] && create_if_block_2$2(ctx);
 
 	const block = {
 		c: function create() {
@@ -8295,7 +8631,7 @@ function create_below_board_slot(ctx) {
 			t = space();
 			if (if_block1) if_block1.c();
 			attr_dev(div, "slot", "below-board");
-			add_location(div, file, 578, 10, 15002);
+			add_location(div, file$9, 578, 10, 15002);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -8308,7 +8644,7 @@ function create_below_board_slot(ctx) {
 				if (if_block0) {
 					if_block0.p(ctx, dirty);
 				} else {
-					if_block0 = create_if_block_3(ctx);
+					if_block0 = create_if_block_3$1(ctx);
 					if_block0.c();
 					if_block0.m(div, t);
 				}
@@ -8321,7 +8657,7 @@ function create_below_board_slot(ctx) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 				} else {
-					if_block1 = create_if_block_2(ctx);
+					if_block1 = create_if_block_2$2(ctx);
 					if_block1.c();
 					if_block1.m(div, null);
 				}
@@ -8352,7 +8688,7 @@ function create_below_board_slot(ctx) {
 }
 
 // (608:4) {#if activePuzzles.length >= 1 && currentPuzzle}
-function create_if_block(ctx) {
+function create_if_block$4(ctx) {
 	let div;
 	let h3;
 	let t1;
@@ -8379,12 +8715,12 @@ function create_if_block(ctx) {
 	let each_1_lookup = new Map_1();
 	let each_value = ensure_array_like_dev(/*activePuzzles*/ ctx[0].sort(sortPuzzlesBySolveTime));
 	const get_key = ctx => /*puzzle*/ ctx[58];
-	validate_each_keys(ctx, each_value, get_each_context, get_key);
+	validate_each_keys(ctx, each_value, get_each_context$2, get_key);
 
 	for (let i = 0; i < each_value.length; i += 1) {
-		let child_ctx = get_each_context(ctx, each_value, i);
+		let child_ctx = get_each_context$2(ctx, each_value, i);
 		let key = get_key(child_ctx);
-		each_1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
+		each_1_lookup.set(key, each_blocks[i] = create_each_block$2(key, child_ctx));
 	}
 
 	const block = {
@@ -8422,29 +8758,29 @@ function create_if_block(ctx) {
 				each_blocks[i].c();
 			}
 
-			add_location(h3, file, 609, 8, 16038);
+			add_location(h3, file$9, 609, 8, 16038);
 			attr_dev(abbr0, "title", "Lichess Puzzle ID");
-			add_location(abbr0, file, 613, 18, 16180);
-			add_location(th0, file, 613, 14, 16176);
+			add_location(abbr0, file$9, 613, 18, 16180);
+			add_location(th0, file$9, 613, 14, 16176);
 			attr_dev(abbr1, "title", "Average solve time");
-			add_location(abbr1, file, 614, 18, 16245);
-			add_location(th1, file, 614, 14, 16241);
+			add_location(abbr1, file$9, 614, 18, 16245);
+			add_location(th1, file$9, 614, 14, 16241);
 			attr_dev(abbr2, "title", "Correct solves in a row");
-			add_location(abbr2, file, 615, 18, 16312);
-			add_location(th2, file, 615, 14, 16308);
+			add_location(abbr2, file$9, 615, 18, 16312);
+			add_location(th2, file$9, 615, 14, 16308);
 			attr_dev(abbr3, "title", "Total correct solves");
-			add_location(abbr3, file, 616, 18, 16387);
-			add_location(th3, file, 616, 14, 16383);
+			add_location(abbr3, file$9, 616, 18, 16387);
+			add_location(th3, file$9, 616, 14, 16383);
 			attr_dev(abbr4, "title", "Failure Count");
-			add_location(abbr4, file, 617, 18, 16459);
-			add_location(th4, file, 617, 14, 16455);
-			add_location(tr, file, 612, 12, 16157);
-			add_location(thead, file, 611, 10, 16137);
-			add_location(tbody, file, 620, 10, 16552);
+			add_location(abbr4, file$9, 617, 18, 16459);
+			add_location(th4, file$9, 617, 14, 16455);
+			add_location(tr, file$9, 612, 12, 16157);
+			add_location(thead, file$9, 611, 10, 16137);
+			add_location(tbody, file$9, 620, 10, 16552);
 			attr_dev(table, "class", "table is-fullwidth is-narrow is-striped");
-			add_location(table, file, 610, 8, 16071);
+			add_location(table, file$9, 610, 8, 16071);
 			attr_dev(div, "class", "box");
-			add_location(div, file, 608, 6, 16012);
+			add_location(div, file$9, 608, 6, 16012);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, div, anchor);
@@ -8480,8 +8816,8 @@ function create_if_block(ctx) {
 			if (dirty[0] & /*currentPuzzle, activePuzzles, minimumSolves, timeGoal*/ 12305) {
 				each_value = ensure_array_like_dev(/*activePuzzles*/ ctx[0].sort(sortPuzzlesBySolveTime));
 				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].r();
-				validate_each_keys(ctx, each_value, get_each_context, get_key);
-				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, tbody, fix_and_destroy_block, create_each_block, null, get_each_context);
+				validate_each_keys(ctx, each_value, get_each_context$2, get_key);
+				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, tbody, fix_and_destroy_block, create_each_block$2, null, get_each_context$2);
 				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].a();
 			}
 		},
@@ -8498,7 +8834,7 @@ function create_if_block(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_if_block.name,
+		id: create_if_block$4.name,
 		type: "if",
 		source: "(608:4) {#if activePuzzles.length >= 1 && currentPuzzle}",
 		ctx
@@ -8508,7 +8844,7 @@ function create_if_block(ctx) {
 }
 
 // (622:12) {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
-function create_each_block(key_1, ctx) {
+function create_each_block$2(key_1, ctx) {
 	let tr;
 	let td0;
 	let a;
@@ -8567,19 +8903,19 @@ function create_each_block(key_1, ctx) {
 			attr_dev(a, "href", a_href_value = /*puzzle*/ ctx[58].lichessUrl());
 			attr_dev(a, "target", "_blank");
 			attr_dev(a, "title", "View on lichess.org");
-			add_location(a, file, 627, 19, 16861);
+			add_location(a, file$9, 627, 19, 16861);
 			attr_dev(td0, "class", "puzzle-id svelte-1oimmcd");
-			add_location(td0, file, 626, 16, 16820);
+			add_location(td0, file$9, 626, 16, 16820);
 			toggle_class(td1, "has-text-warning", /*puzzle*/ ctx[58].averageSolveTime() > /*timeGoal*/ ctx[12]);
 			toggle_class(td1, "has-text-success", /*puzzle*/ ctx[58].averageSolveTime() <= /*timeGoal*/ ctx[12] && /*puzzle*/ ctx[58].averageSolveTime() > 0);
-			add_location(td1, file, 633, 16, 17074);
+			add_location(td1, file$9, 633, 16, 17074);
 			toggle_class(td2, "has-text-warning", /*puzzle*/ ctx[58].getSolveStreak() < /*minimumSolves*/ ctx[13]);
 			toggle_class(td2, "has-text-success", /*puzzle*/ ctx[58].getSolveStreak() >= /*minimumSolves*/ ctx[13]);
-			add_location(td2, file, 642, 16, 17494);
-			add_location(td3, file, 650, 16, 17823);
-			add_location(td4, file, 653, 16, 17910);
+			add_location(td2, file$9, 642, 16, 17494);
+			add_location(td3, file$9, 650, 16, 17823);
+			add_location(td4, file$9, 653, 16, 17910);
 			toggle_class(tr, "is-selected", /*currentPuzzle*/ ctx[4].puzzleId === /*puzzle*/ ctx[58].puzzleId);
-			add_location(tr, file, 622, 14, 16656);
+			add_location(tr, file$9, 622, 14, 16656);
 			this.first = tr;
 		},
 		m: function mount(target, anchor) {
@@ -8660,7 +8996,7 @@ function create_each_block(key_1, ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_each_block.name,
+		id: create_each_block$2.name,
 		type: "each",
 		source: "(622:12) {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}",
 		ctx
@@ -8669,7 +9005,7 @@ function create_each_block(key_1, ctx) {
 	return block;
 }
 
-function create_fragment(ctx) {
+function create_fragment$a(ctx) {
 	let div7;
 	let div1;
 	let div0;
@@ -8721,7 +9057,7 @@ function create_fragment(ctx) {
 	let current;
 	let mounted;
 	let dispose;
-	const if_block_creators = [create_if_block_1, create_else_block];
+	const if_block_creators = [create_if_block_1$2, create_else_block$2];
 	const if_blocks = [];
 
 	function select_block_type(ctx, dirty) {
@@ -8731,7 +9067,7 @@ function create_fragment(ctx) {
 
 	current_block_type_index = select_block_type(ctx);
 	if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
-	let if_block1 = /*activePuzzles*/ ctx[0].length >= 1 && /*currentPuzzle*/ ctx[4] && create_if_block(ctx);
+	let if_block1 = /*activePuzzles*/ ctx[0].length >= 1 && /*currentPuzzle*/ ctx[4] && create_if_block$4(ctx);
 	puzzlehistoryprocessor = new PuzzleHistoryProcessor({ $$inline: true });
 
 	const block = {
@@ -8786,40 +9122,40 @@ function create_fragment(ctx) {
 			div5 = element("div");
 			create_component(puzzlehistoryprocessor.$$.fragment);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file, 563, 4, 14438);
+			add_location(div0, file$9, 563, 4, 14438);
 			attr_dev(div1, "class", "column is-6-desktop");
-			add_location(div1, file, 562, 2, 14400);
-			add_location(strong0, file, 664, 11, 18140);
-			add_location(p0, file, 664, 8, 18137);
-			add_location(strong1, file, 665, 21, 18224);
-			add_location(p1, file, 665, 8, 18211);
-			add_location(strong2, file, 667, 29, 18320);
-			add_location(p2, file, 666, 8, 18287);
-			add_location(strong3, file, 670, 21, 18422);
-			add_location(p3, file, 669, 8, 18397);
+			add_location(div1, file$9, 562, 2, 14400);
+			add_location(strong0, file$9, 664, 11, 18140);
+			add_location(p0, file$9, 664, 8, 18137);
+			add_location(strong1, file$9, 665, 21, 18224);
+			add_location(p1, file$9, 665, 8, 18211);
+			add_location(strong2, file$9, 667, 29, 18320);
+			add_location(p2, file$9, 666, 8, 18287);
+			add_location(strong3, file$9, 670, 21, 18422);
+			add_location(p3, file$9, 669, 8, 18397);
 			attr_dev(div2, "class", "block");
-			add_location(div2, file, 663, 6, 18109);
+			add_location(div2, file$9, 663, 6, 18109);
 			attr_dev(label, "for", "newPuzzleId");
-			add_location(label, file, 677, 10, 18647);
+			add_location(label, file$9, 677, 10, 18647);
 			attr_dev(input, "type", "text");
 			attr_dev(input, "id", "newPuzzleId");
 			attr_dev(input, "placeholder", "");
-			add_location(input, file, 678, 10, 18708);
-			add_location(br, file, 684, 10, 18856);
+			add_location(input, file$9, 678, 10, 18708);
+			add_location(br, file$9, 684, 10, 18856);
 			attr_dev(button, "class", "button is-primary");
 			attr_dev(button, "type", "submit");
-			add_location(button, file, 685, 10, 18873);
-			add_location(form, file, 676, 8, 18583);
+			add_location(button, file$9, 685, 10, 18873);
+			add_location(form, file$9, 676, 8, 18583);
 			attr_dev(div3, "class", "block");
-			add_location(div3, file, 675, 6, 18555);
+			add_location(div3, file$9, 675, 6, 18555);
 			attr_dev(div4, "class", "box");
-			add_location(div4, file, 662, 4, 18085);
+			add_location(div4, file$9, 662, 4, 18085);
 			attr_dev(div5, "class", "box");
-			add_location(div5, file, 689, 4, 18978);
+			add_location(div5, file$9, 689, 4, 18978);
 			attr_dev(div6, "class", "column is-4-desktop");
-			add_location(div6, file, 606, 2, 15919);
+			add_location(div6, file$9, 606, 2, 15919);
 			attr_dev(div7, "class", "columns is-centered");
-			add_location(div7, file, 561, 0, 14364);
+			add_location(div7, file$9, 561, 0, 14364);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -8913,7 +9249,7 @@ function create_fragment(ctx) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 				} else {
-					if_block1 = create_if_block(ctx);
+					if_block1 = create_if_block$4(ctx);
 					if_block1.c();
 					if_block1.m(div6, t1);
 				}
@@ -8955,7 +9291,7 @@ function create_fragment(ctx) {
 
 	dispatch_dev("SvelteRegisterBlock", {
 		block,
-		id: create_fragment.name,
+		id: create_fragment$a.name,
 		type: "component",
 		source: "",
 		ctx
@@ -8983,7 +9319,7 @@ function sortPuzzlesBySolveTime(a, b) {
 	return aTime - bTime;
 }
 
-function instance($$self, $$props, $$invalidate) {
+function instance$a($$self, $$props, $$invalidate) {
 	let $puzzleIdsToWorkOn;
 	let $results;
 	let $puzzleDataStore;
@@ -9674,16 +10010,4902 @@ function instance($$self, $$props, $$invalidate) {
 class Puzzles extends SvelteComponentDev {
 	constructor(options) {
 		super(options);
-		init(this, options, instance, create_fragment, safe_not_equal, {}, add_css, [-1, -1]);
+		init(this, options, instance$a, create_fragment$a, safe_not_equal, {}, add_css$3, [-1, -1]);
 
 		dispatch_dev("SvelteRegisterComponent", {
 			component: this,
 			tagName: "Puzzles",
+			options,
+			id: create_fragment$a.name
+		});
+	}
+}
+
+var Pe=["a","b","c","d","e","f","g","h"],Je=["1","2","3","4","5","6","7","8"],H=["white","black"],Y=["pawn","knight","bishop","rook","queen","king"],Nn=["a","h"],oe=e=>"role"in e;var g=e=>e!==void 0,P=e=>e==="white"?"black":"white",J=e=>e>>3,L=e=>e&7,se=e=>{switch(e){case"pawn":return "p";case"knight":return "n";case"bishop":return "b";case"rook":return "r";case"queen":return "q";case"king":return "k"}};function Me(e){switch(e.toLowerCase()){case"p":return "pawn";case"n":return "knight";case"b":return "bishop";case"r":return "rook";case"q":return "queen";case"k":return "king";default:return}}function ue(e){if(e.length!==2)return;let t=e.charCodeAt(0)-"a".charCodeAt(0),n=e.charCodeAt(1)-"1".charCodeAt(0);if(!(t<0||t>=8||n<0||n>=8))return t+8*n}var W=e=>Pe[L(e)]+Je[J(e)];var Dt=e=>oe(e)?`${se(e.role).toUpperCase()}@${W(e.to)}`:W(e.from)+W(e.to)+(e.promotion?se(e.promotion):""),Ie=(e,t)=>e==="white"?t==="a"?2:6:t==="a"?58:62,et=(e,t)=>e==="white"?t==="a"?3:5:t==="a"?59:61;var On=e=>(e=e-(e>>>1&1431655765),e=(e&858993459)+(e>>>2&858993459),Math.imul(e+(e>>>4)&252645135,16843009)>>24),Lt=e=>(e=e>>>8&16711935|(e&16711935)<<8,e>>>16&65535|(e&65535)<<16),Tn=e=>(e=e>>>1&1431655765|(e&1431655765)<<1,e=e>>>2&858993459|(e&858993459)<<2,e=e>>>4&252645135|(e&252645135)<<4,Lt(e)),l=class e{constructor(t,n){this.lo=t|0,this.hi=n|0;}static fromSquare(t){return t>=32?new e(0,1<<t-32):new e(1<<t,0)}static fromRank(t){return new e(255,0).shl64(8*t)}static fromFile(t){return new e(16843009<<t,16843009<<t)}static empty(){return new e(0,0)}static full(){return new e(4294967295,4294967295)}static corners(){return new e(129,2164260864)}static center(){return new e(402653184,24)}static backranks(){return new e(255,4278190080)}static backrank(t){return t==="white"?new e(255,0):new e(0,4278190080)}static lightSquares(){return new e(1437226410,1437226410)}static darkSquares(){return new e(2857740885,2857740885)}complement(){return new e(~this.lo,~this.hi)}xor(t){return new e(this.lo^t.lo,this.hi^t.hi)}union(t){return new e(this.lo|t.lo,this.hi|t.hi)}intersect(t){return new e(this.lo&t.lo,this.hi&t.hi)}diff(t){return new e(this.lo&~t.lo,this.hi&~t.hi)}intersects(t){return this.intersect(t).nonEmpty()}isDisjoint(t){return this.intersect(t).isEmpty()}supersetOf(t){return t.diff(this).isEmpty()}subsetOf(t){return this.diff(t).isEmpty()}shr64(t){return t>=64?e.empty():t>=32?new e(this.hi>>>t-32,0):t>0?new e(this.lo>>>t^this.hi<<32-t,this.hi>>>t):this}shl64(t){return t>=64?e.empty():t>=32?new e(0,this.lo<<t-32):t>0?new e(this.lo<<t,this.hi<<t^this.lo>>>32-t):this}bswap64(){return new e(Lt(this.hi),Lt(this.lo))}rbit64(){return new e(Tn(this.hi),Tn(this.lo))}minus64(t){let n=this.lo-t.lo,r=(n&t.lo&1)+(t.lo>>>1)+(n>>>1)>>>31;return new e(n,this.hi-(t.hi+r))}equals(t){return this.lo===t.lo&&this.hi===t.hi}size(){return On(this.lo)+On(this.hi)}isEmpty(){return this.lo===0&&this.hi===0}nonEmpty(){return this.lo!==0||this.hi!==0}has(t){return (t>=32?this.hi&1<<t-32:this.lo&1<<t)!==0}set(t,n){return n?this.with(t):this.without(t)}with(t){return t>=32?new e(this.lo,this.hi|1<<t-32):new e(this.lo|1<<t,this.hi)}without(t){return t>=32?new e(this.lo,this.hi&~(1<<t-32)):new e(this.lo&~(1<<t),this.hi)}toggle(t){return t>=32?new e(this.lo,this.hi^1<<t-32):new e(this.lo^1<<t,this.hi)}last(){if(this.hi!==0)return 63-Math.clz32(this.hi);if(this.lo!==0)return 31-Math.clz32(this.lo)}first(){if(this.lo!==0)return 31-Math.clz32(this.lo&-this.lo);if(this.hi!==0)return 63-Math.clz32(this.hi&-this.hi)}withoutFirst(){return this.lo!==0?new e(this.lo&this.lo-1,this.hi):new e(0,this.hi&this.hi-1)}moreThanOne(){return this.hi!==0&&this.lo!==0||(this.lo&this.lo-1)!==0||(this.hi&this.hi-1)!==0}singleSquare(){return this.moreThanOne()?void 0:this.last()}*[Symbol.iterator](){let t=this.lo,n=this.hi;for(;t!==0;){let r=31-Math.clz32(t&-t);t^=1<<r,yield r;}for(;n!==0;){let r=31-Math.clz32(n&-n);n^=1<<r,yield 32+r;}}*reversed(){let t=this.lo,n=this.hi;for(;n!==0;){let r=31-Math.clz32(n);n^=1<<r,yield 32+r;}for(;t!==0;){let r=31-Math.clz32(t);t^=1<<r,yield r;}}};var tt=(e,t)=>{let n=l.empty();for(let r of t){let i=e+r;0<=i&&i<64&&Math.abs(L(e)-L(i))<=2&&(n=n.with(i));}return n},ke=e=>{let t=[];for(let n=0;n<64;n++)t[n]=e(n);return t},yi=ke(e=>tt(e,[-9,-8,-7,-1,1,7,8,9])),xi=ke(e=>tt(e,[-17,-15,-10,-6,6,10,15,17])),Si={white:ke(e=>tt(e,[7,9])),black:ke(e=>tt(e,[-7,-9]))},ae=e=>yi[e],Oe=e=>xi[e],be=(e,t)=>Si[e][t],It=ke(e=>l.fromFile(L(e)).without(e)),Bt=ke(e=>l.fromRank(J(e)).without(e)),Kt=ke(e=>{let t=new l(134480385,2151686160),n=8*(J(e)-L(e));return (n>=0?t.shl64(n):t.shr64(-n)).without(e)}),zt=ke(e=>{let t=new l(270549120,16909320),n=8*(J(e)+L(e)-7);return (n>=0?t.shl64(n):t.shr64(-n)).without(e)}),Ft=(e,t,n)=>{let r=n.intersect(t),i=r.bswap64();return r=r.minus64(e),i=i.minus64(e.bswap64()),r.xor(i.bswap64()).intersect(t)},Ci=(e,t)=>Ft(l.fromSquare(e),It[e],t),Pi=(e,t)=>{let n=Bt[e],r=t.intersect(n),i=r.rbit64();return r=r.minus64(l.fromSquare(e)),i=i.minus64(l.fromSquare(63-e)),r.xor(i.rbit64()).intersect(n)},we=(e,t)=>{let n=l.fromSquare(e);return Ft(n,Kt[e],t).xor(Ft(n,zt[e],t))},ve=(e,t)=>Ci(e,t).xor(Pi(e,t)),Be=(e,t)=>we(e,t).xor(ve(e,t)),nt=(e,t,n)=>{switch(e.role){case"pawn":return be(e.color,t);case"knight":return Oe(t);case"bishop":return we(t,n);case"rook":return ve(t,n);case"queen":return Be(t,n);case"king":return ae(t)}},rt=(e,t)=>{let n=l.fromSquare(t);return Bt[e].intersects(n)?Bt[e].with(e):zt[e].intersects(n)?zt[e].with(e):Kt[e].intersects(n)?Kt[e].with(e):It[e].intersects(n)?It[e].with(e):l.empty()},ye=(e,t)=>rt(e,t).intersect(l.full().shl64(e).xor(l.full().shl64(t))).withoutFirst();var de=class e{constructor(){}static default(){let t=new e;return t.reset(),t}reset(){this.occupied=new l(65535,4294901760),this.promoted=l.empty(),this.white=new l(65535,0),this.black=new l(0,4294901760),this.pawn=new l(65280,16711680),this.knight=new l(66,1107296256),this.bishop=new l(36,603979776),this.rook=new l(129,2164260864),this.queen=new l(8,134217728),this.king=new l(16,268435456);}static empty(){let t=new e;return t.clear(),t}clear(){this.occupied=l.empty(),this.promoted=l.empty();for(let t of H)this[t]=l.empty();for(let t of Y)this[t]=l.empty();}clone(){let t=new e;t.occupied=this.occupied,t.promoted=this.promoted;for(let n of H)t[n]=this[n];for(let n of Y)t[n]=this[n];return t}getColor(t){if(this.white.has(t))return "white";if(this.black.has(t))return "black"}getRole(t){for(let n of Y)if(this[n].has(t))return n}get(t){let n=this.getColor(t);if(!n)return;let r=this.getRole(t),i=this.promoted.has(t);return {color:n,role:r,promoted:i}}take(t){let n=this.get(t);return n&&(this.occupied=this.occupied.without(t),this[n.color]=this[n.color].without(t),this[n.role]=this[n.role].without(t),n.promoted&&(this.promoted=this.promoted.without(t))),n}set(t,n){let r=this.take(t);return this.occupied=this.occupied.with(t),this[n.color]=this[n.color].with(t),this[n.role]=this[n.role].with(t),n.promoted&&(this.promoted=this.promoted.with(t)),r}has(t){return this.occupied.has(t)}*[Symbol.iterator](){for(let t of this.occupied)yield [t,this.get(t)];}pieces(t,n){return this[t].intersect(this[n])}rooksAndQueens(){return this.rook.union(this.queen)}bishopsAndQueens(){return this.bishop.union(this.queen)}kingOf(t){return this.pieces(t,"king").singleSquare()}};var he=class e{constructor(){}static empty(){let t=new e;for(let n of Y)t[n]=0;return t}static fromBoard(t,n){let r=new e;for(let i of Y)r[i]=t.pieces(n,i).size();return r}clone(){let t=new e;for(let n of Y)t[n]=this[n];return t}equals(t){return Y.every(n=>this[n]===t[n])}add(t){let n=new e;for(let r of Y)n[r]=this[r]+t[r];return n}nonEmpty(){return Y.some(t=>this[t]>0)}isEmpty(){return !this.nonEmpty()}hasPawns(){return this.pawn>0}hasNonPawns(){return this.knight>0||this.bishop>0||this.rook>0||this.queen>0||this.king>0}size(){return this.pawn+this.knight+this.bishop+this.rook+this.queen+this.king}},Ee=class e{constructor(t,n){this.white=t,this.black=n;}static empty(){return new e(he.empty(),he.empty())}static fromBoard(t){return new e(he.fromBoard(t,"white"),he.fromBoard(t,"black"))}clone(){return new e(this.white.clone(),this.black.clone())}equals(t){return this.white.equals(t.white)&&this.black.equals(t.black)}add(t){return new e(this.white.add(t.white),this.black.add(t.black))}count(t){return this.white[t]+this.black[t]}size(){return this.white.size()+this.black.size()}isEmpty(){return this.white.isEmpty()&&this.black.isEmpty()}nonEmpty(){return !this.isEmpty()}hasPawns(){return this.white.hasPawns()||this.black.hasPawns()}hasNonPawns(){return this.white.hasNonPawns()||this.black.hasNonPawns()}},xe=class e{constructor(t,n){this.white=t,this.black=n;}static default(){return new e(3,3)}clone(){return new e(this.white,this.black)}equals(t){return this.white===t.white&&this.black===t.black}};var it=class{unwrap(t,n){let r=this._chain(i=>m.ok(t?t(i):i),i=>n?m.ok(n(i)):m.err(i));if(r.isErr)throw r.error;return r.value}map(t,n){return this._chain(r=>m.ok(t(r)),r=>m.err(n?n(r):r))}chain(t,n){return this._chain(t,n||(r=>m.err(r)))}},$t=class extends it{constructor(t){super(),this.value=void 0,this.isOk=!0,this.isErr=!1,this.value=t;}_chain(t,n){return t(this.value)}},Ht=class extends it{constructor(t){super(),this.error=void 0,this.isOk=!1,this.isErr=!0,this.error=t;}_chain(t,n){return n(this.error)}},m;(function(e){e.ok=function(t){return new $t(t)},e.err=function(t){return new Ht(t||new Error)},e.all=function(t){if(Array.isArray(t)){let i=[];for(let o=0;o<t.length;o++){let s=t[o];if(s.isErr)return s;i.push(s.value);}return e.ok(i)}let n={},r=Object.keys(t);for(let i=0;i<r.length;i++){let o=t[r[i]];if(o.isErr)return o;n[r[i]]=o.value;}return e.ok(n)};})(m||(m={}));var T;(function(e){e.Empty="ERR_EMPTY",e.OppositeCheck="ERR_OPPOSITE_CHECK",e.ImpossibleCheck="ERR_IMPOSSIBLE_CHECK",e.PawnsOnBackrank="ERR_PAWNS_ON_BACKRANK",e.Kings="ERR_KINGS",e.Variant="ERR_VARIANT";})(T||(T={}));var q=class extends Error{},Mi=(e,t,n,r)=>n[t].intersect(ve(e,r).intersect(n.rooksAndQueens()).union(we(e,r).intersect(n.bishopsAndQueens())).union(Oe(e).intersect(n.knight)).union(ae(e).intersect(n.king)).union(be(P(t),e).intersect(n.pawn))),ce=class e{constructor(){}static default(){let t=new e;return t.unmovedRooks=l.corners(),t.rook={white:{a:0,h:7},black:{a:56,h:63}},t.path={white:{a:new l(14,0),h:new l(96,0)},black:{a:new l(0,234881024),h:new l(0,1610612736)}},t}static empty(){let t=new e;return t.unmovedRooks=l.empty(),t.rook={white:{a:void 0,h:void 0},black:{a:void 0,h:void 0}},t.path={white:{a:l.empty(),h:l.empty()},black:{a:l.empty(),h:l.empty()}},t}clone(){let t=new e;return t.unmovedRooks=this.unmovedRooks,t.rook={white:{a:this.rook.white.a,h:this.rook.white.h},black:{a:this.rook.black.a,h:this.rook.black.h}},t.path={white:{a:this.path.white.a,h:this.path.white.h},black:{a:this.path.black.a,h:this.path.black.h}},t}add(t,n,r,i){let o=Ie(t,n),s=et(t,n);this.unmovedRooks=this.unmovedRooks.with(i),this.rook[t][n]=i,this.path[t][n]=ye(i,s).with(s).union(ye(r,o).with(o)).without(r).without(i);}static fromSetup(t){let n=e.empty(),r=t.unmovedRooks.intersect(t.board.rook);for(let i of H){let o=l.backrank(i),s=t.board.kingOf(i);if(!g(s)||!o.has(s))continue;let a=r.intersect(t.board[i]).intersect(o),u=a.first();g(u)&&u<s&&n.add(i,"a",s,u);let c=a.last();g(c)&&s<c&&n.add(i,"h",s,c);}return n}discardRook(t){if(this.unmovedRooks.has(t)){this.unmovedRooks=this.unmovedRooks.without(t);for(let n of H)for(let r of Nn)this.rook[n][r]===t&&(this.rook[n][r]=void 0);}}discardColor(t){this.unmovedRooks=this.unmovedRooks.diff(l.backrank(t)),this.rook[t].a=void 0,this.rook[t].h=void 0;}},ee=class{constructor(t){this.rules=t;}reset(){this.board=de.default(),this.pockets=void 0,this.turn="white",this.castles=ce.default(),this.epSquare=void 0,this.remainingChecks=void 0,this.halfmoves=0,this.fullmoves=1;}setupUnchecked(t){this.board=t.board.clone(),this.board.promoted=l.empty(),this.pockets=void 0,this.turn=t.turn,this.castles=ce.fromSetup(t),this.epSquare=Ei(this,t.epSquare),this.remainingChecks=void 0,this.halfmoves=t.halfmoves,this.fullmoves=t.fullmoves;}kingAttackers(t,n,r){return Mi(t,n,this.board,r)}playCaptureAt(t,n){this.halfmoves=0,n.role==="rook"&&this.castles.discardRook(t),this.pockets&&this.pockets[P(n.color)][n.promoted?"pawn":n.role]++;}ctx(){let t=this.isVariantEnd(),n=this.board.kingOf(this.turn);if(!g(n))return {king:n,blockers:l.empty(),checkers:l.empty(),variantEnd:t,mustCapture:!1};let r=ve(n,l.empty()).intersect(this.board.rooksAndQueens()).union(we(n,l.empty()).intersect(this.board.bishopsAndQueens())).intersect(this.board[P(this.turn)]),i=l.empty();for(let s of r){let a=ye(n,s).intersect(this.board.occupied);a.moreThanOne()||(i=i.union(a));}let o=this.kingAttackers(n,P(this.turn),this.board.occupied);return {king:n,blockers:i,checkers:o,variantEnd:t,mustCapture:!1}}clone(){var t,n;let r=new this.constructor;return r.board=this.board.clone(),r.pockets=(t=this.pockets)===null||t===void 0?void 0:t.clone(),r.turn=this.turn,r.castles=this.castles.clone(),r.epSquare=this.epSquare,r.remainingChecks=(n=this.remainingChecks)===null||n===void 0?void 0:n.clone(),r.halfmoves=this.halfmoves,r.fullmoves=this.fullmoves,r}validate(t){if(this.board.occupied.isEmpty())return m.err(new q(T.Empty));if(this.board.king.size()!==2)return m.err(new q(T.Kings));if(!g(this.board.kingOf(this.turn)))return m.err(new q(T.Kings));let n=this.board.kingOf(P(this.turn));return g(n)?this.kingAttackers(n,this.turn,this.board.occupied).nonEmpty()?m.err(new q(T.OppositeCheck)):l.backranks().intersects(this.board.pawn)?m.err(new q(T.PawnsOnBackrank)):t?.ignoreImpossibleCheck?m.ok(void 0):this.validateCheckers():m.err(new q(T.Kings))}validateCheckers(){let t=this.board.kingOf(this.turn);if(g(t)){let n=this.kingAttackers(t,P(this.turn),this.board.occupied);if(n.nonEmpty()){if(g(this.epSquare)){let r=this.epSquare^8,i=this.epSquare^24;if(n.moreThanOne()||n.first()!==r&&this.kingAttackers(t,P(this.turn),this.board.occupied.without(r).with(i)).nonEmpty())return m.err(new q(T.ImpossibleCheck))}else if(n.size()>2||n.size()===2&&rt(n.first(),n.last()).has(t))return m.err(new q(T.ImpossibleCheck))}}return m.ok(void 0)}dropDests(t){return l.empty()}dests(t,n){if(n=n||this.ctx(),n.variantEnd)return l.empty();let r=this.board.get(t);if(!r||r.color!==this.turn)return l.empty();let i,o;if(r.role==="pawn"){i=be(this.turn,t).intersect(this.board[P(this.turn)]);let s=this.turn==="white"?8:-8,a=t+s;if(0<=a&&a<64&&!this.board.occupied.has(a)){i=i.with(a);let u=this.turn==="white"?t<16:t>=64-16,c=a+s;u&&!this.board.occupied.has(c)&&(i=i.with(c));}if(g(this.epSquare)&&_i(this,t,n)){let u=this.epSquare-s;(n.checkers.isEmpty()||n.checkers.singleSquare()===u)&&(o=l.fromSquare(this.epSquare));}}else r.role==="bishop"?i=we(t,this.board.occupied):r.role==="knight"?i=Oe(t):r.role==="rook"?i=ve(t,this.board.occupied):r.role==="queen"?i=Be(t,this.board.occupied):i=ae(t);if(i=i.diff(this.board[this.turn]),g(n.king)){if(r.role==="king"){let s=this.board.occupied.without(t);for(let a of i)this.kingAttackers(a,P(this.turn),s).nonEmpty()&&(i=i.without(a));return i.union(ot(this,"a",n)).union(ot(this,"h",n))}if(n.checkers.nonEmpty()){let s=n.checkers.singleSquare();if(!g(s))return l.empty();i=i.intersect(ye(s,n.king).with(s));}n.blockers.has(t)&&(i=i.intersect(rt(t,n.king)));}return o&&(i=i.union(o)),i}isVariantEnd(){return !1}variantOutcome(t){}hasInsufficientMaterial(t){return this.board[t].intersect(this.board.pawn.union(this.board.rooksAndQueens())).nonEmpty()?!1:this.board[t].intersects(this.board.knight)?this.board[t].size()<=2&&this.board[P(t)].diff(this.board.king).diff(this.board.queen).isEmpty():this.board[t].intersects(this.board.bishop)?(!this.board.bishop.intersects(l.darkSquares())||!this.board.bishop.intersects(l.lightSquares()))&&this.board.pawn.isEmpty()&&this.board.knight.isEmpty():!0}toSetup(){var t,n;return {board:this.board.clone(),pockets:(t=this.pockets)===null||t===void 0?void 0:t.clone(),turn:this.turn,unmovedRooks:this.castles.unmovedRooks,epSquare:Ai(this),remainingChecks:(n=this.remainingChecks)===null||n===void 0?void 0:n.clone(),halfmoves:Math.min(this.halfmoves,150),fullmoves:Math.min(Math.max(this.fullmoves,1),9999)}}isInsufficientMaterial(){return H.every(t=>this.hasInsufficientMaterial(t))}hasDests(t){t=t||this.ctx();for(let n of this.board[this.turn])if(this.dests(n,t).nonEmpty())return !0;return this.dropDests(t).nonEmpty()}isLegal(t,n){if(oe(t))return !this.pockets||this.pockets[this.turn][t.role]<=0||t.role==="pawn"&&l.backranks().has(t.to)?!1:this.dropDests(n).has(t.to);{if(t.promotion==="pawn"||t.promotion==="king"&&this.rules!=="antichess"||!!t.promotion!==(this.board.pawn.has(t.from)&&l.backranks().has(t.to)))return !1;let r=this.dests(t.from,n);return r.has(t.to)||r.has(qn(this,t).to)}}isCheck(){let t=this.board.kingOf(this.turn);return g(t)&&this.kingAttackers(t,P(this.turn),this.board.occupied).nonEmpty()}isEnd(t){return (t?t.variantEnd:this.isVariantEnd())?!0:this.isInsufficientMaterial()||!this.hasDests(t)}isCheckmate(t){return t=t||this.ctx(),!t.variantEnd&&t.checkers.nonEmpty()&&!this.hasDests(t)}isStalemate(t){return t=t||this.ctx(),!t.variantEnd&&t.checkers.isEmpty()&&!this.hasDests(t)}outcome(t){let n=this.variantOutcome(t);return n||(t=t||this.ctx(),this.isCheckmate(t)?{winner:P(this.turn)}:this.isInsufficientMaterial()||this.isStalemate(t)?{winner:void 0}:void 0)}allDests(t){t=t||this.ctx();let n=new Map;if(t.variantEnd)return n;for(let r of this.board[this.turn])n.set(r,this.dests(r,t));return n}play(t){let n=this.turn,r=this.epSquare,i=Vt(this,t);if(this.epSquare=void 0,this.halfmoves+=1,n==="black"&&(this.fullmoves+=1),this.turn=P(n),oe(t))this.board.set(t.to,{role:t.role,color:n}),this.pockets&&this.pockets[n][t.role]--,t.role==="pawn"&&(this.halfmoves=0);else {let o=this.board.take(t.from);if(!o)return;let s;if(o.role==="pawn"){this.halfmoves=0,t.to===r&&(s=this.board.take(t.to+(n==="white"?-8:8)));let a=t.from-t.to;Math.abs(a)===16&&8<=t.from&&t.from<=55&&(this.epSquare=t.from+t.to>>1),t.promotion&&(o.role=t.promotion,o.promoted=!!this.pockets);}else if(o.role==="rook")this.castles.discardRook(t.from);else if(o.role==="king"){if(i){let a=this.castles.rook[n][i];if(g(a)){let u=this.board.take(a);this.board.set(Ie(n,i),o),u&&this.board.set(et(n,i),u);}}this.castles.discardColor(n);}if(!i){let a=this.board.set(t.to,o)||s;a&&this.playCaptureAt(t.to,a);}}this.remainingChecks&&this.isCheck()&&(this.remainingChecks[n]=Math.max(this.remainingChecks[n]-1,0));}},Ke=class extends ee{constructor(){super("chess");}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}},Ei=(e,t)=>{if(!g(t))return;let n=e.turn==="white"?5:2,r=e.turn==="white"?8:-8;if(J(t)!==n||e.board.occupied.has(t+r))return;let i=t-r;if(!(!e.board.pawn.has(i)||!e.board[P(e.turn)].has(i)))return t},Ai=e=>{if(!g(e.epSquare))return;let t=e.ctx(),r=e.board.pieces(e.turn,"pawn").intersect(be(P(e.turn),e.epSquare));for(let i of r)if(e.dests(i,t).has(e.epSquare))return e.epSquare},_i=(e,t,n)=>{if(!g(e.epSquare)||!be(e.turn,t).has(e.epSquare))return !1;if(!g(n.king))return !0;let r=e.epSquare+(e.turn==="white"?-8:8),i=e.board.occupied.toggle(t).toggle(e.epSquare).toggle(r);return !e.kingAttackers(n.king,P(e.turn),i).intersects(i)},ot=(e,t,n)=>{if(!g(n.king)||n.checkers.nonEmpty())return l.empty();let r=e.castles.rook[e.turn][t];if(!g(r))return l.empty();if(e.castles.path[e.turn][t].intersects(e.board.occupied))return l.empty();let i=Ie(e.turn,t),o=ye(n.king,i),s=e.board.occupied.without(n.king);for(let c of o)if(e.kingAttackers(c,P(e.turn),s).nonEmpty())return l.empty();let a=et(e.turn,t),u=e.board.occupied.toggle(n.king).toggle(r).toggle(a);return e.kingAttackers(i,P(e.turn),u).nonEmpty()?l.empty():l.fromSquare(r)},st=(e,t,n)=>{if(n.variantEnd)return l.empty();let r=e.board.get(t);if(!r||r.color!==e.turn)return l.empty();let i=nt(r,t,e.board.occupied);if(r.role==="pawn"){let o=e.board[P(e.turn)];g(e.epSquare)&&(o=o.with(e.epSquare)),i=i.intersect(o);let s=e.turn==="white"?8:-8,a=t+s;if(0<=a&&a<64&&!e.board.occupied.has(a)){i=i.with(a);let u=e.turn==="white"?t<16:t>=64-16,c=a+s;u&&!e.board.occupied.has(c)&&(i=i.with(c));}return i}else i=i.diff(e.board[e.turn]);return t===n.king?i.union(ot(e,"a",n)).union(ot(e,"h",n)):i};var Vt=(e,t)=>{if(oe(t))return;let n=t.to-t.from;if(!(Math.abs(n)!==2&&!e.board[e.turn].has(t.to))&&e.board.king.has(t.from))return n>0?"h":"a"},qn=(e,t)=>{let n=Vt(e,t);if(!n)return t;let r=e.castles.rook[e.turn][n];return {from:t.from,to:g(r)?r:t.to}};var Dn=e=>oe(e)?String.fromCharCode(35+e.to,35+64+8*5+["queen","rook","bishop","knight","pawn"].indexOf(e.role)):String.fromCharCode(35+e.from,e.promotion?35+64+8*["queen","rook","bishop","knight","king"].indexOf(e.promotion)+L(e.to):35+e.to);var z;(function(e){e.Fen="ERR_FEN",e.Board="ERR_BOARD",e.Pockets="ERR_POCKETS",e.Turn="ERR_TURN",e.Castling="ERR_CASTLING",e.EpSquare="ERR_EP_SQUARE",e.RemainingChecks="ERR_REMAINING_CHECKS",e.Halfmoves="ERR_HALFMOVES",e.Fullmoves="ERR_FULLMOVES";})(z||(z={}));var F=class extends Error{},Di=(e,t,n)=>{let r=e.indexOf(t);for(;n-- >0&&r!==-1;)r=e.indexOf(t,r+t.length);return r},Te=e=>/^\d{1,4}$/.test(e)?parseInt(e,10):void 0,Kn=e=>{let t=Me(e);return t&&{role:t,color:e.toLowerCase()===e?"black":"white"}},Gt=e=>{let t=de.empty(),n=7,r=0;for(let i=0;i<e.length;i++){let o=e[i];if(o==="/"&&r===8)r=0,n--;else {let s=parseInt(o,10);if(s>0)r+=s;else {if(r>=8||n<0)return m.err(new F(z.Board));let a=r+n*8,u=Kn(o);if(!u)return m.err(new F(z.Board));e[i+1]==="~"&&(u.promoted=!0,i++),t.set(a,u),r++;}}}return n!==0||r!==8?m.err(new F(z.Board)):m.ok(t)},Ln=e=>{if(e.length>64)return m.err(new F(z.Pockets));let t=Ee.empty();for(let n of e){let r=Kn(n);if(!r)return m.err(new F(z.Pockets));t[r.color][r.role]++;}return m.ok(t)},Li=(e,t)=>{let n=l.empty();if(t==="-")return m.ok(n);for(let r of t){let i=r.toLowerCase(),o=r===i?"black":"white",s=l.backrank(o).intersect(e[o]),a;if(i==="q")a=s;else if(i==="k")a=s.reversed();else if("a"<=i&&i<="h")a=l.fromFile(i.charCodeAt(0)-"a".charCodeAt(0)).intersect(s);else return m.err(new F(z.Castling));for(let u of a){if(e.king.has(u))break;if(e.rook.has(u)){n=n.with(u);break}}}return H.some(r=>l.backrank(r).intersect(n).size()>2)?m.err(new F(z.Castling)):m.ok(n)},In=e=>{let t=e.split("+");if(t.length===3&&t[0]===""){let n=Te(t[1]),r=Te(t[2]);return !g(n)||n>3||!g(r)||r>3?m.err(new F(z.RemainingChecks)):m.ok(new xe(3-n,3-r))}else if(t.length===2){let n=Te(t[0]),r=Te(t[1]);return !g(n)||n>3||!g(r)||r>3?m.err(new F(z.RemainingChecks)):m.ok(new xe(n,r))}else return m.err(new F(z.RemainingChecks))},zn=e=>{let t=e.split(/[\s_]+/),n=t.shift(),r,i=m.ok(void 0);if(n.endsWith("]")){let a=n.indexOf("[");if(a===-1)return m.err(new F(z.Fen));r=Gt(n.slice(0,a)),i=Ln(n.slice(a+1,-1));}else {let a=Di(n,"/",7);a===-1?r=Gt(n):(r=Gt(n.slice(0,a)),i=Ln(n.slice(a+1)));}let o,s=t.shift();if(!g(s)||s==="w")o="white";else if(s==="b")o="black";else return m.err(new F(z.Turn));return r.chain(a=>{let u=t.shift(),c=g(u)?Li(a,u):m.ok(l.empty()),f=t.shift(),p;if(g(f)&&f!=="-"&&(p=ue(f),!g(p)))return m.err(new F(z.EpSquare));let S=t.shift(),b;g(S)&&S.includes("+")&&(b=In(S),S=t.shift());let d=g(S)?Te(S):0;if(!g(d))return m.err(new F(z.Halfmoves));let h=t.shift(),w=g(h)?Te(h):1;if(!g(w))return m.err(new F(z.Fullmoves));let k=t.shift(),y=m.ok(void 0);if(g(k)){if(g(b))return m.err(new F(z.RemainingChecks));y=In(k);}else g(b)&&(y=b);return t.length>0?m.err(new F(z.Fen)):i.chain(M=>c.chain(x=>y.map(C=>({board:a,pockets:M,turn:o,unmovedRooks:x,remainingChecks:C,epSquare:p,halfmoves:d,fullmoves:Math.max(1,w)}))))})};var Ii=e=>{let t=se(e.role);return e.color==="white"&&(t=t.toUpperCase()),e.promoted&&(t+="~"),t},Bi=e=>{let t="",n=0;for(let r=7;r>=0;r--)for(let i=0;i<8;i++){let o=i+r*8,s=e.get(o);s?(n>0&&(t+=n,n=0),t+=Ii(s)):n++,i===7&&(n>0&&(t+=n,n=0),r!==0&&(t+="/"));}return t},Bn=e=>Y.map(t=>se(t).repeat(e[t])).join(""),Ki=e=>Bn(e.white).toUpperCase()+Bn(e.black),zi=(e,t)=>{let n="";for(let r of H){let i=l.backrank(r),o=e.kingOf(r);g(o)&&!i.has(o)&&(o=void 0);let s=e.pieces(r,"rook").intersect(i);for(let a of t.intersect(s).reversed())if(a===s.first()&&g(o)&&a<o)n+=r==="white"?"Q":"q";else if(a===s.last()&&g(o)&&o<a)n+=r==="white"?"K":"k";else {let u=Pe[L(a)];n+=r==="white"?u.toUpperCase():u;}}return n||"-"},Fi=e=>`${e.white}+${e.black}`,at=(e,t)=>[Bi(e.board)+(e.pockets?`[${Ki(e.pockets)}]`:""),e.turn[0],zi(e.board,e.unmovedRooks),g(e.epSquare)?W(e.epSquare):"-",...e.remainingChecks?[Fi(e.remainingChecks)]:[],...[Math.max(0,Math.min(e.halfmoves,9999)),Math.max(1,Math.min(e.fullmoves,9999))]].join(" ");var Hi=(e,t)=>{let n="";if(oe(t))t.role!=="pawn"&&(n=se(t.role).toUpperCase()),n+="@"+W(t.to);else {let r=e.board.getRole(t.from);if(!r)return "--";if(r==="king"&&(e.board[e.turn].has(t.to)||Math.abs(t.to-t.from)===2))n=t.to>t.from?"O-O":"O-O-O";else {let i=e.board.occupied.has(t.to)||r==="pawn"&&L(t.from)!==L(t.to);if(r!=="pawn"){n=se(r).toUpperCase();let o;if(r==="king"?o=ae(t.to).intersect(e.board.king):r==="queen"?o=Be(t.to,e.board.occupied).intersect(e.board.queen):r==="rook"?o=ve(t.to,e.board.occupied).intersect(e.board.rook):r==="bishop"?o=we(t.to,e.board.occupied).intersect(e.board.bishop):o=Oe(t.to).intersect(e.board.knight),o=o.intersect(e.board[e.turn]).without(t.from),o.nonEmpty()){let s=e.ctx();for(let a of o)e.dests(a,s).has(t.to)||(o=o.without(a));if(o.nonEmpty()){let a=!1,u=o.intersects(l.fromRank(J(t.from)));o.intersects(l.fromFile(L(t.from)))?a=!0:u=!0,u&&(n+=Pe[L(t.from)]),a&&(n+=Je[J(t.from)]);}}}else i&&(n=Pe[L(t.from)]);i&&(n+="x"),n+=W(t.to),t.promotion&&(n+="="+se(t.promotion).toUpperCase());}}return n},Fn=(e,t)=>{var n;let r=Hi(e,t);return e.play(t),!((n=e.outcome())===null||n===void 0)&&n.winner?r+"#":e.isCheck()?r+"+":r};var $n=(e,t)=>{let n=e.ctx(),r=t.match(/^([NBRQK])?([a-h])?([1-8])?[-x]?([a-h][1-8])(?:=?([nbrqkNBRQK]))?[+#]?$/);if(!r){let f;if(t==="O-O"||t==="O-O+"||t==="O-O#"?f="h":(t==="O-O-O"||t==="O-O-O+"||t==="O-O-O#")&&(f="a"),f){let b=e.castles.rook[e.turn][f];return !g(n.king)||!g(b)||!e.dests(n.king,n).has(b)?void 0:{from:n.king,to:b}}let p=t.match(/^([pnbrqkPNBRQK])?@([a-h][1-8])[+#]?$/);if(!p)return;let S={role:p[1]?Me(p[1]):"pawn",to:ue(p[2])};return e.isLegal(S,n)?S:void 0}let i=r[1]?Me(r[1]):"pawn",o=ue(r[4]),s=r[5]?Me(r[5]):void 0;if(!!s!==(i==="pawn"&&l.backranks().has(o))||s==="king"&&e.rules!=="antichess")return;let a=e.board.pieces(e.turn,i);i==="pawn"&&!r[2]?a=a.intersect(l.fromFile(L(o))):r[2]&&(a=a.intersect(l.fromFile(r[2].charCodeAt(0)-"a".charCodeAt(0)))),r[3]&&(a=a.intersect(l.fromRank(r[3].charCodeAt(0)-"1".charCodeAt(0))));let u=i==="pawn"?l.fromFile(L(o)):l.empty();a=a.intersect(u.union(nt({color:P(e.turn),role:i},o,e.board.occupied)));let c;for(let f of a)if(e.dests(f,n).has(o)){if(g(c))return;c=f;}if(g(c))return {from:c,to:o,promotion:s}};var ct=class extends ee{constructor(){super("crazyhouse");}reset(){super.reset(),this.pockets=Ee.empty();}setupUnchecked(t){super.setupUnchecked(t),this.board.promoted=t.board.promoted.intersect(t.board.occupied).diff(t.board.king).diff(t.board.pawn),this.pockets=t.pockets?t.pockets.clone():Ee.empty();}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}validate(t){return super.validate(t).chain(n=>{var r,i;return !((r=this.pockets)===null||r===void 0)&&r.count("king")?m.err(new q(T.Kings)):(((i=this.pockets)===null||i===void 0?void 0:i.size())||0)+this.board.occupied.size()>64?m.err(new q(T.Variant)):m.ok(void 0)})}hasInsufficientMaterial(t){return this.pockets?this.board.occupied.size()+this.pockets.size()<=3&&this.board.pawn.isEmpty()&&this.board.promoted.isEmpty()&&this.board.rooksAndQueens().isEmpty()&&this.pockets.count("pawn")<=0&&this.pockets.count("rook")<=0&&this.pockets.count("queen")<=0:super.hasInsufficientMaterial(t)}dropDests(t){var n,r;let i=this.board.occupied.complement().intersect(!((n=this.pockets)===null||n===void 0)&&n[this.turn].hasNonPawns()?l.full():!((r=this.pockets)===null||r===void 0)&&r[this.turn].hasPawns()?l.backranks().complement():l.empty());if(t=t||this.ctx(),g(t.king)&&t.checkers.nonEmpty()){let o=t.checkers.singleSquare();return g(o)?i.intersect(ye(o,t.king)):l.empty()}else return i}},lt=class extends ee{constructor(){super("atomic");}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}validate(t){if(this.board.occupied.isEmpty())return m.err(new q(T.Empty));if(this.board.king.size()>2)return m.err(new q(T.Kings));let n=this.board.kingOf(P(this.turn));return g(n)?this.kingAttackers(n,this.turn,this.board.occupied).nonEmpty()?m.err(new q(T.OppositeCheck)):l.backranks().intersects(this.board.pawn)?m.err(new q(T.PawnsOnBackrank)):t?.ignoreImpossibleCheck?m.ok(void 0):this.validateCheckers():m.err(new q(T.Kings))}validateCheckers(){return g(this.epSquare)?m.ok(void 0):super.validateCheckers()}kingAttackers(t,n,r){let i=this.board.pieces(n,"king");return i.isEmpty()||ae(t).intersects(i)?l.empty():super.kingAttackers(t,n,r)}playCaptureAt(t,n){super.playCaptureAt(t,n),this.board.take(t);for(let r of ae(t).intersect(this.board.occupied).diff(this.board.pawn)){let i=this.board.take(r);i?.role==="rook"&&this.castles.discardRook(r),i?.role==="king"&&this.castles.discardColor(i.color);}}hasInsufficientMaterial(t){if(this.board.pieces(P(t),"king").isEmpty())return !1;if(this.board[t].diff(this.board.king).isEmpty())return !0;if(this.board[P(t)].diff(this.board.king).nonEmpty()){if(this.board.occupied.equals(this.board.bishop.union(this.board.king))){if(!this.board.bishop.intersect(this.board.white).intersects(l.darkSquares()))return !this.board.bishop.intersect(this.board.black).intersects(l.lightSquares());if(!this.board.bishop.intersect(this.board.white).intersects(l.lightSquares()))return !this.board.bishop.intersect(this.board.black).intersects(l.darkSquares())}return !1}return this.board.queen.nonEmpty()||this.board.pawn.nonEmpty()?!1:this.board.knight.union(this.board.bishop).union(this.board.rook).size()===1?!0:this.board.occupied.equals(this.board.knight.union(this.board.king))?this.board.knight.size()<=2:!1}dests(t,n){n=n||this.ctx();let r=l.empty();for(let i of st(this,t,n)){let o=this.clone();o.play({from:t,to:i});let s=o.board.kingOf(this.turn);g(s)&&(!g(o.board.kingOf(o.turn))||o.kingAttackers(s,o.turn,o.board.occupied).isEmpty())&&(r=r.with(i));}return r}isVariantEnd(){return !!this.variantOutcome()}variantOutcome(t){for(let n of H)if(this.board.pieces(n,"king").isEmpty())return {winner:P(n)}}},ut=class extends ee{constructor(){super("antichess");}reset(){super.reset(),this.castles=ce.empty();}setupUnchecked(t){super.setupUnchecked(t),this.castles=ce.empty();}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}validate(t){return this.board.occupied.isEmpty()?m.err(new q(T.Empty)):l.backranks().intersects(this.board.pawn)?m.err(new q(T.PawnsOnBackrank)):m.ok(void 0)}kingAttackers(t,n,r){return l.empty()}ctx(){let t=super.ctx();if(g(this.epSquare)&&be(P(this.turn),this.epSquare).intersects(this.board.pieces(this.turn,"pawn")))return t.mustCapture=!0,t;let n=this.board[P(this.turn)];for(let r of this.board[this.turn])if(st(this,r,t).intersects(n))return t.mustCapture=!0,t;return t}dests(t,n){n=n||this.ctx();let r=st(this,t,n),i=this.board[P(this.turn)];return r.intersect(n.mustCapture?g(this.epSquare)&&this.board.getRole(t)==="pawn"?i.with(this.epSquare):i:l.full())}hasInsufficientMaterial(t){if(this.board[t].isEmpty())return !1;if(this.board[P(t)].isEmpty())return !0;if(this.board.occupied.equals(this.board.bishop)){let n=this.board[t].intersects(l.lightSquares()),r=this.board[t].intersects(l.darkSquares()),i=this.board[P(t)].isDisjoint(l.lightSquares()),o=this.board[P(t)].isDisjoint(l.darkSquares());return n&&i||r&&o}return this.board.occupied.equals(this.board.knight)&&this.board.occupied.size()===2?this.board.white.intersects(l.lightSquares())!==this.board.black.intersects(l.darkSquares())!=(this.turn===t):!1}isVariantEnd(){return this.board[this.turn].isEmpty()}variantOutcome(t){if(t=t||this.ctx(),t.variantEnd||this.isStalemate(t))return {winner:this.turn}}},dt=class extends ee{constructor(){super("kingofthehill");}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}hasInsufficientMaterial(t){return !1}isVariantEnd(){return this.board.king.intersects(l.center())}variantOutcome(t){for(let n of H)if(this.board.pieces(n,"king").intersects(l.center()))return {winner:n}}},ht=class extends ee{constructor(){super("3check");}reset(){super.reset(),this.remainingChecks=xe.default();}setupUnchecked(t){var n;super.setupUnchecked(t),this.remainingChecks=((n=t.remainingChecks)===null||n===void 0?void 0:n.clone())||xe.default();}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}hasInsufficientMaterial(t){return this.board.pieces(t,"king").equals(this.board[t])}isVariantEnd(){return !!this.remainingChecks&&(this.remainingChecks.white<=0||this.remainingChecks.black<=0)}variantOutcome(t){if(this.remainingChecks){for(let n of H)if(this.remainingChecks[n]<=0)return {winner:n}}}},Gi=()=>{let e=de.empty();return e.occupied=new l(65535,0),e.promoted=l.empty(),e.white=new l(61680,0),e.black=new l(3855,0),e.pawn=l.empty(),e.knight=new l(6168,0),e.bishop=new l(9252,0),e.rook=new l(16962,0),e.queen=new l(129,0),e.king=new l(33024,0),e},ft=class extends ee{constructor(){super("racingkings");}reset(){this.board=Gi(),this.pockets=void 0,this.turn="white",this.castles=ce.empty(),this.epSquare=void 0,this.remainingChecks=void 0,this.halfmoves=0,this.fullmoves=1;}setupUnchecked(t){super.setupUnchecked(t),this.castles=ce.empty();}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}validate(t){return this.isCheck()||this.board.pawn.nonEmpty()?m.err(new q(T.Variant)):super.validate(t)}dests(t,n){if(n=n||this.ctx(),t===n.king)return super.dests(t,n);let r=l.empty();for(let i of super.dests(t,n)){let o={from:t,to:i},s=this.clone();s.play(o),s.isCheck()||(r=r.with(i));}return r}hasInsufficientMaterial(t){return !1}isVariantEnd(){let t=l.fromRank(7),n=this.board.king.intersect(t);if(n.isEmpty())return !1;if(this.turn==="white"||n.intersects(this.board.black))return !0;let r=this.board.kingOf("black");if(g(r)){let i=this.board.occupied.without(r);for(let o of ae(r).intersect(t).diff(this.board.black))if(this.kingAttackers(o,"white",i).isEmpty())return !1}return !0}variantOutcome(t){if(t?!t.variantEnd:!this.isVariantEnd())return;let n=l.fromRank(7),r=this.board.pieces("black","king").intersects(n),i=this.board.pieces("white","king").intersects(n);return r&&!i?{winner:"black"}:i&&!r?{winner:"white"}:{winner:void 0}}},Ui=()=>{let e=de.empty();return e.occupied=new l(4294967295,4294901862),e.promoted=l.empty(),e.white=new l(4294967295,102),e.black=new l(0,4294901760),e.pawn=new l(4294967295,16711782),e.knight=new l(0,1107296256),e.bishop=new l(0,603979776),e.rook=new l(0,2164260864),e.queen=new l(0,134217728),e.king=new l(0,268435456),e},pt=class extends ee{constructor(){super("horde");}reset(){this.board=Ui(),this.pockets=void 0,this.turn="white",this.castles=ce.default(),this.castles.discardColor("white"),this.epSquare=void 0,this.remainingChecks=void 0,this.halfmoves=0,this.fullmoves=1;}static default(){let t=new this;return t.reset(),t}static fromSetup(t,n){let r=new this;return r.setupUnchecked(t),r.validate(n).map(i=>r)}clone(){return super.clone()}validate(t){if(this.board.occupied.isEmpty())return m.err(new q(T.Empty));if(this.board.king.size()!==1)return m.err(new q(T.Kings));let n=this.board.kingOf(P(this.turn));if(g(n)&&this.kingAttackers(n,this.turn,this.board.occupied).nonEmpty())return m.err(new q(T.OppositeCheck));for(let r of H){let i=this.board.pieces(r,"king").isEmpty()?l.backrank(P(r)):l.backranks();if(this.board.pieces(r,"pawn").intersects(i))return m.err(new q(T.PawnsOnBackrank))}return t?.ignoreImpossibleCheck?m.ok(void 0):this.validateCheckers()}hasInsufficientMaterial(t){if(this.board.pieces(t,"king").nonEmpty())return !1;let n=b=>b==="light"?"dark":"light",r=b=>b==="light"?l.lightSquares():l.darkSquares(),i=b=>{let d=this.board.pieces(b,"bishop");return d.intersects(l.darkSquares())&&d.intersects(l.lightSquares())},o=he.fromBoard(this.board,t),s=b=>r(b).intersect(this.board.pieces(t,"bishop")).size(),a=s("light")>=1?"light":"dark",u=o.pawn+o.knight+o.rook+o.queen+Math.min(s("dark"),2)+Math.min(s("light"),2),c=he.fromBoard(this.board,P(t)),f=b=>r(b).intersect(this.board.pieces(P(t),"bishop")).size(),p=c.size(),S=b=>p-b;if(u===0)return !0;if(u>=4||(o.pawn>=1||o.queen>=1)&&u>=2||o.rook>=1&&u>=2&&!(u===2&&o.rook===1&&o.bishop===1&&S(f(a))===1))return !1;if(u===1){if(p===1)return !0;if(o.queen===1)return !(c.pawn>=1||c.rook>=1||f("light")>=2||f("dark")>=2);if(o.pawn===1){let b=this.board.pieces(t,"pawn").last(),d=this.clone();d.board.set(b,{color:t,role:"queen"});let h=this.clone();return h.board.set(b,{color:t,role:"knight"}),d.hasInsufficientMaterial(t)&&h.hasInsufficientMaterial(t)}else {if(o.rook===1)return !(c.pawn>=2||c.rook>=1&&c.pawn>=1||c.rook>=1&&c.knight>=1||c.pawn>=1&&c.knight>=1);if(o.bishop===1)return !(f(n(a))>=2||f(n(a))>=1&&c.pawn>=1||c.pawn>=2);if(o.knight===1)return !(p>=4&&(c.knight>=2||c.pawn>=2||c.rook>=1&&c.knight>=1||c.rook>=1&&c.bishop>=1||c.knight>=1&&c.bishop>=1||c.rook>=1&&c.pawn>=1||c.knight>=1&&c.pawn>=1||c.bishop>=1&&c.pawn>=1||i(P(t))&&c.pawn>=1)&&(f("dark")<2||S(f("dark"))>=3)&&(f("light")<2||S(f("light"))>=3))}}else {if(u===2)return p===1?!0:o.knight===2?c.pawn+c.bishop+c.knight<1:i(t)?!(c.pawn>=1||c.bishop>=1||c.knight>=1&&c.rook+c.queen>=1):o.bishop>=1&&o.knight>=1?!(c.pawn>=1||f(n(a))>=1||S(f(a))>=3):!(c.pawn>=1&&f(n(a))>=1||c.pawn>=1&&c.knight>=1||f(n(a))>=1&&c.knight>=1||f(n(a))>=2||c.knight>=2||c.pawn>=2);if(u===3)return o.knight===2&&o.bishop===1||o.knight===3||i(t)?!1:p===1}return !0}isVariantEnd(){return this.board.white.isEmpty()||this.board.black.isEmpty()}variantOutcome(t){if(this.board.white.isEmpty())return {winner:"black"};if(this.board.black.isEmpty())return {winner:"white"}}},Hn=e=>{switch(e){case"chess":return Ke.default();case"antichess":return ut.default();case"atomic":return lt.default();case"horde":return pt.default();case"racingkings":return ft.default();case"kingofthehill":return dt.default();case"3check":return ht.default();case"crazyhouse":return ct.default()}},Vn=(e,t,n)=>{switch(e){case"chess":return Ke.fromSetup(t,n);case"antichess":return ut.fromSetup(t,n);case"atomic":return lt.fromSetup(t,n);case"horde":return pt.fromSetup(t,n);case"racingkings":return ft.fromSetup(t,n);case"kingofthehill":return dt.fromSetup(t,n);case"3check":return ht.fromSetup(t,n);case"crazyhouse":return ct.fromSetup(t,n)}};var ji=(e=Zt)=>({headers:e(),moves:new ze}),ze=class{constructor(){this.children=[];}*mainline(){let t=this;for(;t.children.length;){let n=t.children[0];yield n.data,t=n;}}},mt=class extends ze{constructor(t){super(),this.data=t;}};var Un=(e,t,n)=>{let r=new ze,i=[{before:e,after:r,ctx:t}],o;for(;o=i.pop();)for(let s=0;s<o.before.children.length;s++){let a=s<o.before.children.length-1?o.ctx.clone():o.ctx,u=o.before.children[s],c=n(a,u.data,s);if(g(c)){let f=new mt(c);o.after.children.push(f),i.push({before:u,after:f,ctx:a});}}return r};var Zt=()=>new Map([["Event","?"],["Site","?"],["Date","????.??.??"],["Round","?"],["White","?"],["Black","?"],["Result","*"]]);var Gn="\uFEFF",Ut=e=>/^\s*$/.test(e),Wt=e=>e.startsWith("%"),jt=class extends Error{},Yt=class{constructor(t,n=Zt,r=1e6){this.emitGame=t,this.initHeaders=n,this.maxBudget=r,this.lineBuf=[],this.resetGame(),this.state=0;}resetGame(){this.budget=this.maxBudget,this.found=!1,this.state=1,this.game=ji(this.initHeaders),this.stack=[{parent:this.game.moves,root:!0}],this.commentBuf=[];}consumeBudget(t){if(this.budget-=t,this.budget<0)throw new jt("ERR_PGN_BUDGET")}parse(t,n){if(!(this.budget<0))try{let r=0;for(;;){let i=t.indexOf(`
+`,r);if(i===-1)break;let o=i>r&&t[i-1]==="\r"?i-1:i;this.consumeBudget(i-r),this.lineBuf.push(t.slice(r,o)),r=i+1,this.handleLine();}this.consumeBudget(t.length-r),this.lineBuf.push(t.slice(r)),n?.stream||(this.handleLine(),this.emit(void 0));}catch(r){this.emit(r);}}handleLine(){let t=!0,n=this.lineBuf.join("");this.lineBuf=[];e:for(;;)switch(this.state){case 0:n.startsWith(Gn)&&(n=n.slice(Gn.length)),this.state=1;case 1:if(Ut(n)||Wt(n))return;this.found=!0,this.state=2;case 2:{if(Wt(n))return;let r=!0;for(;r;)r=!1,n=n.replace(/^\s*\[([A-Za-z0-9][A-Za-z0-9_+#=:-]*)\s+"((?:[^"\\]|\\"|\\\\)*)"\]/,(i,o,s)=>(this.consumeBudget(200),this.game.headers.set(o,s.replace(/\\"/g,'"').replace(/\\\\/g,"\\")),r=!0,t=!1,""));if(Ut(n))return;this.state=3;}case 3:{if(t){if(Wt(n))return;if(Ut(n))return this.emit(void 0)}let r=/(?:[NBKRQ]?[a-h]?[1-8]?[-x]?[a-h][1-8](?:=?[nbrqkNBRQK])?|[pnbrqkPNBRQK]?@[a-h][1-8]|O-O-O|0-0-0|O-O|0-0)[+#]?|--|Z0|0000|@@@@|{|;|\$\d{1,4}|[?!]{1,2}|\(|\)|\*|1-0|0-1|1\/2-1\/2/g,i;for(;i=r.exec(n);){let o=this.stack[this.stack.length-1],s=i[0];if(s===";")return;if(s.startsWith("$"))this.handleNag(parseInt(s.slice(1),10));else if(s==="!")this.handleNag(1);else if(s==="?")this.handleNag(2);else if(s==="!!")this.handleNag(3);else if(s==="??")this.handleNag(4);else if(s==="!?")this.handleNag(5);else if(s==="?!")this.handleNag(6);else if(s==="1-0"||s==="0-1"||s==="1/2-1/2"||s==="*")this.stack.length===1&&s!=="*"&&this.game.headers.set("Result",s);else if(s==="(")this.consumeBudget(100),this.stack.push({parent:o.parent,root:!1});else if(s===")")this.stack.length>1&&this.stack.pop();else if(s==="{"){let a=r.lastIndex,u=n[a]===" "?a+1:a;n=n.slice(u),this.state=4;continue e}else this.consumeBudget(100),s==="Z0"||s==="0000"||s==="@@@@"?s="--":s.startsWith("0")&&(s=s.replace(/0/g,"O")),o.node&&(o.parent=o.node),o.node=new mt({san:s,startingComments:o.startingComments}),o.startingComments=void 0,o.root=!1,o.parent.children.push(o.node);}return}case 4:{let r=n.indexOf("}");if(r===-1){this.commentBuf.push(n);return}else {let i=r>0&&n[r-1]===" "?r-1:r;this.commentBuf.push(n.slice(0,i)),this.handleComment(),n=n.slice(r),this.state=3,t=!1;}}}}handleNag(t){var n;this.consumeBudget(50);let r=this.stack[this.stack.length-1];r.node&&((n=r.node.data).nags||(n.nags=[]),r.node.data.nags.push(t));}handleComment(){var t,n;this.consumeBudget(100);let r=this.stack[this.stack.length-1],i=this.commentBuf.join(`
+`);this.commentBuf=[],r.node?((t=r.node.data).comments||(t.comments=[]),r.node.data.comments.push(i)):r.root?((n=this.game).comments||(n.comments=[]),this.game.comments.push(i)):(r.startingComments||(r.startingComments=[]),r.startingComments.push(i));}emit(t){if(this.state===4&&this.handleComment(),t)return this.emitGame(this.game,t);this.found&&this.emitGame(this.game,void 0),this.resetGame();}},Qt=(e,t=Zt)=>{let n=[];return new Yt(r=>n.push(r),t,NaN).parse(e),n},Yi=e=>{switch((e||"chess").toLowerCase()){case"chess":case"chess960":case"chess 960":case"standard":case"from position":case"classical":case"normal":case"fischerandom":case"fischerrandom":case"fischer random":case"wild/0":case"wild/1":case"wild/2":case"wild/3":case"wild/4":case"wild/5":case"wild/6":case"wild/7":case"wild/8":case"wild/8a":return "chess";case"crazyhouse":case"crazy house":case"house":case"zh":return "crazyhouse";case"king of the hill":case"koth":case"kingofthehill":return "kingofthehill";case"three-check":case"three check":case"threecheck":case"three check chess":case"3-check":case"3 check":case"3check":return "3check";case"antichess":case"anti chess":case"anti":return "antichess";case"atomic":case"atom":case"atomic chess":return "atomic";case"horde":case"horde chess":return "horde";case"racing kings":case"racingkings":case"racing":case"race":return "racingkings";default:return}};var Wn=(e,t)=>{let n=Yi(e.get("Variant"));if(!n)return m.err(new q(T.Variant));let r=e.get("FEN");return r?zn(r).chain(i=>Vn(n,i,t)):m.ok(Hn(n))};function Zi(e){switch(e){case"G":return "green";case"R":return "red";case"Y":return "yellow";case"B":return "blue";default:return}}var Qi=e=>{let t=Zi(e.slice(0,1)),n=ue(e.slice(1,3)),r=ue(e.slice(3,5));if(!(!t||!g(n))){if(e.length===3)return {color:t,from:n,to:n};if(e.length===5&&g(r))return {color:t,from:n,to:r}}};var jn=e=>{let t,n,r,i=[];return {text:e.replace(/\s?\[%(emt|clk)\s(\d{1,5}):(\d{1,2}):(\d{1,2}(?:\.\d{0,3})?)\]\s?/g,(s,a,u,c,f)=>{let p=parseInt(u,10)*3600+parseInt(c,10)*60+parseFloat(f);return a==="emt"?t=p:a==="clk"&&(n=p),"  "}).replace(/\s?\[%(?:csl|cal)\s([RGYB][a-h][1-8](?:[a-h][1-8])?(?:,[RGYB][a-h][1-8](?:[a-h][1-8])?)*)\]\s?/g,(s,a)=>{for(let u of a.split(","))i.push(Qi(u));return "  "}).replace(/\s?\[%eval\s(?:#([+-]?\d{1,5})|([+-]?(?:\d{1,5}|\d{0,5}\.\d{1,2})))(?:,(\d{1,5}))?\]\s?/g,(s,a,u,c)=>{let f=c&&parseInt(c,10);return r=a?{mate:parseInt(a,10),depth:f}:{pawns:parseFloat(u),depth:f},"  "}).trim(),shapes:i,emt:t,clock:n,evaluation:r}};function Xt(e){return t=>e&&e(t)||Ji(t)}var Ji=e=>eo[e],eo={flipTheBoard:"Flip the board",analysisBoard:"Analysis board",practiceWithComputer:"Practice with computer",getPgn:"Get PGN",download:"Download",viewOnLichess:"View on Lichess",viewOnSite:"View on site"};var Yn=["white","black"],qe=["a","b","c","d","e","f","g","h"],Fe=["1","2","3","4","5","6","7","8"];var Qn=[...Fe].reverse(),gt=Array.prototype.concat(...qe.map(e=>Fe.map(t=>e+t))),V=e=>gt[8*e[0]+e[1]],N=e=>[e.charCodeAt(0)-97,e.charCodeAt(1)-49],Xn=e=>{if(e)return e[1]==="@"?[e.slice(2,4)]:[e.slice(0,2),e.slice(2,4)]},kt=gt.map(N);function Jn(e){let t,n=()=>(t===void 0&&(t=e()),t);return n.clear=()=>{t=void 0;},n}var er=()=>{let e;return {start(){e=performance.now();},cancel(){e=void 0;},stop(){if(!e)return 0;let t=performance.now()-e;return e=void 0,t}}},bt=e=>e==="white"?"black":"white",Se=(e,t)=>{let n=e[0]-t[0],r=e[1]-t[1];return n*n+r*r},$e=(e,t)=>e.role===t.role&&e.color===t.color,Ce=e=>(t,n)=>[(n?t[0]:7-t[0])*e.width/8,(n?7-t[1]:t[1])*e.height/8],Z=(e,t)=>{e.style.transform=`translate(${t[0]}px,${t[1]}px)`;},Jt=(e,t,n=1)=>{e.style.transform=`translate(${t[0]}px,${t[1]}px) scale(${n})`;},He=(e,t)=>{e.style.visibility=t?"visible":"hidden";},le=e=>{var t;if(e.clientX||e.clientX===0)return [e.clientX,e.clientY];if(!((t=e.targetTouches)===null||t===void 0)&&t[0])return [e.targetTouches[0].clientX,e.targetTouches[0].clientY]},wt=e=>e.buttons===2||e.button===2,Q=(e,t)=>{let n=document.createElement(e);return t&&(n.className=t),n};function vt(e,t,n){let r=N(e);return t||(r[0]=7-r[0],r[1]=7-r[1]),[n.left+n.width*r[0]/8+n.width/16,n.top+n.height*(7-r[1])/8+n.height/16]}var te=class e{constructor(t){this.path=t;this.size=()=>this.path.length/2;this.head=()=>this.path.slice(0,2);this.tail=()=>new e(this.path.slice(2));this.init=()=>new e(this.path.slice(0,-2));this.last=()=>this.path.slice(-2);this.empty=()=>this.path=="";this.contains=t=>this.path.startsWith(t.path);this.isChildOf=t=>this.init()===t;this.append=t=>new e(this.path+t);this.equals=t=>this.path==t.path;}static{this.root=new e("");}};var yt=class{constructor(t,n,r,i){this.initial=t;this.moves=n;this.players=r;this.metadata=i;this.nodeAt=t=>tr(this.moves,t);this.dataAt=t=>{let n=this.nodeAt(t);return n?no(n)?n.data:this.initial:void 0};this.title=()=>this.players.white.name?[this.players.white.title,this.players.white.name,"vs",this.players.black.title,this.players.black.name].filter(t=>t&&!!t.trim()).join("_").replace(" ","-"):"lichess-pgn-viewer";this.pathAtMainlinePly=t=>t==0?te.root:this.mainline[Math.max(0,Math.min(this.mainline.length-1,t=="last"?9999:t-1))]?.path||te.root;this.hasPlayerName=()=>!!(this.players.white?.name||this.players.black?.name);this.mainline=Array.from(this.moves.mainline());}},to=(e,t)=>e.children.find(n=>n.data.path.last()==t),tr=(e,t)=>{if(t.empty())return e;let n=to(e,t.head());return n?tr(n,t.tail()):void 0},no=e=>"data"in e,nr=e=>"uci"in e;var en=class e{constructor(t,n,r){this.pos=t;this.path=n;this.clocks=r;this.clone=()=>new e(this.pos.clone(),this.path,{...this.clocks});}},tn=e=>{let t=e.map(jn),n=r=>r.reduce((i,o)=>typeof o==null?i:o,void 0);return {texts:t.map(r=>r.text).filter(r=>!!r),shapes:t.flatMap(r=>r.shapes),clock:n(t.map(r=>r.clock)),emt:n(t.map(r=>r.emt))}},rr=(e,t=!1)=>{let n=Qt(e)[0]||Qt("*")[0],r=Wn(n.headers).unwrap(),i=at(r.toSetup()),o=tn(n.comments||[]),s=new Map(Array.from(n.headers,([p,S])=>[p.toLowerCase(),S])),a=so(s,t),u={fen:i,turn:r.turn,check:r.isCheck(),pos:r.clone(),comments:o.texts,shapes:o.shapes,clocks:{white:a.timeControl?.initial||o.clock,black:a.timeControl?.initial||o.clock}},c=ro(r,n.moves,a),f=oo(s,a);return new yt(u,c,f,a)},ro=(e,t,n)=>Un(t,new en(e,te.root,{}),(r,i,o)=>{let s=$n(r.pos,i.san);if(!s)return;let a=Dn(s),u=r.path.append(a),c=Fn(r.pos,s);r.path=u;let f=r.pos.toSetup(),p=tn(i.comments||[]),S=tn(i.startingComments||[]),b=[...p.shapes,...S.shapes],d=(f.fullmoves-1)*2+(r.pos.turn==="white"?0:1),h=r.clocks=io(r.clocks,r.pos.turn,p.clock);return d<2&&n.timeControl&&(h={white:n.timeControl.initial,black:n.timeControl.initial,...h}),{path:u,ply:d,move:s,san:c,uci:Dt(s),fen:at(r.pos.toSetup()),turn:r.pos.turn,check:r.pos.isCheck(),comments:p.texts,startingComments:S.texts,nags:i.nags||[],shapes:b,clocks:h,emt:p.emt}}),io=(e,t,n)=>t=="white"?{...e,black:n}:{...e,white:n};function oo(e,t){let n=(i,o)=>{let s=e.get(`${i}${o}`);return s=="?"||s==""?void 0:s},r=i=>{let o=n(i,"");return {name:o,title:n(i,"title"),rating:parseInt(n(i,"elo")||"")||void 0,isLichessUser:t.isLichess&&!!o?.match(/^[a-z0-9][a-z0-9_-]{0,28}[a-z0-9]$/i)}};return {white:r("white"),black:r("black")}}function so(e,t){let n=e.get("source")||e.get("site"),r=e.get("timecontrol")?.split("+").map(s=>parseInt(s)),i=r&&r[0]?{initial:r[0],increment:r[1]||0}:void 0,o=e.get("orientation");return {externalLink:n&&n.match(/^https?:\/\//)?n:void 0,isLichess:!!(t&&n?.startsWith(t)),timeControl:i,orientation:o==="white"||o==="black"?o:void 0}}var Ge=class{constructor(t,n){this.opts=t;this.redraw=n;this.flipped=!1;this.pane="board";this.autoScrollRequested=!1;this.curNode=()=>this.game.nodeAt(this.path)||this.game.moves;this.curData=()=>this.game.dataAt(this.path)||this.game.initial;this.goTo=(t,n=!0)=>{let r=t=="first"?te.root:t=="prev"?this.path.init():t=="next"?this.game.nodeAt(this.path)?.children[0]?.data.path:this.game.pathAtMainlinePly("last");this.toPath(r||this.path,n);};this.canGoTo=t=>t=="prev"||t=="first"?!this.path.empty():!!this.curNode().children[0];this.toPath=(t,n=!0)=>{this.div?.dispatchEvent(new CustomEvent("pathChange",{detail:{path:t}})),this.path=t,this.pane="board",this.autoScrollRequested=!0,this.redrawGround(),this.redraw(),n&&this.focus();};this.focus=()=>this.div?.focus();this.toggleMenu=()=>{this.pane=this.pane=="board"?"menu":"board",this.redraw();};this.togglePgn=()=>{this.pane=this.pane=="pgn"?"board":"pgn",this.redraw();};this.orientation=()=>{let t=this.opts.orientation||"white";return this.flipped?P(t):t};this.flip=()=>{this.flipped=!this.flipped,this.pane="board",this.redrawGround(),this.redraw();};this.cgState=()=>{let t=this.curData(),n=nr(t)?Xn(t.uci):this.opts.chessground?.lastMove;return {fen:t.fen,orientation:this.orientation(),check:t.check,lastMove:n,turnColor:t.turn}};this.analysisUrl=()=>this.game.metadata.isLichess&&this.game.metadata.externalLink||`https://lichess.org/analysis/${this.curData().fen.replace(" ","_")}?color=${this.orientation()}`;this.practiceUrl=()=>`${this.analysisUrl()}#practice`;this.setGround=t=>{this.ground=t,this.redrawGround();};this.redrawGround=()=>this.withGround(t=>{t.set(this.cgState()),t.setShapes(this.curData().shapes.map(n=>({orig:W(n.from),dest:W(n.to),brush:n.color})));});this.withGround=t=>this.ground&&t(this.ground);this.game=rr(t.pgn,t.lichess),t.orientation=t.orientation||this.game.metadata.orientation,this.translate=Xt(t.translate),this.path=this.game.pathAtMainlinePly(t.initialPly);}};var Ae=(e,t)=>Math.abs(e-t),ao=e=>(t,n,r,i)=>Ae(t,r)<2&&(e==="white"?i===n+1||n<=1&&i===n+2&&t===r:i===n-1||n>=6&&i===n-2&&t===r),nn=(e,t,n,r)=>{let i=Ae(e,n),o=Ae(t,r);return i===1&&o===2||i===2&&o===1},ir=(e,t,n,r)=>Ae(e,n)===Ae(t,r),or=(e,t,n,r)=>e===n||t===r,rn=(e,t,n,r)=>ir(e,t,n,r)||or(e,t,n,r),co=(e,t,n)=>(r,i,o,s)=>Ae(r,o)<2&&Ae(i,s)<2||n&&i===s&&i===(e==="white"?0:7)&&(r===4&&(o===2&&t.includes(0)||o===6&&t.includes(7))||t.includes(o));function lo(e,t){let n=t==="white"?"1":"8",r=[];for(let[i,o]of e)i[1]===n&&o.color===t&&o.role==="rook"&&r.push(N(i)[0]);return r}function on(e,t,n){let r=e.get(t);if(!r)return [];let i=N(t),o=r.role,s=o==="pawn"?ao(r.color):o==="knight"?nn:o==="bishop"?ir:o==="rook"?or:o==="queen"?rn:co(r.color,lo(e,r.color),n);return kt.filter(a=>(i[0]!==a[0]||i[1]!==a[1])&&s(i[0],i[1],a[0],a[1])).map(V)}function U(e,...t){e&&setTimeout(()=>e(...t),1);}function sr(e){e.orientation=bt(e.orientation),e.animation.current=e.draggable.current=e.selected=void 0;}function ar(e,t){for(let[n,r]of t)r?e.pieces.set(n,r):e.pieces.delete(n);}function cr(e,t){if(e.check=void 0,t===!0&&(t=e.turnColor),t)for(let[n,r]of e.pieces)r.role==="king"&&r.color===t&&(e.check=n);}function uo(e,t,n,r){re(e),e.premovable.current=[t,n],U(e.premovable.events.set,t,n,r);}function ne(e){e.premovable.current&&(e.premovable.current=void 0,U(e.premovable.events.unset));}function ho(e,t,n){ne(e),e.predroppable.current={role:t,key:n},U(e.predroppable.events.set,t,n);}function re(e){let t=e.predroppable;t.current&&(t.current=void 0,U(t.events.unset));}function fo(e,t,n){if(!e.autoCastle)return !1;let r=e.pieces.get(t);if(!r||r.role!=="king")return !1;let i=N(t),o=N(n);if(i[1]!==0&&i[1]!==7||i[1]!==o[1])return !1;i[0]===4&&!e.pieces.has(n)&&(o[0]===6?n=V([7,o[1]]):o[0]===2&&(n=V([0,o[1]])));let s=e.pieces.get(n);return !s||s.color!==r.color||s.role!=="rook"?!1:(e.pieces.delete(t),e.pieces.delete(n),i[0]<o[0]?(e.pieces.set(V([6,o[1]]),r),e.pieces.set(V([5,o[1]]),s)):(e.pieces.set(V([2,o[1]]),r),e.pieces.set(V([3,o[1]]),s)),!0)}function sn(e,t,n){let r=e.pieces.get(t),i=e.pieces.get(n);if(t===n||!r)return !1;let o=i&&i.color!==r.color?i:void 0;return n===e.selected&&G(e),U(e.events.move,t,n,o),fo(e,t,n)||(e.pieces.set(n,r),e.pieces.delete(t)),e.lastMove=[t,n],e.check=void 0,U(e.events.change),o||!0}function xt(e,t,n,r){if(e.pieces.has(n))if(r)e.pieces.delete(n);else return !1;return U(e.events.dropNewPiece,t,n),e.pieces.set(n,t),e.lastMove=[n],e.check=void 0,U(e.events.change),e.movable.dests=void 0,e.turnColor=bt(e.turnColor),!0}function lr(e,t,n){let r=sn(e,t,n);return r&&(e.movable.dests=void 0,e.turnColor=bt(e.turnColor),e.animation.current=void 0),r}function an(e,t,n){if(Ct(e,t,n)){let r=lr(e,t,n);if(r){let i=e.hold.stop();G(e);let o={premove:!1,ctrlKey:e.stats.ctrlKey,holdTime:i};return r!==!0&&(o.captured=r),U(e.movable.events.after,t,n,o),!0}}else if(mo(e,t,n))return uo(e,t,n,{ctrlKey:e.stats.ctrlKey}),G(e),!0;return G(e),!1}function St(e,t,n,r){let i=e.pieces.get(t);i&&(po(e,t,n)||r)?(e.pieces.delete(t),xt(e,i,n,r),U(e.movable.events.afterNewPiece,i.role,n,{premove:!1,predrop:!1})):i&&go(e,t,n)?ho(e,i.role,n):(ne(e),re(e)),e.pieces.delete(t),G(e);}function Ue(e,t,n){if(U(e.events.select,t),e.selected){if(e.selected===t&&!e.draggable.enabled){G(e),e.hold.cancel();return}else if((e.selectable.enabled||n)&&e.selected!==t&&an(e,e.selected,t)){e.stats.dragged=!1;return}}(e.selectable.enabled||e.draggable.enabled)&&(ur(e,t)||ln(e,t))&&(cn(e,t),e.hold.start());}function cn(e,t){e.selected=t,ln(e,t)?e.premovable.customDests||(e.premovable.dests=on(e.pieces,t,e.premovable.castle)):e.premovable.dests=void 0;}function G(e){e.selected=void 0,e.premovable.dests=void 0,e.hold.cancel();}function ur(e,t){let n=e.pieces.get(t);return !!n&&(e.movable.color==="both"||e.movable.color===n.color&&e.turnColor===n.color)}var Ct=(e,t,n)=>{var r,i;return t!==n&&ur(e,t)&&(e.movable.free||!!(!((i=(r=e.movable.dests)===null||r===void 0?void 0:r.get(t))===null||i===void 0)&&i.includes(n)))};function po(e,t,n){let r=e.pieces.get(t);return !!r&&(t===n||!e.pieces.has(n))&&(e.movable.color==="both"||e.movable.color===r.color&&e.turnColor===r.color)}function ln(e,t){let n=e.pieces.get(t);return !!n&&e.premovable.enabled&&e.movable.color===n.color&&e.turnColor!==n.color}function mo(e,t,n){var r,i;let o=(i=(r=e.premovable.customDests)===null||r===void 0?void 0:r.get(t))!==null&&i!==void 0?i:on(e.pieces,t,e.premovable.castle);return t!==n&&ln(e,t)&&o.includes(n)}function go(e,t,n){let r=e.pieces.get(t),i=e.pieces.get(n);return !!r&&(!i||i.color!==e.movable.color)&&e.predroppable.enabled&&(r.role!=="pawn"||n[1]!=="1"&&n[1]!=="8")&&e.movable.color===r.color&&e.turnColor!==r.color}function dr(e,t){let n=e.pieces.get(t);return !!n&&e.draggable.enabled&&(e.movable.color==="both"||e.movable.color===n.color&&(e.turnColor===n.color||e.premovable.enabled))}function hr(e){let t=e.premovable.current;if(!t)return !1;let n=t[0],r=t[1],i=!1;if(Ct(e,n,r)){let o=lr(e,n,r);if(o){let s={premove:!0};o!==!0&&(s.captured=o),U(e.movable.events.after,n,r,s),i=!0;}}return ne(e),i}function fr(e,t){let n=e.predroppable.current,r=!1;if(!n)return !1;if(t(n)){let i={role:n.role,color:e.movable.color};xt(e,i,n.key)&&(U(e.movable.events.afterNewPiece,n.role,n.key,{premove:!1,predrop:!0}),r=!0);}return re(e),r}function We(e){ne(e),re(e),G(e);}function un(e){e.movable.color=e.movable.dests=e.animation.current=void 0,We(e);}function ie(e,t,n){let r=Math.floor(8*(e[0]-n.left)/n.width);t||(r=7-r);let i=7-Math.floor(8*(e[1]-n.top)/n.height);return t||(i=7-i),r>=0&&r<8&&i>=0&&i<8?V([r,i]):void 0}function pr(e,t,n,r){let i=N(e),o=kt.filter(c=>rn(i[0],i[1],c[0],c[1])||nn(i[0],i[1],c[0],c[1])),a=o.map(c=>vt(V(c),n,r)).map(c=>Se(t,c)),[,u]=a.reduce((c,f,p)=>c[0]<f?c:[f,p],[a[0],0]);return V(o[u])}var I=e=>e.orientation==="white";var hn="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",ko={p:"pawn",r:"rook",n:"knight",b:"bishop",q:"queen",k:"king"},bo={pawn:"p",rook:"r",knight:"n",bishop:"b",queen:"q",king:"k"};function Pt(e){e==="start"&&(e=hn);let t=new Map,n=7,r=0;for(let i of e)switch(i){case" ":case"[":return t;case"/":if(--n,n<0)return t;r=0;break;case"~":{let o=t.get(V([r-1,n]));o&&(o.promoted=!0);break}default:{let o=i.charCodeAt(0);if(o<57)r+=o-48;else {let s=i.toLowerCase();t.set(V([r,n]),{role:ko[s],color:i===s?"black":"white"}),++r;}}}return t}function mr(e){return Qn.map(t=>qe.map(n=>{let r=e.get(n+t);if(r){let i=bo[r.role];return r.color==="white"&&(i=i.toUpperCase()),r.promoted&&(i+="~"),i}else return "1"}).join("")).join("/").replace(/1{2,}/g,t=>t.length.toString())}function fn(e,t){t.animation&&(pn(e.animation,t.animation),(e.animation.duration||0)<70&&(e.animation.enabled=!1));}function Mt(e,t){var n,r,i;if(!((n=t.movable)===null||n===void 0)&&n.dests&&(e.movable.dests=void 0),!((r=t.drawable)===null||r===void 0)&&r.autoShapes&&(e.drawable.autoShapes=[]),pn(e,t),t.fen&&(e.pieces=Pt(t.fen),e.drawable.shapes=((i=t.drawable)===null||i===void 0?void 0:i.shapes)||[]),"check"in t&&cr(e,t.check||!1),"lastMove"in t&&!t.lastMove?e.lastMove=void 0:t.lastMove&&(e.lastMove=t.lastMove),e.selected&&cn(e,e.selected),fn(e,t),!e.movable.rookCastle&&e.movable.dests){let o=e.movable.color==="white"?"1":"8",s="e"+o,a=e.movable.dests.get(s),u=e.pieces.get(s);if(!a||!u||u.role!=="king")return;e.movable.dests.set(s,a.filter(c=>!(c==="a"+o&&a.includes("c"+o))&&!(c==="h"+o&&a.includes("g"+o))));}}function pn(e,t){for(let n in t)Object.prototype.hasOwnProperty.call(t,n)&&(Object.prototype.hasOwnProperty.call(e,n)&&gr(e[n])&&gr(t[n])?pn(e[n],t[n]):e[n]=t[n]);}function gr(e){if(typeof e!="object"||e===null)return !1;let t=Object.getPrototypeOf(e);return t===Object.prototype||t===null}var fe=(e,t)=>t.animation.enabled?xo(e,t):pe(e,t);function pe(e,t){let n=e(t);return t.dom.redraw(),n}var mn=(e,t)=>({key:e,pos:N(e),piece:t}),vo=(e,t)=>t.sort((n,r)=>Se(e.pos,n.pos)-Se(e.pos,r.pos))[0];function yo(e,t){let n=new Map,r=[],i=new Map,o=[],s=[],a=new Map,u,c,f;for(let[p,S]of e)a.set(p,mn(p,S));for(let p of gt)u=t.pieces.get(p),c=a.get(p),u?c?$e(u,c.piece)||(o.push(c),s.push(mn(p,u))):s.push(mn(p,u)):c&&o.push(c);for(let p of s)c=vo(p,o.filter(S=>$e(p.piece,S.piece))),c&&(f=[c.pos[0]-p.pos[0],c.pos[1]-p.pos[1]],n.set(p.key,f.concat(f)),r.push(c.key));for(let p of o)r.includes(p.key)||i.set(p.key,p.piece);return {anims:n,fadings:i}}function kr(e,t){let n=e.animation.current;if(n===void 0){e.dom.destroyed||e.dom.redrawNow();return}let r=1-(t-n.start)*n.frequency;if(r<=0)e.animation.current=void 0,e.dom.redrawNow();else {let i=So(r);for(let o of n.plan.anims.values())o[2]=o[0]*i,o[3]=o[1]*i;e.dom.redrawNow(!0),requestAnimationFrame((o=performance.now())=>kr(e,o));}}function xo(e,t){let n=new Map(t.pieces),r=e(t),i=yo(n,t);if(i.anims.size||i.fadings.size){let o=t.animation.current&&t.animation.current.start;t.animation.current={start:performance.now(),frequency:1/t.animation.duration,plan:i},o||kr(t,performance.now());}else t.dom.redraw();return r}var So=e=>e<.5?4*e*e*e:(e-1)*(2*e-2)*(2*e-2)+1;var Co=["green","red","blue","yellow"];function br(e,t){if(t.touches&&t.touches.length>1)return;t.stopPropagation(),t.preventDefault(),t.ctrlKey?G(e):We(e);let n=le(t),r=ie(n,I(e),e.dom.bounds());r&&(e.drawable.current={orig:r,pos:n,brush:Po(t),snapToValidMove:e.drawable.defaultSnapToValidMove},wr(e));}function wr(e){requestAnimationFrame(()=>{let t=e.drawable.current;if(t){let n=ie(t.pos,I(e),e.dom.bounds());n||(t.snapToValidMove=!1);let r=t.snapToValidMove?pr(t.orig,t.pos,I(e),e.dom.bounds()):n;r!==t.mouseSq&&(t.mouseSq=r,t.dest=r!==t.orig?r:void 0,e.dom.redrawNow()),wr(e);}});}function vr(e,t){e.drawable.current&&(e.drawable.current.pos=le(t));}function yr(e){let t=e.drawable.current;t&&(t.mouseSq&&Mo(e.drawable,t),gn(e));}function gn(e){e.drawable.current&&(e.drawable.current=void 0,e.dom.redraw());}function xr(e){e.drawable.shapes.length&&(e.drawable.shapes=[],e.dom.redraw(),Sr(e.drawable));}function Po(e){var t;let n=(e.shiftKey||e.ctrlKey)&&wt(e),r=e.altKey||e.metaKey||((t=e.getModifierState)===null||t===void 0?void 0:t.call(e,"AltGraph"));return Co[(n?1:0)+(r?2:0)]}function Mo(e,t){let n=i=>i.orig===t.orig&&i.dest===t.dest,r=e.shapes.find(n);r&&(e.shapes=e.shapes.filter(i=>!n(i))),(!r||r.brush!==t.brush)&&e.shapes.push({orig:t.orig,dest:t.dest,brush:t.brush}),Sr(e);}function Sr(e){e.onChange&&e.onChange(e.shapes);}function Cr(e,t){if(!(e.trustAllEvents||t.isTrusted)||t.button!==void 0&&t.button!==0||t.touches&&t.touches.length>1)return;let n=e.dom.bounds(),r=le(t),i=ie(r,I(e),n);if(!i)return;let o=e.pieces.get(i),s=e.selected;if(!s&&e.drawable.enabled&&(e.drawable.eraseOnClick||!o||o.color!==e.turnColor)&&xr(e),t.cancelable!==!1&&(!t.touches||e.blockTouchScroll||o||s||Ao(e,r)))t.preventDefault();else if(t.touches)return;let a=!!e.premovable.current,u=!!e.predroppable.current;e.stats.ctrlKey=t.ctrlKey,e.selected&&Ct(e,e.selected,i)?fe(p=>Ue(p,i),e):Ue(e,i);let c=e.selected===i,f=_r(e,i);if(o&&f&&c&&dr(e,i)){e.draggable.current={orig:i,piece:o,origPos:r,pos:r,started:e.draggable.autoDistance&&e.stats.dragged,element:f,previouslySelected:s,originTarget:t.target,keyHasChanged:!1},f.cgDragging=!0,f.classList.add("dragging");let p=e.dom.elements.ghost;p&&(p.className=`ghost ${o.color} ${o.role}`,Z(p,Ce(n)(N(i),I(e))),He(p,!0)),kn(e);}else a&&ne(e),u&&re(e);e.dom.redraw();}function Ao(e,t){let n=I(e),r=e.dom.bounds(),i=Math.pow(r.width/8,2);for(let o of e.pieces.keys()){let s=vt(o,n,r);if(Se(s,t)<=i)return !0}return !1}function Pr(e,t,n,r){let i="a0";e.pieces.set(i,t),e.dom.redraw();let o=le(n);e.draggable.current={orig:i,piece:t,origPos:o,pos:o,started:!0,element:()=>_r(e,i),originTarget:n.target,newPiece:!0,force:!!r,keyHasChanged:!1},kn(e);}function kn(e){requestAnimationFrame(()=>{var t;let n=e.draggable.current;if(!n)return;!((t=e.animation.current)===null||t===void 0)&&t.plan.anims.has(n.orig)&&(e.animation.current=void 0);let r=e.pieces.get(n.orig);if(!r||!$e(r,n.piece))_e(e);else if(!n.started&&Se(n.pos,n.origPos)>=Math.pow(e.draggable.distance,2)&&(n.started=!0),n.started){if(typeof n.element=="function"){let o=n.element();if(!o)return;o.cgDragging=!0,o.classList.add("dragging"),n.element=o;}let i=e.dom.bounds();Z(n.element,[n.pos[0]-i.left-i.width/16,n.pos[1]-i.top-i.height/16]),n.keyHasChanged||(n.keyHasChanged=n.orig!==ie(n.pos,I(e),i));}kn(e);});}function Mr(e,t){e.draggable.current&&(!t.touches||t.touches.length<2)&&(e.draggable.current.pos=le(t));}function Er(e,t){let n=e.draggable.current;if(!n)return;if(t.type==="touchend"&&t.cancelable!==!1&&t.preventDefault(),t.type==="touchend"&&n.originTarget!==t.target&&!n.newPiece){e.draggable.current=void 0;return}ne(e),re(e);let r=le(t)||n.pos,i=ie(r,I(e),e.dom.bounds());i&&n.started&&n.orig!==i?n.newPiece?St(e,n.orig,i,n.force):(e.stats.ctrlKey=t.ctrlKey,an(e,n.orig,i)&&(e.stats.dragged=!0)):n.newPiece?e.pieces.delete(n.orig):e.draggable.deleteOnDropOff&&!i&&(e.pieces.delete(n.orig),U(e.events.change)),(n.orig===n.previouslySelected||n.keyHasChanged)&&(n.orig===i||!i)?G(e):e.selectable.enabled||G(e),Ar(e),e.draggable.current=void 0,e.dom.redraw();}function _e(e){let t=e.draggable.current;t&&(t.newPiece&&e.pieces.delete(t.orig),e.draggable.current=void 0,G(e),Ar(e),e.dom.redraw());}function Ar(e){let t=e.dom.elements;t.ghost&&He(t.ghost,!1);}function _r(e,t){let n=e.dom.elements.board.firstChild;for(;n;){if(n.cgKey===t&&n.tagName==="PIECE")return n;n=n.nextSibling;}}function Nr(e,t){e.exploding={stage:1,keys:t},e.dom.redraw(),setTimeout(()=>{Rr(e,2),setTimeout(()=>Rr(e,void 0),120);},120);}function Rr(e,t){e.exploding&&(t?e.exploding.stage=t:e.exploding=void 0,e.dom.redraw());}function Or(e,t){function n(){sr(e),t();}return {set(r){r.orientation&&r.orientation!==e.orientation&&n(),fn(e,r),(r.fen?fe:pe)(i=>Mt(i,r),e);},state:e,getFen:()=>mr(e.pieces),toggleOrientation:n,setPieces(r){fe(i=>ar(i,r),e);},selectSquare(r,i){r?fe(o=>Ue(o,r,i),e):e.selected&&(G(e),e.dom.redraw());},move(r,i){fe(o=>sn(o,r,i),e);},newPiece(r,i){fe(o=>xt(o,r,i),e);},playPremove(){if(e.premovable.current){if(fe(hr,e))return !0;e.dom.redraw();}return !1},playPredrop(r){if(e.predroppable.current){let i=fr(e,r);return e.dom.redraw(),i}return !1},cancelPremove(){pe(ne,e);},cancelPredrop(){pe(re,e);},cancelMove(){pe(r=>{We(r),_e(r);},e);},stop(){pe(r=>{un(r),_e(r);},e);},explode(r){Nr(e,r);},setAutoShapes(r){pe(i=>i.drawable.autoShapes=r,e);},setShapes(r){pe(i=>i.drawable.shapes=r,e);},getKeyAtDomPos(r){return ie(r,I(e),e.dom.bounds())},redrawAll:t,dragNewPiece(r,i,o){Pr(e,r,i,o);},destroy(){un(e),e.dom.unbind&&e.dom.unbind(),e.dom.destroyed=!0;}}}function Tr(){return {pieces:Pt(hn),orientation:"white",turnColor:"white",coordinates:!0,ranksPosition:"right",autoCastle:!0,viewOnly:!1,disableContextMenu:!1,addPieceZIndex:!1,blockTouchScroll:!1,pieceKey:!1,trustAllEvents:!1,highlight:{lastMove:!0,check:!0},animation:{enabled:!0,duration:200},movable:{free:!0,color:"both",showDests:!0,events:{},rookCastle:!0},premovable:{enabled:!0,showDests:!0,castle:!0,events:{}},predroppable:{enabled:!1,events:{}},draggable:{enabled:!0,distance:3,autoDistance:!0,showGhost:!0,deleteOnDropOff:!1},dropmode:{active:!1},selectable:{enabled:!0},stats:{dragged:!("ontouchstart"in window)},events:{},drawable:{enabled:!0,visible:!0,defaultSnapToValidMove:!0,eraseOnClick:!0,shapes:[],autoShapes:[],brushes:{green:{key:"g",color:"#15781B",opacity:1,lineWidth:10},red:{key:"r",color:"#882020",opacity:1,lineWidth:10},blue:{key:"b",color:"#003088",opacity:1,lineWidth:10},yellow:{key:"y",color:"#e68f00",opacity:1,lineWidth:10},paleBlue:{key:"pb",color:"#003088",opacity:.4,lineWidth:15},paleGreen:{key:"pg",color:"#15781B",opacity:.4,lineWidth:15},paleRed:{key:"pr",color:"#882020",opacity:.4,lineWidth:15},paleGrey:{key:"pgr",color:"#4a4a4a",opacity:.35,lineWidth:15},purple:{key:"purp",color:"#68217a",opacity:.65,lineWidth:10},pink:{key:"pink",color:"#ee2080",opacity:.5,lineWidth:10},hilite:{key:"hilite",color:"#fff",opacity:1,lineWidth:1}},prevSvgHash:""},hold:er()}}function Lr(){let e=B("defs"),t=$(B("filter"),{id:"cg-filter-blur"});return t.appendChild($(B("feGaussianBlur"),{stdDeviation:"0.022"})),e.appendChild(t),e}function Ir(e,t,n){var r;let i=e.drawable,o=i.current,s=o&&o.mouseSq?o:void 0,a=new Map,u=e.dom.bounds(),c=i.autoShapes.filter(b=>!b.piece);for(let b of i.shapes.concat(c).concat(s?[s]:[])){if(!b.dest)continue;let d=(r=a.get(b.dest))!==null&&r!==void 0?r:new Set,h=At(Et(N(b.orig),e.orientation),u),w=At(Et(N(b.dest),e.orientation),u);d.add(wn(h,w)),a.set(b.dest,d);}let f=i.shapes.concat(c).map(b=>({shape:b,current:!1,hash:qr(b,bn(b.dest,a),!1,u)}));s&&f.push({shape:s,current:!0,hash:qr(s,bn(s.dest,a),!0,u)});let p=f.map(b=>b.hash).join(";");if(p===e.drawable.prevSvgHash)return;e.drawable.prevSvgHash=p;let S=t.querySelector("defs");Ro(i,f,S),No(f,t.querySelector("g"),n.querySelector("g"),b=>qo(e,b,i.brushes,a,u));}function Ro(e,t,n){var r;let i=new Map,o;for(let u of t.filter(c=>c.shape.dest&&c.shape.brush))o=Br(e.brushes[u.shape.brush],u.shape.modifiers),!((r=u.shape.modifiers)===null||r===void 0)&&r.hilite&&i.set("hilite",e.brushes.hilite),i.set(o.key,o);let s=new Set,a=n.firstElementChild;for(;a;)s.add(a.getAttribute("cgKey")),a=a.nextElementSibling;for(let[u,c]of i.entries())s.has(u)||n.appendChild(Io(c));}function No(e,t,n,r){let i=new Map;for(let o of e)i.set(o.hash,!1);for(let o of [t,n]){let s=[],a=o.firstElementChild,u;for(;a;)u=a.getAttribute("cgHash"),i.has(u)?i.set(u,!0):s.push(a),a=a.nextElementSibling;for(let c of s)o.removeChild(c);}for(let o of e.filter(s=>!i.get(s.hash)))for(let s of r(o))s.isCustom?n.appendChild(s.el):t.appendChild(s.el);}function qr({orig:e,dest:t,brush:n,piece:r,modifiers:i,customSvg:o,label:s},a,u,c){var f,p;return [c.width,c.height,u,e,t,n,a&&"-",r&&Oo(r),i&&To(i),o&&`custom-${Dr(o.html)},${(p=(f=o.center)===null||f===void 0?void 0:f[0])!==null&&p!==void 0?p:"o"}`,s&&`label-${Dr(s.text)}`].filter(S=>S).join(",")}function Oo(e){return [e.color,e.role,e.scale].filter(t=>t).join(",")}function To(e){return [e.lineWidth,e.hilite&&"*"].filter(t=>t).join(",")}function Dr(e){let t=0;for(let n=0;n<e.length;n++)t=(t<<5)-t+e.charCodeAt(n)>>>0;return t.toString()}function qo(e,{shape:t,current:n,hash:r},i,o,s){var a,u;let c=At(Et(N(t.orig),e.orientation),s),f=t.dest?At(Et(N(t.dest),e.orientation),s):c,p=t.brush&&Br(i[t.brush],t.modifiers),S=o.get(t.dest),b=[];if(p){let d=$(B("g"),{cgHash:r});b.push({el:d}),c[0]!==f[0]||c[1]!==f[1]?d.appendChild(Lo(t,p,c,f,n,bn(t.dest,o))):d.appendChild(Do(i[t.brush],c,n,s));}if(t.label){let d=t.label;(a=d.fill)!==null&&a!==void 0||(d.fill=t.brush&&i[t.brush].color);let h=t.brush?void 0:"tr";b.push({el:Bo(d,r,c,f,S,h),isCustom:!0});}if(t.customSvg){let d=(u=t.customSvg.center)!==null&&u!==void 0?u:"orig",[h,w]=d==="label"?zr(c,f,S).map(y=>y-.5):d==="dest"?f:c,k=$(B("g"),{transform:`translate(${h},${w})`,cgHash:r});k.innerHTML=`<svg width="1" height="1" viewBox="0 0 100 100">${t.customSvg.html}</svg>`,b.push({el:k,isCustom:!0});}return b}function Do(e,t,n,r){let i=Ko(),o=(r.width+r.height)/(4*Math.max(r.width,r.height));return $(B("circle"),{stroke:e.color,"stroke-width":i[n?0:1],fill:"none",opacity:Kr(e,n),cx:t[0],cy:t[1],r:o-i[1]/2})}function Lo(e,t,n,r,i,o){var s;function a(f){var p;let S=Fo(o&&!i),b=r[0]-n[0],d=r[1]-n[1],h=Math.atan2(d,b),w=Math.cos(h)*S,k=Math.sin(h)*S;return $(B("line"),{stroke:f?"white":t.color,"stroke-width":zo(t,i)+(f?.04:0),"stroke-linecap":"round","marker-end":`url(#arrowhead-${f?"hilite":t.key})`,opacity:!((p=e.modifiers)===null||p===void 0)&&p.hilite?1:Kr(t,i),x1:n[0],y1:n[1],x2:r[0]-w,y2:r[1]-k})}if(!(!((s=e.modifiers)===null||s===void 0)&&s.hilite))return a(!1);let u=B("g"),c=$(B("g"),{filter:"url(#cg-filter-blur)"});return c.appendChild($o(n,r)),c.appendChild(a(!0)),u.appendChild(c),u.appendChild(a(!1)),u}function Io(e){let t=$(B("marker"),{id:"arrowhead-"+e.key,orient:"auto",overflow:"visible",markerWidth:4,markerHeight:4,refX:e.key==="hilite"?1.86:2.05,refY:2});return t.appendChild($(B("path"),{d:"M0,0 V4 L3,2 Z",fill:e.color})),t.setAttribute("cgKey",e.key),t}function Bo(e,t,n,r,i,o){var s;let u=.4*.75**e.text.length,c=zr(n,r,i),f=o==="tr"?.4:0,p=$(B("g"),{transform:`translate(${c[0]+f},${c[1]-f})`,cgHash:t});p.appendChild($(B("circle"),{r:.4/2,"fill-opacity":o?1:.8,"stroke-opacity":o?1:.7,"stroke-width":.03,fill:(s=e.fill)!==null&&s!==void 0?s:"#666",stroke:"white"}));let S=$(B("text"),{"font-size":u,"font-family":"Noto Sans","text-anchor":"middle",fill:"white",y:.13*.75**e.text.length});return S.innerHTML=e.text,p.appendChild(S),p}function Et(e,t){return t==="white"?e:[7-e[0],7-e[1]]}function bn(e,t){return (e&&t.has(e)&&t.get(e).size>1)===!0}function B(e){return document.createElementNS("http://www.w3.org/2000/svg",e)}function $(e,t){for(let n in t)Object.prototype.hasOwnProperty.call(t,n)&&e.setAttribute(n,t[n]);return e}function Br(e,t){return t?{color:e.color,opacity:Math.round(e.opacity*10)/10,lineWidth:Math.round(t.lineWidth||e.lineWidth),key:[e.key,t.lineWidth].filter(n=>n).join("")}:e}function Ko(){return [3/64,4/64]}function zo(e,t){return (e.lineWidth||10)*(t?.85:1)/64}function Kr(e,t){return (e.opacity||1)*(t?.9:1)}function Fo(e){return (e?20:10)/64}function At(e,t){let n=Math.min(1,t.width/t.height),r=Math.min(1,t.height/t.width);return [(e[0]-3.5)*n,(3.5-e[1])*r]}function $o(e,t){let n={from:[Math.floor(Math.min(e[0],t[0])),Math.floor(Math.min(e[1],t[1]))],to:[Math.ceil(Math.max(e[0],t[0])),Math.ceil(Math.max(e[1],t[1]))]};return $(B("rect"),{x:n.from[0],y:n.from[1],width:n.to[0]-n.from[0],height:n.to[1]-n.from[1],fill:"none",stroke:"none"})}function wn(e,t,n=!0){let r=Math.atan2(t[1]-e[1],t[0]-e[0])+Math.PI;return n?(Math.round(r*8/Math.PI)+16)%16:r}function Ho(e,t){return Math.sqrt([e[0]-t[0],e[1]-t[1]].reduce((n,r)=>n+r*r,0))}function zr(e,t,n){let r=Ho(e,t),i=wn(e,t,!1);if(n&&(r-=33/64,n.size>1)){r-=10/64;let o=wn(e,t);(n.has((o+1)%16)||n.has((o+15)%16))&&o&1&&(r-=.4);}return [e[0]-Math.cos(i)*r,e[1]-Math.sin(i)*r].map(o=>o+.5)}function $r(e,t){e.innerHTML="",e.classList.add("cg-wrap");for(let u of Yn)e.classList.toggle("orientation-"+u,t.orientation===u);e.classList.toggle("manipulable",!t.viewOnly);let n=Q("cg-container");e.appendChild(n);let r=Q("cg-board");n.appendChild(r);let i,o,s;if(t.drawable.visible&&(i=$(B("svg"),{class:"cg-shapes",viewBox:"-4 -4 8 8",preserveAspectRatio:"xMidYMid slice"}),i.appendChild(Lr()),i.appendChild(B("g")),o=$(B("svg"),{class:"cg-custom-svgs",viewBox:"-3.5 -3.5 8 8",preserveAspectRatio:"xMidYMid slice"}),o.appendChild(B("g")),s=Q("cg-auto-pieces"),n.appendChild(i),n.appendChild(o),n.appendChild(s)),t.coordinates){let u=t.orientation==="black"?" black":"",c=t.ranksPosition==="left"?" left":"";n.appendChild(Fr(Fe,"ranks"+u+c)),n.appendChild(Fr(qe,"files"+u));}let a;return t.draggable.enabled&&t.draggable.showGhost&&(a=Q("piece","ghost"),He(a,!1),n.appendChild(a)),{board:r,container:n,wrap:e,ghost:a,svg:i,customSvg:o,autoPieces:s}}function Fr(e,t){let n=Q("coords",t),r;for(let i of e)r=Q("coord"),r.textContent=i,n.appendChild(r);return n}function Hr(e,t){if(!e.dropmode.active)return;ne(e),re(e);let n=e.dropmode.piece;if(n){e.pieces.set("a0",n);let r=le(t),i=r&&ie(r,I(e),e.dom.bounds());i&&St(e,"a0",i);}e.dom.redraw();}function Gr(e,t){let n=e.dom.elements.board;if("ResizeObserver"in window&&new ResizeObserver(t).observe(e.dom.elements.wrap),(e.disableContextMenu||e.drawable.enabled)&&n.addEventListener("contextmenu",i=>i.preventDefault()),e.viewOnly)return;let r=Go(e);n.addEventListener("touchstart",r,{passive:!1}),n.addEventListener("mousedown",r,{passive:!1});}function Ur(e,t){let n=[];if("ResizeObserver"in window||n.push(je(document.body,"chessground.resize",t)),!e.viewOnly){let r=Vr(e,Mr,vr),i=Vr(e,Er,yr);for(let s of ["touchmove","mousemove"])n.push(je(document,s,r));for(let s of ["touchend","mouseup"])n.push(je(document,s,i));let o=()=>e.dom.bounds.clear();n.push(je(document,"scroll",o,{capture:!0,passive:!0})),n.push(je(window,"resize",o,{passive:!0}));}return ()=>n.forEach(r=>r())}function je(e,t,n,r){return e.addEventListener(t,n,r),()=>e.removeEventListener(t,n,r)}var Go=e=>t=>{e.draggable.current?_e(e):e.drawable.current?gn(e):t.shiftKey||wt(t)?e.drawable.enabled&&br(e,t):e.viewOnly||(e.dropmode.active?Hr(e,t):Cr(e,t));},Vr=(e,t,n)=>r=>{e.drawable.current?e.drawable.enabled&&n(e,r):e.viewOnly||t(e,r);};function jr(e){let t=I(e),n=Ce(e.dom.bounds()),r=e.dom.elements.board,i=e.pieces,o=e.animation.current,s=o?o.plan.anims:new Map,a=o?o.plan.fadings:new Map,u=e.draggable.current,c=Wo(e),f=new Set,p=new Set,S=new Map,b=new Map,d,h,w,k,y,M,x,C,E,_;for(h=r.firstChild;h;){if(d=h.cgKey,Zr(h))if(w=i.get(d),y=s.get(d),M=a.get(d),k=h.cgPiece,h.cgDragging&&(!u||u.orig!==d)&&(h.classList.remove("dragging"),Z(h,n(N(d),t)),h.cgDragging=!1),!M&&h.cgFading&&(h.cgFading=!1,h.classList.remove("fading")),w){if(y&&h.cgAnimating&&k===Ye(w)){let v=N(d);v[0]+=y[2],v[1]+=y[3],h.classList.add("anim"),Z(h,n(v,t));}else h.cgAnimating&&(h.cgAnimating=!1,h.classList.remove("anim"),Z(h,n(N(d),t)),e.addPieceZIndex&&(h.style.zIndex=vn(N(d),t)));k===Ye(w)&&(!M||!h.cgFading)?f.add(d):M&&k===Ye(M)?(h.classList.add("fading"),h.cgFading=!0):yn(S,k,h);}else yn(S,k,h);else if(Qr(h)){let v=h.className;c.get(d)===v?p.add(d):yn(b,v,h);}h=h.nextSibling;}for(let[v,O]of c)if(!p.has(v)){E=b.get(O),_=E&&E.pop();let D=n(N(v),t);if(_)_.cgKey=v,Z(_,D);else {let R=Q("square",O);R.cgKey=v,Z(R,D),r.insertBefore(R,r.firstChild);}}for(let[v,O]of i)if(y=s.get(v),!f.has(v))if(x=S.get(Ye(O)),C=x&&x.pop(),C){C.cgKey=v,C.cgFading&&(C.classList.remove("fading"),C.cgFading=!1);let D=N(v);e.addPieceZIndex&&(C.style.zIndex=vn(D,t)),y&&(C.cgAnimating=!0,C.classList.add("anim"),D[0]+=y[2],D[1]+=y[3]),Z(C,n(D,t));}else {let D=Ye(O),R=Q("piece",D),K=N(v);R.cgPiece=D,R.cgKey=v,y&&(R.cgAnimating=!0,K[0]+=y[2],K[1]+=y[3]),Z(R,n(K,t)),e.addPieceZIndex&&(R.style.zIndex=vn(K,t)),r.appendChild(R);}for(let v of S.values())Wr(e,v);for(let v of b.values())Wr(e,v);}function Yr(e){let t=I(e),n=Ce(e.dom.bounds()),r=e.dom.elements.board.firstChild;for(;r;)(Zr(r)&&!r.cgAnimating||Qr(r))&&Z(r,n(N(r.cgKey),t)),r=r.nextSibling;}function xn(e){var t,n;let r=e.dom.elements.wrap.getBoundingClientRect(),i=e.dom.elements.container,o=r.height/r.width,s=Math.floor(r.width*window.devicePixelRatio/8)*8/window.devicePixelRatio,a=s*o;i.style.width=s+"px",i.style.height=a+"px",e.dom.bounds.clear(),(t=e.addDimensionsCssVarsTo)===null||t===void 0||t.style.setProperty("--cg-width",s+"px"),(n=e.addDimensionsCssVarsTo)===null||n===void 0||n.style.setProperty("--cg-height",a+"px");}var Zr=e=>e.tagName==="PIECE",Qr=e=>e.tagName==="SQUARE";function Wr(e,t){for(let n of t)e.dom.elements.board.removeChild(n);}function vn(e,t){let r=e[1];return `${t?3+7-r:3+r}`}var Ye=e=>`${e.color} ${e.role}`;function Wo(e){var t,n,r;let i=new Map;if(e.lastMove&&e.highlight.lastMove)for(let a of e.lastMove)me(i,a,"last-move");if(e.check&&e.highlight.check&&me(i,e.check,"check"),e.selected&&(me(i,e.selected,"selected"),e.movable.showDests)){let a=(t=e.movable.dests)===null||t===void 0?void 0:t.get(e.selected);if(a)for(let c of a)me(i,c,"move-dest"+(e.pieces.has(c)?" oc":""));let u=(r=(n=e.premovable.customDests)===null||n===void 0?void 0:n.get(e.selected))!==null&&r!==void 0?r:e.premovable.dests;if(u)for(let c of u)me(i,c,"premove-dest"+(e.pieces.has(c)?" oc":""));}let o=e.premovable.current;if(o)for(let a of o)me(i,a,"current-premove");else e.predroppable.current&&me(i,e.predroppable.current.key,"current-premove");let s=e.exploding;if(s)for(let a of s.keys)me(i,a,"exploding"+s.stage);return e.highlight.custom&&e.highlight.custom.forEach((a,u)=>{me(i,u,a);}),i}function me(e,t,n){let r=e.get(t);r?e.set(t,`${r} ${n}`):e.set(t,n);}function yn(e,t,n){let r=e.get(t);r?r.push(n):e.set(t,[n]);}function Xr(e,t,n){let r=new Map,i=[];for(let a of e)r.set(a.hash,!1);let o=t.firstElementChild,s;for(;o;)s=o.getAttribute("cgHash"),r.has(s)?r.set(s,!0):i.push(o),o=o.nextElementSibling;for(let a of i)t.removeChild(a);for(let a of e)r.get(a.hash)||t.appendChild(n(a));}function Jr(e,t){let r=e.drawable.autoShapes.filter(i=>i.piece).map(i=>({shape:i,hash:Yo(i),current:!1}));Xr(r,t,i=>jo(e,i,e.dom.bounds()));}function ei(e){var t;let n=I(e),r=Ce(e.dom.bounds()),i=(t=e.dom.elements.autoPieces)===null||t===void 0?void 0:t.firstChild;for(;i;)Jt(i,r(N(i.cgKey),n),i.cgScale),i=i.nextSibling;}function jo(e,{shape:t,hash:n},r){var i,o,s;let a=t.orig,u=(i=t.piece)===null||i===void 0?void 0:i.role,c=(o=t.piece)===null||o===void 0?void 0:o.color,f=(s=t.piece)===null||s===void 0?void 0:s.scale,p=Q("piece",`${u} ${c}`);return p.setAttribute("cgHash",n),p.cgKey=a,p.cgScale=f,Jt(p,Ce(r)(N(a),I(e)),f),p}var Yo=e=>{var t,n,r;return [e.orig,(t=e.piece)===null||t===void 0?void 0:t.role,(n=e.piece)===null||n===void 0?void 0:n.color,(r=e.piece)===null||r===void 0?void 0:r.scale].join(",")};function ti(e,t){let n=Tr();Mt(n,t||{});function r(){let i="dom"in n?n.dom.unbind:void 0,o=$r(e,n),s=Jn(()=>o.board.getBoundingClientRect()),a=f=>{jr(c),o.autoPieces&&Jr(c,o.autoPieces),!f&&o.svg&&Ir(c,o.svg,o.customSvg);},u=()=>{xn(c),Yr(c),o.autoPieces&&ei(c);},c=n;return c.dom={elements:o,bounds:s,redraw:Qo(a),redrawNow:a,unbind:i},c.drawable.prevSvgHash="",xn(c),a(!1),Gr(c,u),i||(c.dom.unbind=Ur(c,u)),c.events.insert&&c.events.insert(o),c}return Or(r(),r)}function Qo(e){let t=!1;return ()=>{t||(t=!0,requestAnimationFrame(()=>{e(),t=!1;}));}}function Xo(e,t){return document.createElement(e,t)}function Jo(e,t,n){return document.createElementNS(e,t,n)}function es(){return Re(document.createDocumentFragment())}function ts(e){return document.createTextNode(e)}function ns(e){return document.createComment(e)}function rs(e,t,n){if(ge(e)){let r=e;for(;r&&ge(r);)r=Re(r).parent;e=r??e;}ge(t)&&(t=Re(t,e)),n&&ge(n)&&(n=Re(n).firstChildNode),e.insertBefore(t,n);}function is(e,t){e.removeChild(t);}function os(e,t){ge(t)&&(t=Re(t,e)),e.appendChild(t);}function ni(e){if(ge(e)){for(;e&&ge(e);)e=Re(e).parent;return e??null}return e.parentNode}function ss(e){var t;if(ge(e)){let n=Re(e),r=ni(n);if(r&&n.lastChildNode){let i=Array.from(r.childNodes),o=i.indexOf(n.lastChildNode);return (t=i[o+1])!==null&&t!==void 0?t:null}return null}return e.nextSibling}function as(e){return e.tagName}function cs(e,t){e.textContent=t;}function ls(e){return e.textContent}function us(e){return e.nodeType===1}function ds(e){return e.nodeType===3}function hs(e){return e.nodeType===8}function ge(e){return e.nodeType===11}function Re(e,t){var n,r,i;let o=e;return (n=o.parent)!==null&&n!==void 0||(o.parent=t??null),(r=o.firstChildNode)!==null&&r!==void 0||(o.firstChildNode=e.firstChild),(i=o.lastChildNode)!==null&&i!==void 0||(o.lastChildNode=e.lastChild),o}var ri={createElement:Xo,createElementNS:Jo,createTextNode:ts,createDocumentFragment:es,createComment:ns,insertBefore:rs,removeChild:is,appendChild:os,parentNode:ni,nextSibling:ss,tagName:as,setTextContent:cs,getTextContent:ls,isElement:us,isText:ds,isComment:hs,isDocumentFragment:ge};function Ne(e,t,n,r,i){let o=t===void 0?void 0:t.key;return {sel:e,data:t,children:n,text:r,elm:i,key:o}}var Ze=Array.isArray;function De(e){return typeof e=="string"||typeof e=="number"||e instanceof String||e instanceof Number}function Sn(e){return e===void 0}function j(e){return e!==void 0}var Cn=Ne("",{},[],void 0,void 0);function Qe(e,t){var n,r;let i=e.key===t.key,o=((n=e.data)===null||n===void 0?void 0:n.is)===((r=t.data)===null||r===void 0?void 0:r.is),s=e.sel===t.sel,a=!e.sel&&e.sel===t.sel?typeof e.text==typeof t.text:!0;return s&&i&&o&&a}function fs(){throw new Error("The document fragment is not supported on this platform.")}function ps(e,t){return e.isElement(t)}function ms(e,t){return e.isDocumentFragment(t)}function gs(e,t,n){var r;let i={};for(let o=t;o<=n;++o){let s=(r=e[o])===null||r===void 0?void 0:r.key;s!==void 0&&(i[s]=o);}return i}var ks=["create","update","remove","destroy","pre","post"];function Pn(e,t,n){let r={create:[],update:[],remove:[],destroy:[],pre:[],post:[]},i=ri;for(let d of ks)for(let h of e){let w=h[d];w!==void 0&&r[d].push(w);}function o(d){let h=d.id?"#"+d.id:"",w=d.getAttribute("class"),k=w?"."+w.split(" ").join("."):"";return Ne(i.tagName(d).toLowerCase()+h+k,{},[],void 0,d)}function s(d){return Ne(void 0,{},[],void 0,d)}function a(d,h){return function(){if(--h===0){let k=i.parentNode(d);i.removeChild(k,d);}}}function u(d,h){var w,k,y,M;let x,C=d.data;if(C!==void 0){let v=(w=C.hook)===null||w===void 0?void 0:w.init;j(v)&&(v(d),C=d.data);}let E=d.children,_=d.sel;if(_==="!")Sn(d.text)&&(d.text=""),d.elm=i.createComment(d.text);else if(_!==void 0){let v=_.indexOf("#"),O=_.indexOf(".",v),D=v>0?v:_.length,R=O>0?O:_.length,K=v!==-1||O!==-1?_.slice(0,Math.min(D,R)):_,X=d.elm=j(C)&&j(x=C.ns)?i.createElementNS(x,K,C):i.createElement(K,C);for(D<R&&X.setAttribute("id",_.slice(D+1,R)),O>0&&X.setAttribute("class",_.slice(R+1).replace(/\./g," ")),x=0;x<r.create.length;++x)r.create[x](Cn,d);if(Ze(E))for(x=0;x<E.length;++x){let Rn=E[x];Rn!=null&&i.appendChild(X,u(Rn,h));}else De(d.text)&&i.appendChild(X,i.createTextNode(d.text));let Xe=d.data.hook;j(Xe)&&((k=Xe.create)===null||k===void 0||k.call(Xe,Cn,d),Xe.insert&&h.push(d));}else if(!((y=n?.experimental)===null||y===void 0)&&y.fragments&&d.children){for(d.elm=((M=i.createDocumentFragment)!==null&&M!==void 0?M:fs)(),x=0;x<r.create.length;++x)r.create[x](Cn,d);for(x=0;x<d.children.length;++x){let v=d.children[x];v!=null&&i.appendChild(d.elm,u(v,h));}}else d.elm=i.createTextNode(d.text);return d.elm}function c(d,h,w,k,y,M){for(;k<=y;++k){let x=w[k];x!=null&&i.insertBefore(d,u(x,M),h);}}function f(d){var h,w;let k=d.data;if(k!==void 0){(w=(h=k?.hook)===null||h===void 0?void 0:h.destroy)===null||w===void 0||w.call(h,d);for(let y=0;y<r.destroy.length;++y)r.destroy[y](d);if(d.children!==void 0)for(let y=0;y<d.children.length;++y){let M=d.children[y];M!=null&&typeof M!="string"&&f(M);}}}function p(d,h,w,k){for(var y,M;w<=k;++w){let x,C,E=h[w];if(E!=null)if(j(E.sel)){f(E),x=r.remove.length+1,C=a(E.elm,x);for(let v=0;v<r.remove.length;++v)r.remove[v](E,C);let _=(M=(y=E?.data)===null||y===void 0?void 0:y.hook)===null||M===void 0?void 0:M.remove;j(_)?_(E,C):C();}else E.children?(f(E),p(d,E.children,0,E.children.length-1)):i.removeChild(d,E.elm);}}function S(d,h,w,k){let y=0,M=0,x=h.length-1,C=h[0],E=h[x],_=w.length-1,v=w[0],O=w[_],D,R,K,X;for(;y<=x&&M<=_;)C==null?C=h[++y]:E==null?E=h[--x]:v==null?v=w[++M]:O==null?O=w[--_]:Qe(C,v)?(b(C,v,k),C=h[++y],v=w[++M]):Qe(E,O)?(b(E,O,k),E=h[--x],O=w[--_]):Qe(C,O)?(b(C,O,k),i.insertBefore(d,C.elm,i.nextSibling(E.elm)),C=h[++y],O=w[--_]):Qe(E,v)?(b(E,v,k),i.insertBefore(d,E.elm,C.elm),E=h[--x],v=w[++M]):(D===void 0&&(D=gs(h,y,x)),R=D[v.key],Sn(R)?i.insertBefore(d,u(v,k),C.elm):(K=h[R],K.sel!==v.sel?i.insertBefore(d,u(v,k),C.elm):(b(K,v,k),h[R]=void 0,i.insertBefore(d,K.elm,C.elm))),v=w[++M]);M<=_&&(X=w[_+1]==null?null:w[_+1].elm,c(d,X,w,M,_,k)),y<=x&&p(d,h,y,x);}function b(d,h,w){var k,y,M,x,C,E,_,v;let O=(k=h.data)===null||k===void 0?void 0:k.hook;(y=O?.prepatch)===null||y===void 0||y.call(O,d,h);let D=h.elm=d.elm;if(d===h)return;if(h.data!==void 0||j(h.text)&&h.text!==d.text){(M=h.data)!==null&&M!==void 0||(h.data={}),(x=d.data)!==null&&x!==void 0||(d.data={});for(let X=0;X<r.update.length;++X)r.update[X](d,h);(_=(E=(C=h.data)===null||C===void 0?void 0:C.hook)===null||E===void 0?void 0:E.update)===null||_===void 0||_.call(E,d,h);}let R=d.children,K=h.children;Sn(h.text)?j(R)&&j(K)?R!==K&&S(D,R,K,w):j(K)?(j(d.text)&&i.setTextContent(D,""),c(D,null,K,0,K.length-1,w)):j(R)?p(D,R,0,R.length-1):j(d.text)&&i.setTextContent(D,""):d.text!==h.text&&(j(R)&&p(D,R,0,R.length-1),i.setTextContent(D,h.text)),(v=O?.postpatch)===null||v===void 0||v.call(O,d,h);}return function(h,w){let k,y,M,x=[];for(k=0;k<r.pre.length;++k)r.pre[k]();for(ps(i,h)?h=o(h):ms(i,h)&&(h=s(h)),Qe(h,w)?b(h,w,x):(y=h.elm,M=i.parentNode(y),u(w,x),M!==null&&(i.insertBefore(M,w.elm,i.nextSibling(y)),p(M,[h],0,0))),k=0;k<x.length;++k)x[k].data.hook.insert(x[k]);for(k=0;k<r.post.length;++k)r.post[k]();return w}}function oi(e,t,n){if(e.ns="http://www.w3.org/2000/svg",n!=="foreignObject"&&t!==void 0)for(let r=0;r<t.length;++r){let i=t[r];if(typeof i=="string")continue;let o=i.data;o!==void 0&&oi(o,i.children,i.sel);}}function A(e,t,n){let r={},i,o,s;if(n!==void 0?(t!==null&&(r=t),Ze(n)?i=n:De(n)?o=n.toString():n&&n.sel&&(i=[n])):t!=null&&(Ze(t)?i=t:De(t)?o=t.toString():t&&t.sel?i=[t]:r=t),i!==void 0)for(s=0;s<i.length;++s)De(i[s])&&(i[s]=Ne(void 0,void 0,void 0,i[s],void 0));return e[0]==="s"&&e[1]==="v"&&e[2]==="g"&&(e.length===3||e[3]==="."||e[3]==="#")&&oi(r,i,e),Ne(e,r,i,o,void 0)}var bs="http://www.w3.org/1999/xlink",ws="http://www.w3.org/XML/1998/namespace";function si(e,t){let n,r=t.elm,i=e.data.attrs,o=t.data.attrs;if(!(!i&&!o)&&i!==o){i=i||{},o=o||{};for(n in o){let s=o[n];i[n]!==s&&(s===!0?r.setAttribute(n,""):s===!1?r.removeAttribute(n):n.charCodeAt(0)!==120?r.setAttribute(n,s):n.charCodeAt(3)===58?r.setAttributeNS(ws,n,s):n.charCodeAt(5)===58?r.setAttributeNS(bs,n,s):r.setAttribute(n,s));}for(n in i)n in o||r.removeAttribute(n);}}var Mn={create:si,update:si};function ai(e,t){let n,r,i=t.elm,o=e.data.class,s=t.data.class;if(!(!o&&!s)&&o!==s){o=o||{},s=s||{};for(r in o)o[r]&&!Object.prototype.hasOwnProperty.call(s,r)&&i.classList.remove(r);for(r in s)n=s[r],n!==o[r]&&i.classList[n?"add":"remove"](r);}}var En={create:ai,update:ai};function ci(e,t,n){for(let r of ["touchstart","mousedown"])e.addEventListener(r,i=>{t(i),i.preventDefault();},{passive:!1});}var _t=(e,t,n,r=!0)=>Le(i=>i.addEventListener(e,o=>{let s=t(o);return s===!1&&o.preventDefault(),s},{passive:r}));function Le(e){return {insert:t=>e(t.elm)}}function li(e){let t=0;return n=>{t+=n.deltaY*(n.deltaMode?40:1),Math.abs(t)>=4?(e(n,!0),t=0):e(n,!1);}}function ui(e,t){let n=()=>{e(),r=Math.max(100,r-r/15),i=setTimeout(n,r);},r=350,i=setTimeout(n,500);e();let o=t.type=="touchstart"?"touchend":"mouseup";document.addEventListener(o,()=>clearTimeout(i),{once:!0});}var vs=e=>e.altKey||e.ctrlKey||e.shiftKey||e.metaKey||document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLTextAreaElement,di=e=>t=>{vs(t)||(t.key=="ArrowLeft"?e.goTo("prev"):t.key=="ArrowRight"?e.goTo("next"):t.key=="f"&&e.flip());};var hi=e=>A("div.lpv__menu.lpv__pane",[A("button.lpv__menu__entry.lpv__menu__flip.lpv__fbt",{hook:_t("click",e.flip)},e.translate("flipTheBoard")),e.opts.menu.analysisBoard?.enabled?A("a.lpv__menu__entry.lpv__menu__analysis.lpv__fbt",{attrs:{href:e.analysisUrl(),target:"_blank"}},e.translate("analysisBoard")):void 0,e.opts.menu.practiceWithComputer?.enabled?A("a.lpv__menu__entry.lpv__menu__practice.lpv__fbt",{attrs:{href:e.practiceUrl(),target:"_blank"}},e.translate("practiceWithComputer")):void 0,e.opts.menu.getPgn.enabled?A("button.lpv__menu__entry.lpv__menu__pgn.lpv__fbt",{hook:_t("click",e.togglePgn)},e.translate("getPgn")):void 0,ys(e)]),ys=e=>{let t=e.game.metadata.externalLink;return t&&A("a.lpv__menu__entry.lpv__fbt",{attrs:{href:t,target:"_blank"}},e.translate(e.game.metadata.isLichess?"viewOnLichess":"viewOnSite"))},fi=e=>A("div.lpv__controls",[e.pane=="board"?void 0:Rt(e,"first","step-backward"),Rt(e,"prev","left-open"),A("button.lpv__fbt.lpv__controls__menu.lpv__icon",{class:{active:e.pane!="board","lpv__icon-ellipsis-vert":e.pane=="board"},hook:_t("click",e.toggleMenu)},e.pane=="board"?void 0:"X"),Rt(e,"next","right-open"),e.pane=="board"?void 0:Rt(e,"last","step-forward")]),Rt=(e,t,n)=>A(`button.lpv__controls__goto.lpv__controls__goto--${t}.lpv__fbt.lpv__icon.lpv__icon-${n}`,{class:{disabled:e.pane=="board"&&!e.canGoTo(t)},hook:Le(r=>ci(r,i=>ui(()=>e.goTo(t),i)))});var mi=e=>A("div.lpv__side",A("div.lpv__moves",{hook:{insert:t=>{let n=t.elm;e.path.empty()||pi(e,n),n.addEventListener("mousedown",r=>{let i=r.target.getAttribute("p");i&&e.toPath(new te(i));},{passive:!0});},postpatch:(t,n)=>{e.autoScrollRequested&&(pi(e,n.elm),e.autoScrollRequested=!1);}}},[...e.game.initial.comments.map(Ot),...Cs(e)])),An=()=>A("move.empty","..."),_n=e=>A("index",`${e}.`),Ot=e=>A("comment",e),xs=()=>A("paren.open","("),Ss=()=>A("paren.close",")"),Nt=e=>Math.floor((e.ply-1)/2)+1,Cs=e=>{let t=Ms(e),n=[],r,i=e.game.moves.children.slice(1);for(e.game.initial.pos.turn=="black"&&e.game.mainline[0]&&n.push(_n(e.game.initial.pos.fullmoves),An());r=(r||e.game.moves).children[0];){let o=r.data,s=o.ply%2==1;s&&n.push(_n(Nt(o))),n.push(t(o));let a=s&&(i.length||o.comments.length)&&r.children.length;a&&n.push(An()),o.comments.forEach(u=>n.push(Ot(u))),i.forEach(u=>n.push(Ps(t,u))),a&&n.push(_n(Nt(o)),An()),i=r.children.slice(1);}return n},Ps=(e,t)=>A("variation",[...t.data.startingComments.map(Ot),...gi(e,t)]),gi=(e,t)=>{let n=[],r=[];t.data.ply%2==0&&n.push(A("index",[Nt(t.data),"..."]));do{let i=t.data;i.ply%2==1&&n.push(A("index",[Nt(i),"."])),n.push(e(i)),i.comments.forEach(o=>n.push(Ot(o))),r.forEach(o=>{n=[...n,xs(),...gi(e,o),Ss()];}),r=t.children.slice(1),t=t.children[0];}while(t);return n},Ms=e=>t=>A("move",{class:{current:e.path.equals(t.path),ancestor:e.path.contains(t.path),good:t.nags.includes(1),mistake:t.nags.includes(2),brilliant:t.nags.includes(3),blunder:t.nags.includes(4),interesting:t.nags.includes(5),inaccuracy:t.nags.includes(6)},attrs:{p:t.path.path}},t.san),pi=(e,t)=>{let n=t.querySelector(".current");if(!n){t.scrollTop=e.path.empty()?0:99999;return}t.scrollTop=n.offsetTop-t.offsetHeight/2+n.offsetHeight;};function Tt(e,t){let n=t=="bottom"?e.orientation():P(e.orientation()),r=e.game.players[n],i=[r.title?A("span.lpv__player__title",r.title):void 0,A("span.lpv__player__name",r.name),r.rating?A("span.lpv__player__rating",["(",r.rating,")"]):void 0];return A(`div.lpv__player.lpv__player--${t}`,[r.isLichessUser?A("a.lpv__player__person.ulpt.user-link",{attrs:{href:`${e.opts.lichess}/@/${r.name}`}},i):A("span.lpv__player__person",i),e.opts.showClocks?Es(e,n):void 0])}var Es=(e,t)=>{let n=e.curData(),r=n.clocks&&n.clocks[t];return typeof r==null?void 0:A("div.lpv__player__clock",{class:{active:t==n.turn}},As(r))},As=e=>{if(!e&&e!==0)return ["-"];let t=new Date(e*1e3),n=":",r=ki(t.getUTCMinutes())+n+ki(t.getUTCSeconds());return e>=3600?[Math.floor(e/3600)+n+r]:[r]},ki=e=>(e<10?"0":"")+e;function qt(e){let t=e.opts,n=`lpv.lpv--moves-${t.showMoves}.lpv--controls-${t.showControls}${t.classes?"."+t.classes.replace(" ","."):""}`,r=t.showPlayers=="auto"?e.game.hasPlayerName():t.showPlayers;return A(`div.${n}`,{class:{"lpv--menu":e.pane!="board","lpv--players":r},attrs:{tabindex:0},hook:Le(i=>{e.setGround(ti(i.querySelector(".cg-wrap"),Ns(e,i))),i.addEventListener("keydown",di(e));})},[r?Tt(e,"top"):void 0,_s(e),r?Tt(e,"bottom"):void 0,t.showControls?fi(e):void 0,t.showMoves?mi(e):void 0,e.pane=="menu"?hi(e):e.pane=="pgn"?Rs(e):void 0])}var _s=e=>A("div.lpv__board",{hook:Le(t=>{t.addEventListener("click",e.focus),e.opts.scrollToMove&&!("ontouchstart"in window)&&t.addEventListener("wheel",li((n,r)=>{n.preventDefault(),n.deltaY>0&&r?e.goTo("next",!1):n.deltaY<0&&r&&e.goTo("prev",!1);}));})},A("div.cg-wrap")),Rs=e=>{let t=new Blob([e.opts.pgn],{type:"text/plain"});return A("div.lpv__pgn.lpv__pane",[A("a.lpv__pgn__download.lpv__fbt",{attrs:{href:window.URL.createObjectURL(t),download:e.opts.menu.getPgn.fileName||`${e.game.title()}.pgn`}},e.translate("download")),A("textarea.lpv__pgn__text",e.opts.pgn)])},Ns=(e,t)=>({viewOnly:!e.opts.drawArrows,addDimensionsCssVarsTo:t,drawable:{enabled:e.opts.drawArrows,visible:!0},disableContextMenu:e.opts.drawArrows,...e.opts.chessground||{},movable:{free:!1},draggable:{enabled:!1},selectable:{enabled:!1},...e.cgState()});var Os={pgn:"*",fen:void 0,showPlayers:"auto",showClocks:!0,showMoves:"auto",showControls:!0,scrollToMove:!0,orientation:void 0,initialPly:0,chessground:{},drawArrows:!0,menu:{getPgn:{enabled:!0,fileName:void 0},practiceWithComputer:{enabled:!0},analysisBoard:{enabled:!0}},lichess:"https://lichess.org",classes:void 0};function wi(e,t){let n={...Os};return vi(n,t),n.fen&&(n.pgn=`[FEN "${n.fen}"]
+${n.pgn}`),n.classes||(n.classes=e.className),n}function vi(e,t){for(let n in t)typeof t[n]<"u"&&(bi(e[n])&&bi(t[n])?vi(e[n],t[n]):e[n]=t[n]);}function bi(e){if(typeof e!="object"||e===null)return !1;let t=Object.getPrototypeOf(e);return t===Object.prototype||t===null}function Ts(e,t){let n=Pn([En,Mn]),r=wi(e,t),i=new Ge(r,a),o=qt(i);e.innerHTML="";let s=n(e,o);i.div=s.elm;function a(){s=n(s,qt(i));}return i}
+
+/* svelte/DailyGame.svelte generated by Svelte v4.2.18 */
+const file$8 = "svelte/DailyGame.svelte";
+
+function create_fragment$9(ctx) {
+	let div8;
+	let div7;
+	let div6;
+	let div0;
+	let a;
+	let t0;
+	let a_href_value;
+	let t1;
+	let div5;
+	let div2;
+	let div1;
+	let div1_id_value;
+	let t2;
+	let div4;
+	let div3;
+	let div3_id_value;
+
+	const block = {
+		c: function create() {
+			div8 = element("div");
+			div7 = element("div");
+			div6 = element("div");
+			div0 = element("div");
+			a = element("a");
+			t0 = text("Chess.com");
+			t1 = space();
+			div5 = element("div");
+			div2 = element("div");
+			div1 = element("div");
+			t2 = space();
+			div4 = element("div");
+			div3 = element("div");
+			attr_dev(a, "href", a_href_value = /*game*/ ctx[0].url);
+			attr_dev(a, "class", "button is-link is-small");
+			attr_dev(a, "target", "_blank");
+			add_location(a, file$8, 61, 8, 1418);
+			attr_dev(div0, "class", "block");
+			add_location(div0, file$8, 60, 6, 1390);
+			attr_dev(div1, "class", "is2d");
+			attr_dev(div1, "id", div1_id_value = /*game*/ ctx[0].url);
+			add_location(div1, file$8, 67, 10, 1594);
+			attr_dev(div2, "class", "cell");
+			add_location(div2, file$8, 66, 8, 1565);
+			attr_dev(div3, "class", "is2d reversed");
+			attr_dev(div3, "id", div3_id_value = "" + (/*game*/ ctx[0].url + "-reversed"));
+			add_location(div3, file$8, 70, 10, 1716);
+			attr_dev(div4, "class", "cell");
+			add_location(div4, file$8, 69, 8, 1687);
+			attr_dev(div5, "class", "grid");
+			add_location(div5, file$8, 65, 6, 1538);
+			attr_dev(div6, "class", "box");
+			add_location(div6, file$8, 59, 4, 1366);
+			attr_dev(div7, "class", "fixed-grid has-2-cols");
+			add_location(div7, file$8, 58, 2, 1326);
+			attr_dev(div8, "class", "block");
+			add_location(div8, file$8, 57, 0, 1304);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div8, anchor);
+			append_dev(div8, div7);
+			append_dev(div7, div6);
+			append_dev(div6, div0);
+			append_dev(div0, a);
+			append_dev(a, t0);
+			append_dev(div6, t1);
+			append_dev(div6, div5);
+			append_dev(div5, div2);
+			append_dev(div2, div1);
+			/*div1_binding*/ ctx[4](div1);
+			append_dev(div5, t2);
+			append_dev(div5, div4);
+			append_dev(div4, div3);
+			/*div3_binding*/ ctx[5](div3);
+		},
+		p: function update(ctx, [dirty]) {
+			if (dirty & /*game*/ 1 && a_href_value !== (a_href_value = /*game*/ ctx[0].url)) {
+				attr_dev(a, "href", a_href_value);
+			}
+
+			if (dirty & /*game*/ 1 && div1_id_value !== (div1_id_value = /*game*/ ctx[0].url)) {
+				attr_dev(div1, "id", div1_id_value);
+			}
+
+			if (dirty & /*game*/ 1 && div3_id_value !== (div3_id_value = "" + (/*game*/ ctx[0].url + "-reversed"))) {
+				attr_dev(div3, "id", div3_id_value);
+			}
+		},
+		i: noop,
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div8);
+			}
+
+			/*div1_binding*/ ctx[4](null);
+			/*div3_binding*/ ctx[5](null);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$9.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$9($$self, $$props, $$invalidate) {
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('DailyGame', slots, []);
+	let { game = {} } = $$props;
+	let pgnViewerContainer;
+	let reversedBoard;
+	let pgnViewer;
+	let reversedViewer;
+	let mainWidth;
+	let mainStyle;
+	let { myColor = "white" } = $$props;
+	const otherColor = myColor === "white" ? "black" : "white";
+
+	onMount(() => {
+		pgnViewer = Ts(pgnViewerContainer, {
+			pgn: game.pgn,
+			initialPly: "last",
+			orientation: myColor,
+			scrollToMove: false,
+			menu: {
+				analysisBoard: { enabled: false },
+				practiceWithComputer: { enabled: false }
+			}
+		});
+
+		reversedViewer = Ts(reversedBoard, {
+			pgn: game.pgn,
+			initialPly: "last",
+			orientation: otherColor,
+			scrollToMove: false,
+			showClocks: false,
+			showControls: false,
+			menu: {
+				analysisBoard: { enabled: false },
+				practiceWithComputer: { enabled: false }
+			}
+		});
+
+		pgnViewer.div.addEventListener("pathChange", event => {
+			reversedViewer.toPath(event.detail.path);
+		});
+	});
+
+	afterUpdate(() => {
+		if (pgnViewer) {
+			pgnViewer.redraw();
+		}
+	});
+
+	const writable_props = ['game', 'myColor'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<DailyGame> was created with unknown prop '${key}'`);
+	});
+
+	function div1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			pgnViewerContainer = $$value;
+			$$invalidate(1, pgnViewerContainer);
+		});
+	}
+
+	function div3_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			reversedBoard = $$value;
+			$$invalidate(2, reversedBoard);
+		});
+	}
+
+	$$self.$$set = $$props => {
+		if ('game' in $$props) $$invalidate(0, game = $$props.game);
+		if ('myColor' in $$props) $$invalidate(3, myColor = $$props.myColor);
+	};
+
+	$$self.$capture_state = () => ({
+		onMount,
+		afterUpdate,
+		LichessPgnViewer: Ts,
+		game,
+		pgnViewerContainer,
+		reversedBoard,
+		pgnViewer,
+		reversedViewer,
+		mainWidth,
+		mainStyle,
+		myColor,
+		otherColor
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('game' in $$props) $$invalidate(0, game = $$props.game);
+		if ('pgnViewerContainer' in $$props) $$invalidate(1, pgnViewerContainer = $$props.pgnViewerContainer);
+		if ('reversedBoard' in $$props) $$invalidate(2, reversedBoard = $$props.reversedBoard);
+		if ('pgnViewer' in $$props) pgnViewer = $$props.pgnViewer;
+		if ('reversedViewer' in $$props) reversedViewer = $$props.reversedViewer;
+		if ('mainWidth' in $$props) mainWidth = $$props.mainWidth;
+		if ('mainStyle' in $$props) mainStyle = $$props.mainStyle;
+		if ('myColor' in $$props) $$invalidate(3, myColor = $$props.myColor);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	return [game, pgnViewerContainer, reversedBoard, myColor, div1_binding, div3_binding];
+}
+
+class DailyGame extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$9, create_fragment$9, safe_not_equal, { game: 0, myColor: 3 });
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "DailyGame",
+			options,
+			id: create_fragment$9.name
+		});
+	}
+
+	get game() {
+		throw new Error("<DailyGame>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set game(value) {
+		throw new Error("<DailyGame>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get myColor() {
+		throw new Error("<DailyGame>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set myColor(value) {
+		throw new Error("<DailyGame>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+}
+
+/* svelte/DailyGames.svelte generated by Svelte v4.2.18 */
+const file$7 = "svelte/DailyGames.svelte";
+
+function get_each_context$1(ctx, list, i) {
+	const child_ctx = ctx.slice();
+	child_ctx[23] = list[i];
+	return child_ctx;
+}
+
+function get_each_context_1$1(ctx, list, i) {
+	const child_ctx = ctx.slice();
+	child_ctx[23] = list[i];
+	return child_ctx;
+}
+
+// (154:0) {#each myGames as game (game.url)}
+function create_each_block_1$1(key_1, ctx) {
+	let div;
+	let dailygame;
+	let rect;
+	let stop_animation = noop;
+	let current;
+
+	dailygame = new DailyGame({
+			props: {
+				game: /*game*/ ctx[23],
+				myColor: /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
+				? "white"
+				: "black"
+			},
+			$$inline: true
+		});
+
+	const block = {
+		key: key_1,
+		first: null,
+		c: function create() {
+			div = element("div");
+			create_component(dailygame.$$.fragment);
+			add_location(div, file$7, 154, 2, 4386);
+			this.first = div;
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			mount_component(dailygame, div, null);
+			current = true;
+		},
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
+			const dailygame_changes = {};
+			if (dirty & /*myGames*/ 1) dailygame_changes.game = /*game*/ ctx[23];
+
+			if (dirty & /*myGames*/ 1) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
+			? "white"
+			: "black";
+
+			dailygame.$set(dailygame_changes);
+		},
+		r: function measure() {
+			rect = div.getBoundingClientRect();
+		},
+		f: function fix() {
+			fix_position(div);
+			stop_animation();
+		},
+		a: function animate() {
+			stop_animation();
+			stop_animation = create_animation(div, rect, flip, {});
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(dailygame.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(dailygame.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			destroy_component(dailygame);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_each_block_1$1.name,
+		type: "each",
+		source: "(154:0) {#each myGames as game (game.url)}",
+		ctx
+	});
+
+	return block;
+}
+
+// (163:0) {#each theirGames as game (game.url)}
+function create_each_block$1(key_1, ctx) {
+	let div;
+	let dailygame;
+	let t;
+	let rect;
+	let stop_animation = noop;
+	let current;
+
+	dailygame = new DailyGame({
+			props: {
+				game: /*game*/ ctx[23],
+				myColor: /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
+				? "white"
+				: "black"
+			},
+			$$inline: true
+		});
+
+	const block = {
+		key: key_1,
+		first: null,
+		c: function create() {
+			div = element("div");
+			create_component(dailygame.$$.fragment);
+			t = space();
+			add_location(div, file$7, 163, 2, 4594);
+			this.first = div;
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			mount_component(dailygame, div, null);
+			append_dev(div, t);
+			current = true;
+		},
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
+			const dailygame_changes = {};
+			if (dirty & /*theirGames*/ 2) dailygame_changes.game = /*game*/ ctx[23];
+
+			if (dirty & /*theirGames*/ 2) dailygame_changes.myColor = /*game*/ ctx[23].white.includes(/*chessDotComUsername*/ ctx[3])
+			? "white"
+			: "black";
+
+			dailygame.$set(dailygame_changes);
+		},
+		r: function measure() {
+			rect = div.getBoundingClientRect();
+		},
+		f: function fix() {
+			fix_position(div);
+			stop_animation();
+		},
+		a: function animate() {
+			stop_animation();
+			stop_animation = create_animation(div, rect, flip, {});
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(dailygame.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(dailygame.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			destroy_component(dailygame);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_each_block$1.name,
+		type: "each",
+		source: "(163:0) {#each theirGames as game (game.url)}",
+		ctx
+	});
+
+	return block;
+}
+
+function create_fragment$8(ctx) {
+	let link;
+	let link_href_value;
+	let t0;
+	let h1;
+	let t2;
+	let h20;
+	let t4;
+	let each_blocks_1 = [];
+	let each0_lookup = new Map();
+	let t5;
+	let h21;
+	let t7;
+	let each_blocks = [];
+	let each1_lookup = new Map();
+	let each1_anchor;
+	let current;
+	let each_value_1 = ensure_array_like_dev(/*myGames*/ ctx[0]);
+	const get_key = ctx => /*game*/ ctx[23].url;
+	validate_each_keys(ctx, each_value_1, get_each_context_1$1, get_key);
+
+	for (let i = 0; i < each_value_1.length; i += 1) {
+		let child_ctx = get_each_context_1$1(ctx, each_value_1, i);
+		let key = get_key(child_ctx);
+		each0_lookup.set(key, each_blocks_1[i] = create_each_block_1$1(key, child_ctx));
+	}
+
+	let each_value = ensure_array_like_dev(/*theirGames*/ ctx[1]);
+	const get_key_1 = ctx => /*game*/ ctx[23].url;
+	validate_each_keys(ctx, each_value, get_each_context$1, get_key_1);
+
+	for (let i = 0; i < each_value.length; i += 1) {
+		let child_ctx = get_each_context$1(ctx, each_value, i);
+		let key = get_key_1(child_ctx);
+		each1_lookup.set(key, each_blocks[i] = create_each_block$1(key, child_ctx));
+	}
+
+	const block = {
+		c: function create() {
+			link = element("link");
+			t0 = space();
+			h1 = element("h1");
+			h1.textContent = "Daily Games";
+			t2 = space();
+			h20 = element("h2");
+			h20.textContent = "My Turn";
+			t4 = space();
+
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				each_blocks_1[i].c();
+			}
+
+			t5 = space();
+			h21 = element("h2");
+			h21.textContent = "Their Turn";
+			t7 = space();
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].c();
+			}
+
+			each1_anchor = empty();
+			attr_dev(link, "id", "piece-sprite");
+			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css");
+			attr_dev(link, "rel", "stylesheet");
+			add_location(link, file$7, 149, 0, 4219);
+			attr_dev(h1, "class", "title");
+			add_location(h1, file$7, 151, 0, 4297);
+			add_location(h20, file$7, 152, 0, 4332);
+			add_location(h21, file$7, 161, 0, 4534);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, link, anchor);
+			insert_dev(target, t0, anchor);
+			insert_dev(target, h1, anchor);
+			insert_dev(target, t2, anchor);
+			insert_dev(target, h20, anchor);
+			insert_dev(target, t4, anchor);
+
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				if (each_blocks_1[i]) {
+					each_blocks_1[i].m(target, anchor);
+				}
+			}
+
+			insert_dev(target, t5, anchor);
+			insert_dev(target, h21, anchor);
+			insert_dev(target, t7, anchor);
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				if (each_blocks[i]) {
+					each_blocks[i].m(target, anchor);
+				}
+			}
+
+			insert_dev(target, each1_anchor, anchor);
+			current = true;
+		},
+		p: function update(ctx, [dirty]) {
+			if (!current || dirty & /*pieceSet*/ 4 && link_href_value !== (link_href_value = "/piece-css/" + /*pieceSet*/ ctx[2] + ".css")) {
+				attr_dev(link, "href", link_href_value);
+			}
+
+			if (dirty & /*myGames, chessDotComUsername*/ 9) {
+				each_value_1 = ensure_array_like_dev(/*myGames*/ ctx[0]);
+				group_outros();
+				for (let i = 0; i < each_blocks_1.length; i += 1) each_blocks_1[i].r();
+				validate_each_keys(ctx, each_value_1, get_each_context_1$1, get_key);
+				each_blocks_1 = update_keyed_each(each_blocks_1, dirty, get_key, 1, ctx, each_value_1, each0_lookup, t5.parentNode, fix_and_outro_and_destroy_block, create_each_block_1$1, t5, get_each_context_1$1);
+				for (let i = 0; i < each_blocks_1.length; i += 1) each_blocks_1[i].a();
+				check_outros();
+			}
+
+			if (dirty & /*theirGames, chessDotComUsername*/ 10) {
+				each_value = ensure_array_like_dev(/*theirGames*/ ctx[1]);
+				group_outros();
+				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].r();
+				validate_each_keys(ctx, each_value, get_each_context$1, get_key_1);
+				each_blocks = update_keyed_each(each_blocks, dirty, get_key_1, 1, ctx, each_value, each1_lookup, each1_anchor.parentNode, fix_and_outro_and_destroy_block, create_each_block$1, each1_anchor, get_each_context$1);
+				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].a();
+				check_outros();
+			}
+		},
+		i: function intro(local) {
+			if (current) return;
+
+			for (let i = 0; i < each_value_1.length; i += 1) {
+				transition_in(each_blocks_1[i]);
+			}
+
+			for (let i = 0; i < each_value.length; i += 1) {
+				transition_in(each_blocks[i]);
+			}
+
+			current = true;
+		},
+		o: function outro(local) {
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				transition_out(each_blocks_1[i]);
+			}
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				transition_out(each_blocks[i]);
+			}
+
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(link);
+				detach_dev(t0);
+				detach_dev(h1);
+				detach_dev(t2);
+				detach_dev(h20);
+				detach_dev(t4);
+				detach_dev(t5);
+				detach_dev(h21);
+				detach_dev(t7);
+				detach_dev(each1_anchor);
+			}
+
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				each_blocks_1[i].d(detaching);
+			}
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].d(detaching);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$8.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$8($$self, $$props, $$invalidate) {
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('DailyGames', slots, []);
+	let myGames = [];
+	let theirGames = [];
+	let title = "Daily Games";
+	let pieceSet;
+	let gameCount = null;
+	let previousGameCount = null;
+	const chessDotComUsername = document.body.dataset.chessDotComUsername;
+	const config = new Config();
+	const configForm = new ConfigForm(config);
+	const updateFrequencyOption = config.getConfigOption("Update frequency in seconds", 5);
+	const boardOption = config.getConfigOption("Board", "brown");
+	boardOption.setAllowedValues(boardOptions);
+
+	boardOption.addObserver(board => {
+		document.body.dataset.board = board;
+		boardOption.setValue(board);
+	});
+
+	const pieceSetOption = config.getConfigOption("Piece set", "merida");
+	pieceSetOption.setAllowedValues(pieceSetOptions);
+
+	pieceSetOption.addObserver(set => {
+		$$invalidate(2, pieceSet = set);
+	});
+
+	pieceSet = pieceSetOption.getValue();
+	const titleAnimationSpeedOption = config.getConfigOption("Title animation speed in ms", 250);
+	const titleAnimationLength = config.getConfigOption("Title animation length in ms", 3000);
+	const firstTitleAnimationText = config.getConfigOption("Title animation 1", "♘♞♘ New Move ♘♞♘");
+	const secondTitleAnimationText = config.getConfigOption("Title animation 2", "♞♘♞ New Move ♞♘♞");
+	const themeOption = config.getConfigOption("Theme", "system");
+	themeOption.setAllowedValues(["system", "dark", "light"]);
+
+	function animateTitle(finalTitle) {
+		const string1 = firstTitleAnimationText.getValue();
+		const string2 = secondTitleAnimationText.getValue();
+
+		let animationInterval = setInterval(
+			function () {
+				$$invalidate(4, title = title === string1 ? string2 : string1);
+			},
+			titleAnimationSpeedOption.getValue()
+		);
+
+		setTimeout(
+			function () {
+				clearInterval(animationInterval);
+				setTitle(finalTitle);
+			},
+			titleAnimationLength.getValue()
+		);
+	}
+
+	function setTitle(newTitle) {
+		$$invalidate(4, title = `${newTitle} | Daily Games`);
+	}
+
+	async function updateGames() {
+		const games = await fetchGames();
+		$$invalidate(0, myGames = filterMyTurnGames(games));
+		$$invalidate(1, theirGames = filterTheirTurnGames(games));
+		$$invalidate(6, previousGameCount = gameCount);
+		$$invalidate(5, gameCount = myGames.length);
+		setTimeout(updateGames, updateFrequencyOption.getValue() * 1000);
+	}
+
+	/**
+ * @typedef {Object} Game
+ * @property {string} url
+ * @property {number} move_by
+ * @property {string} pgn
+ * @property {string} time_control
+ * @property {number} last_activity
+ * @property {boolean} rated
+ * @property {string} turn
+ * @property {string} fen
+ * @property {number} start_time
+ * @property {string} time_class
+ * @property {string} rules
+ * @property {string} white
+ * @property {string} black
+ */
+	/**
+ * Fetch games
+ * @returns {Promise<Game[]>} The games
+ */
+	async function fetchGames() {
+		const response = await fetch(`https://api.chess.com/pub/player/${chessDotComUsername}/games`);
+		const data = await response.json();
+		return data.games;
+	}
+
+	function filterMyTurnGames(games) {
+		return games.filter(game => game.turn === "white" && game.white.includes(chessDotComUsername) || game.turn === "black" && game.black.includes(chessDotComUsername));
+	}
+
+	function filterTheirTurnGames(games) {
+		const myTurnGames = filterMyTurnGames(games);
+		const myTurnUrls = myTurnGames.map(game => game.url);
+		return games.filter(game => !myTurnUrls.includes(game.url));
+	}
+
+	onMount(async () => {
+		await updateGames();
+		configForm.addLinkToDOM("config");
+		document.body.dataset.board = boardOption.getValue();
+	});
+
+	const writable_props = [];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<DailyGames> was created with unknown prop '${key}'`);
+	});
+
+	$$self.$capture_state = () => ({
+		onMount,
+		flip,
+		Config,
+		ConfigForm,
+		boardOptions,
+		pieceSetOptions,
+		DailyGame,
+		myGames,
+		theirGames,
+		title,
+		pieceSet,
+		gameCount,
+		previousGameCount,
+		chessDotComUsername,
+		config,
+		configForm,
+		updateFrequencyOption,
+		boardOption,
+		pieceSetOption,
+		titleAnimationSpeedOption,
+		titleAnimationLength,
+		firstTitleAnimationText,
+		secondTitleAnimationText,
+		themeOption,
+		animateTitle,
+		setTitle,
+		updateGames,
+		fetchGames,
+		filterMyTurnGames,
+		filterTheirTurnGames
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('myGames' in $$props) $$invalidate(0, myGames = $$props.myGames);
+		if ('theirGames' in $$props) $$invalidate(1, theirGames = $$props.theirGames);
+		if ('title' in $$props) $$invalidate(4, title = $$props.title);
+		if ('pieceSet' in $$props) $$invalidate(2, pieceSet = $$props.pieceSet);
+		if ('gameCount' in $$props) $$invalidate(5, gameCount = $$props.gameCount);
+		if ('previousGameCount' in $$props) $$invalidate(6, previousGameCount = $$props.previousGameCount);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*title*/ 16) {
+			document.title = title;
+		}
+
+		if ($$self.$$.dirty & /*previousGameCount, gameCount*/ 96) {
+			{
+				if (previousGameCount !== null && gameCount !== null && gameCount > previousGameCount) {
+					const newTitle = ("♘").repeat(gameCount);
+					animateTitle(newTitle);
+				}
+
+				if (gameCount === 0) {
+					setTitle("Not your turn");
+				}
+			}
+		}
+	};
+
+	return [
+		myGames,
+		theirGames,
+		pieceSet,
+		chessDotComUsername,
+		title,
+		gameCount,
+		previousGameCount
+	];
+}
+
+class DailyGames extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$8, create_fragment$8, safe_not_equal, {});
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "DailyGames",
+			options,
+			id: create_fragment$8.name
+		});
+	}
+}
+
+/**
+ * @param {any} obj
+ * @returns {boolean}
+ */
+function is_date(obj) {
+	return Object.prototype.toString.call(obj) === '[object Date]';
+}
+
+/** @returns {(t: any) => any} */
+function get_interpolator(a, b) {
+	if (a === b || a !== a) return () => a;
+	const type = typeof a;
+	if (type !== typeof b || Array.isArray(a) !== Array.isArray(b)) {
+		throw new Error('Cannot interpolate values of different type');
+	}
+	if (Array.isArray(a)) {
+		const arr = b.map((bi, i) => {
+			return get_interpolator(a[i], bi);
+		});
+		return (t) => arr.map((fn) => fn(t));
+	}
+	if (type === 'object') {
+		if (!a || !b) throw new Error('Object cannot be null');
+		if (is_date(a) && is_date(b)) {
+			a = a.getTime();
+			b = b.getTime();
+			const delta = b - a;
+			return (t) => new Date(a + t * delta);
+		}
+		const keys = Object.keys(b);
+		const interpolators = {};
+		keys.forEach((key) => {
+			interpolators[key] = get_interpolator(a[key], b[key]);
+		});
+		return (t) => {
+			const result = {};
+			keys.forEach((key) => {
+				result[key] = interpolators[key](t);
+			});
+			return result;
+		};
+	}
+	if (type === 'number') {
+		const delta = b - a;
+		return (t) => a + t * delta;
+	}
+	throw new Error(`Cannot interpolate ${type} values`);
+}
+
+/**
+ * A tweened store in Svelte is a special type of store that provides smooth transitions between state values over time.
+ *
+ * https://svelte.dev/docs/svelte-motion#tweened
+ * @template T
+ * @param {T} [value]
+ * @param {import('./private.js').TweenedOptions<T>} [defaults]
+ * @returns {import('./public.js').Tweened<T>}
+ */
+function tweened(value, defaults = {}) {
+	const store = writable(value);
+	/** @type {import('../internal/private.js').Task} */
+	let task;
+	let target_value = value;
+	/**
+	 * @param {T} new_value
+	 * @param {import('./private.js').TweenedOptions<T>} [opts]
+	 */
+	function set(new_value, opts) {
+		if (value == null) {
+			store.set((value = new_value));
+			return Promise.resolve();
+		}
+		target_value = new_value;
+		let previous_task = task;
+		let started = false;
+		let {
+			delay = 0,
+			duration = 400,
+			easing = identity,
+			interpolate = get_interpolator
+		} = assign(assign({}, defaults), opts);
+		if (duration === 0) {
+			if (previous_task) {
+				previous_task.abort();
+				previous_task = null;
+			}
+			store.set((value = target_value));
+			return Promise.resolve();
+		}
+		const start = now() + delay;
+		let fn;
+		task = loop((now) => {
+			if (now < start) return true;
+			if (!started) {
+				fn = interpolate(value, new_value);
+				if (typeof duration === 'function') duration = duration(value, new_value);
+				started = true;
+			}
+			if (previous_task) {
+				previous_task.abort();
+				previous_task = null;
+			}
+			const elapsed = now - start;
+			if (elapsed > /** @type {number} */ (duration)) {
+				store.set((value = new_value));
+				return false;
+			}
+			// @ts-ignore
+			store.set((value = fn(easing(elapsed / duration))));
+			return true;
+		});
+		return task.promise;
+	}
+	return {
+		set,
+		update: (fn, opts) => set(fn(target_value, value), opts),
+		subscribe: store.subscribe
+	};
+}
+
+/* svelte/components/ProgressTimer.svelte generated by Svelte v4.2.18 */
+const file$6 = "svelte/components/ProgressTimer.svelte";
+
+function add_css$2(target) {
+	append_styles(target, "svelte-l2ukrv", "progress.svelte-l2ukrv{position:relative;width:100%}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiUHJvZ3Jlc3NUaW1lci5zdmVsdGUiLCJzb3VyY2VzIjpbIlByb2dyZXNzVGltZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQsIG9uRGVzdHJveSwgY3JlYXRlRXZlbnREaXNwYXRjaGVyIH0gZnJvbSBcInN2ZWx0ZVwiO1xuICBpbXBvcnQgeyB0d2VlbmVkIH0gZnJvbSBcInN2ZWx0ZS9tb3Rpb25cIjtcbiAgaW1wb3J0IHsgbGluZWFyIH0gZnJvbSBcInN2ZWx0ZS9lYXNpbmdcIjtcblxuICBjb25zdCBzZWNvbmRQcm9ncmVzcyA9IHR3ZWVuZWQoMCwge1xuICAgIGR1cmF0aW9uOiAxMDAwLFxuICAgIGVhc2luZzogbGluZWFyLFxuICB9KTtcblxuICBleHBvcnQgbGV0IG1heCA9IDYwO1xuICBleHBvcnQgbGV0IHdpZHRoO1xuXG4gIGxldCB0aW1lUmVtYWluaW5nO1xuXG4gIGNvbnN0IGRpc3BhdGNoID0gY3JlYXRlRXZlbnREaXNwYXRjaGVyKCk7XG5cbiAgJDoge1xuICAgIHRpbWVSZW1haW5pbmcgPSBtYXggLSAkc2Vjb25kUHJvZ3Jlc3M7XG4gIH1cblxuICAkOiB7XG4gICAgaWYgKHRpbWVSZW1haW5pbmcgPD0gMCkge1xuICAgICAgZGlzcGF0Y2goXCJjb21wbGV0ZVwiKTtcbiAgICAgIGNsZWFySW50ZXJ2YWwodXBkYXRlSW50ZXJ2YWwpO1xuICAgIH1cbiAgfVxuXG4gIGxldCB1cGRhdGVJbnRlcnZhbDtcblxuICBvbk1vdW50KCgpID0+IHtcbiAgICBzZWNvbmRQcm9ncmVzcy51cGRhdGUoKHByZXZpb3VzKSA9PiBwcmV2aW91cyArIDEpO1xuICAgIHVwZGF0ZUludGVydmFsID0gc2V0SW50ZXJ2YWwoKCkgPT4ge1xuICAgICAgc2Vjb25kUHJvZ3Jlc3MudXBkYXRlKChwcmV2aW91cykgPT4gcHJldmlvdXMgKyAxKTtcbiAgICB9LCAxMDAwKTtcbiAgfSk7XG5cbiAgb25EZXN0cm95KCgpID0+IGNsZWFySW50ZXJ2YWwodXBkYXRlSW50ZXJ2YWwpKTtcbjwvc2NyaXB0PlxuXG48ZGl2IGNsYXNzPVwiZGl2XCIgc3R5bGU9XCJ3aWR0aDoge3dpZHRofXB4XCI+XG4gIDxwcm9ncmVzcyBjbGFzcz1cInByb2dyZXNzIGlzLXN1Y2Nlc3MgbWItMFwiIHZhbHVlPXskc2Vjb25kUHJvZ3Jlc3N9IHttYXh9XG4gID48L3Byb2dyZXNzPlxuICA8ZGl2IGNsYXNzPVwiaGFzLXRleHQtY2VudGVyZWQgaXMtc2l6ZS0zXCI+XG4gICAge3RpbWVSZW1haW5pbmcudG9GaXhlZCgyKX1cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICBwcm9ncmVzcyB7XG4gICAgcG9zaXRpb246IHJlbGF0aXZlO1xuICAgIHdpZHRoOiAxMDAlO1xuICB9XG48L3N0eWxlPlxuIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQWlERSxzQkFBUyxDQUNQLFFBQVEsQ0FBRSxRQUFRLENBQ2xCLEtBQUssQ0FBRSxJQUNUIn0= */");
+}
+
+function create_fragment$7(ctx) {
+	let div1;
+	let progress;
+	let t0;
+	let div0;
+	let t1_value = /*timeRemaining*/ ctx[2].toFixed(2) + "";
+	let t1;
+
+	const block = {
+		c: function create() {
+			div1 = element("div");
+			progress = element("progress");
+			t0 = space();
+			div0 = element("div");
+			t1 = text(t1_value);
+			attr_dev(progress, "class", "progress is-success mb-0 svelte-l2ukrv");
+			progress.value = /*$secondProgress*/ ctx[3];
+			attr_dev(progress, "max", /*max*/ ctx[0]);
+			add_location(progress, file$6, 41, 2, 850);
+			attr_dev(div0, "class", "has-text-centered is-size-3");
+			add_location(div0, file$6, 43, 2, 940);
+			attr_dev(div1, "class", "div");
+			set_style(div1, "width", /*width*/ ctx[1] + "px");
+			add_location(div1, file$6, 40, 0, 805);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div1, anchor);
+			append_dev(div1, progress);
+			append_dev(div1, t0);
+			append_dev(div1, div0);
+			append_dev(div0, t1);
+		},
+		p: function update(ctx, [dirty]) {
+			if (dirty & /*$secondProgress*/ 8) {
+				prop_dev(progress, "value", /*$secondProgress*/ ctx[3]);
+			}
+
+			if (dirty & /*max*/ 1) {
+				attr_dev(progress, "max", /*max*/ ctx[0]);
+			}
+
+			if (dirty & /*timeRemaining*/ 4 && t1_value !== (t1_value = /*timeRemaining*/ ctx[2].toFixed(2) + "")) set_data_dev(t1, t1_value);
+
+			if (dirty & /*width*/ 2) {
+				set_style(div1, "width", /*width*/ ctx[1] + "px");
+			}
+		},
+		i: noop,
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div1);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$7.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$7($$self, $$props, $$invalidate) {
+	let $secondProgress;
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('ProgressTimer', slots, []);
+	const secondProgress = tweened(0, { duration: 1000, easing: identity });
+	validate_store(secondProgress, 'secondProgress');
+	component_subscribe($$self, secondProgress, value => $$invalidate(3, $secondProgress = value));
+	let { max = 60 } = $$props;
+	let { width } = $$props;
+	let timeRemaining;
+	const dispatch = createEventDispatcher();
+	let updateInterval;
+
+	onMount(() => {
+		secondProgress.update(previous => previous + 1);
+
+		$$invalidate(5, updateInterval = setInterval(
+			() => {
+				secondProgress.update(previous => previous + 1);
+			},
+			1000
+		));
+	});
+
+	onDestroy(() => clearInterval(updateInterval));
+
+	$$self.$$.on_mount.push(function () {
+		if (width === undefined && !('width' in $$props || $$self.$$.bound[$$self.$$.props['width']])) {
+			console.warn("<ProgressTimer> was created without expected prop 'width'");
+		}
+	});
+
+	const writable_props = ['max', 'width'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ProgressTimer> was created with unknown prop '${key}'`);
+	});
+
+	$$self.$$set = $$props => {
+		if ('max' in $$props) $$invalidate(0, max = $$props.max);
+		if ('width' in $$props) $$invalidate(1, width = $$props.width);
+	};
+
+	$$self.$capture_state = () => ({
+		onMount,
+		onDestroy,
+		createEventDispatcher,
+		tweened,
+		linear: identity,
+		secondProgress,
+		max,
+		width,
+		timeRemaining,
+		dispatch,
+		updateInterval,
+		$secondProgress
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('max' in $$props) $$invalidate(0, max = $$props.max);
+		if ('width' in $$props) $$invalidate(1, width = $$props.width);
+		if ('timeRemaining' in $$props) $$invalidate(2, timeRemaining = $$props.timeRemaining);
+		if ('updateInterval' in $$props) $$invalidate(5, updateInterval = $$props.updateInterval);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*max, $secondProgress*/ 9) {
+			{
+				$$invalidate(2, timeRemaining = max - $secondProgress);
+			}
+		}
+
+		if ($$self.$$.dirty & /*timeRemaining, updateInterval*/ 36) {
+			{
+				if (timeRemaining <= 0) {
+					dispatch("complete");
+					clearInterval(updateInterval);
+				}
+			}
+		}
+	};
+
+	return [max, width, timeRemaining, $secondProgress, secondProgress, updateInterval];
+}
+
+class ProgressTimer extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$7, create_fragment$7, safe_not_equal, { max: 0, width: 1 }, add_css$2);
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "ProgressTimer",
+			options,
+			id: create_fragment$7.name
+		});
+	}
+
+	get max() {
+		throw new Error("<ProgressTimer>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set max(value) {
+		throw new Error("<ProgressTimer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get width() {
+		throw new Error("<ProgressTimer>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set width(value) {
+		throw new Error("<ProgressTimer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+}
+
+/* svelte/KnightMoves.svelte generated by Svelte v4.2.18 */
+
+const { Object: Object_1$1 } = globals;
+const file$5 = "svelte/KnightMoves.svelte";
+
+function add_css$1(target) {
+	append_styles(target, "svelte-119er7j", ".cell.svelte-119er7j button.svelte-119er7j{width:100%;display:inline-block}@keyframes svelte-119er7j-incorrectAnswer{25%{background-color:red;transform:translateX(-10px)}50%{background-color:red;transform:translateX(10px)}75%{background-color:red;transform:translateX(-10px)}100%{transform:translateX(0px)}}@keyframes svelte-119er7j-correctAnswer{50%{background-color:green;transform:scale(1.01)}100%{transform:scale(1)}}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiS25pZ2h0TW92ZXMuc3ZlbHRlIiwic291cmNlcyI6WyJLbmlnaHRNb3Zlcy5zdmVsdGUiXSwic291cmNlc0NvbnRlbnQiOlsiPHNjcmlwdD5cbiAgaW1wb3J0IHsgb25Nb3VudCB9IGZyb20gXCJzdmVsdGVcIjtcblxuICBpbXBvcnQgQ2hlc3Nib2FyZCBmcm9tIFwiLi9jb21wb25lbnRzL0NoZXNzYm9hcmQuc3ZlbHRlXCI7XG4gIGltcG9ydCBQcm9ncmVzc1RpbWVyIGZyb20gXCIuL2NvbXBvbmVudHMvUHJvZ3Jlc3NUaW1lci5zdmVsdGVcIjtcblxuICBpbXBvcnQgeyBrbmlnaHRNb3Zlc0RhdGEgfSBmcm9tIFwic3JjL2tuaWdodF9tb3Zlc19kYXRhXCI7XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgQ29uZmlnRm9ybSB9IGZyb20gXCJzcmMvbG9jYWxfY29uZmlnXCI7XG4gIGltcG9ydCB7IFV0aWwgfSBmcm9tIFwic3JjL3V0aWxcIjtcblxuICBsZXQgY2hlc3Nncm91bmQ7XG4gIGxldCBqc29uRGF0YSA9IGtuaWdodE1vdmVzRGF0YTtcbiAgbGV0IHBvc2l0aW9uRGF0YSA9IG51bGw7XG4gIGxldCBjb3JyZWN0Q291bnQgPSAwO1xuICBsZXQgaW5jb3JyZWN0Q291bnQgPSAwO1xuXG4gIGxldCBnYW1lUnVubmluZyA9IGZhbHNlO1xuICBsZXQgdGltZVJlbWFpbmluZyA9IG51bGw7XG5cbiAgbGV0IGFuaW1hdGluZyA9IGZhbHNlO1xuICBsZXQgYW5zd2VyU2hvd247XG4gIGxldCBncm91cGVkUGF0aHMgPSBbXTtcbiAgbGV0IGdyb3VwSW5kZXggPSAwO1xuXG4gIGxldCBkaXNhYmxlTmV4dCA9IGZhbHNlO1xuICBsZXQgZGlzYWJsZVByZXYgPSB0cnVlO1xuXG4gICQ6IHtcbiAgICBkaXNhYmxlTmV4dCA9IGdyb3VwSW5kZXggPj0gZ3JvdXBlZFBhdGhzLmxlbmd0aCAtIDE7XG4gICAgZGlzYWJsZVByZXYgPSBncm91cEluZGV4IDw9IDA7XG4gIH1cblxuICAkOiB7XG4gICAgaWYgKGFuc3dlclNob3duICYmIGdyb3VwZWRQYXRocy5sZW5ndGggPiAwICYmIGdyb3VwSW5kZXggPj0gMCkge1xuICAgICAgZHJhd0NvcnJlY3RBcnJvd3MoZ3JvdXBlZFBhdGhzW2dyb3VwSW5kZXhdKTtcbiAgICB9XG4gIH1cblxuICBsZXQgaGlnaFNjb3JlID0gMDtcbiAgbGV0IG1heFBhdGhzVG9EaXNwbGF5T3B0aW9uO1xuICBsZXQgYW5pbWF0aW9uTGVuZ3RoT3B0aW9uO1xuICBsZXQga25pZ2h0U3F1YXJlO1xuICBsZXQga2luZ1NxdWFyZTtcbiAgbGV0IGNvbmZpZztcbiAgbGV0IGNvbmZpZ0Zvcm07XG5cbiAgbGV0IGJvYXJkV2lkdGg7XG5cbiAgbGV0IGJ1dHRvbjE7XG4gIGxldCBidXR0b24yO1xuICBsZXQgYnV0dG9uMztcbiAgbGV0IGJ1dHRvbjQ7XG4gIGxldCBidXR0b241O1xuICBsZXQgYnV0dG9uNjtcblxuICBjb25zdCBjdXN0b21CcnVzaGVzID0ge1xuICAgIGJyYW5kMToge1xuICAgICAga2V5OiBcImJyYW5kMVwiLFxuICAgICAgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKFwiLS1icmFuZC1jb2xvci0xXCIpLFxuICAgICAgb3BhY2l0eTogMSxcbiAgICAgIGxpbmVXaWR0aDogMTUsXG4gICAgfSxcbiAgICBicmFuZDI6IHtcbiAgICAgIGtleTogXCJicmFuZDJcIixcbiAgICAgIGNvbG9yOiBVdGlsLmdldFJvb3RDc3NWYXJWYWx1ZShcIi0tYnJhbmQtY29sb3ItMlwiKSxcbiAgICAgIG9wYWNpdHk6IDEsXG4gICAgICBsaW5lV2lkdGg6IDE1LFxuICAgIH0sXG4gICAgYnJhbmQzOiB7XG4gICAgICBrZXk6IFwiYnJhbmQzXCIsXG4gICAgICBjb2xvcjogVXRpbC5nZXRSb290Q3NzVmFyVmFsdWUoXCItLWJyYW5kLWNvbG9yLTNcIiksXG4gICAgICBvcGFjaXR5OiAxLFxuICAgICAgbGluZVdpZHRoOiAxNSxcbiAgICB9LFxuICAgIGJyYW5kNDoge1xuICAgICAga2V5OiBcImJyYW5kNFwiLFxuICAgICAgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKFwiLS1icmFuZC1jb2xvci00XCIpLFxuICAgICAgb3BhY2l0eTogMSxcbiAgICAgIGxpbmVXaWR0aDogMTUsXG4gICAgfSxcbiAgICBicmFuZDU6IHtcbiAgICAgIGtleTogXCJicmFuZDVcIixcbiAgICAgIGNvbG9yOiBVdGlsLmdldFJvb3RDc3NWYXJWYWx1ZShcIi0tYnJhbmQtY29sb3ItNVwiKSxcbiAgICAgIG9wYWNpdHk6IDEsXG4gICAgICBsaW5lV2lkdGg6IDE1LFxuICAgIH0sXG4gICAgYnJhbmQ2OiB7XG4gICAgICBrZXk6IFwiYnJhbmQ2XCIsXG4gICAgICBjb2xvcjogVXRpbC5nZXRSb290Q3NzVmFyVmFsdWUoXCItLWJyYW5kLWNvbG9yLTZcIiksXG4gICAgICBvcGFjaXR5OiAxLFxuICAgICAgbGluZVdpZHRoOiAxNSxcbiAgICB9LFxuICAgIGJyYW5kNzoge1xuICAgICAga2V5OiBcImJyYW5kN1wiLFxuICAgICAgY29sb3I6IFV0aWwuZ2V0Um9vdENzc1ZhclZhbHVlKFwiLS1icmFuZC1jb2xvci03XCIpLFxuICAgICAgb3BhY2l0eTogMSxcbiAgICAgIGxpbmVXaWR0aDogMTUsXG4gICAgfSxcbiAgICBicmFuZDg6IHtcbiAgICAgIGtleTogXCJicmFuZDhcIixcbiAgICAgIGNvbG9yOiBVdGlsLmdldFJvb3RDc3NWYXJWYWx1ZShcIi0tYnJhbmQtY29sb3ItOFwiKSxcbiAgICAgIG9wYWNpdHk6IDEsXG4gICAgICBsaW5lV2lkdGg6IDE1LFxuICAgIH0sXG4gICAgYnJhbmQ5OiB7XG4gICAgICBrZXk6IFwiYnJhbmQ5XCIsXG4gICAgICBjb2xvcjogVXRpbC5nZXRSb290Q3NzVmFyVmFsdWUoXCItLWJyYW5kLWNvbG9yLTlcIiksXG4gICAgICBvcGFjaXR5OiAxLFxuICAgICAgbGluZVdpZHRoOiAxNSxcbiAgICB9LFxuICB9O1xuXG4gIGluaXRDb25maWcoKTtcblxuICBsZXQgY2hlc3Nncm91bmRDb25maWcgPSB7XG4gICAgZmVuOiBcIjgvOC84LzgvOC84LzgvOFwiLFxuICAgIGFuaW1hdGlvbjoge1xuICAgICAgZW5hYmxlZDogdHJ1ZSxcbiAgICAgIGR1cmF0aW9uOiBhbmltYXRpb25MZW5ndGhPcHRpb24uZ2V0VmFsdWUoKSxcbiAgICB9LFxuICAgIGhpZ2hsaWdodDoge1xuICAgICAgbGFzdE1vdmU6IGZhbHNlLFxuICAgIH0sXG4gICAgZHJhZ2dhYmxlOiBmYWxzZSxcbiAgICBzZWxlY3RhYmxlOiBmYWxzZSxcbiAgICBkcmF3YWJsZToge1xuICAgICAgYnJ1c2hlczogY3VzdG9tQnJ1c2hlcyxcbiAgICB9LFxuICB9O1xuXG4gIG9uTW91bnQoKCkgPT4ge1xuICAgIGluaXRLZXlib2FyZFNob3J0Y3V0cygpO1xuICAgIG5ld1Bvc2l0aW9uKCk7XG4gIH0pO1xuXG4gIGZ1bmN0aW9uIGdldEJ1dHRvbihpZCkge1xuICAgIHN3aXRjaCAoaWQpIHtcbiAgICAgIGNhc2UgMTpcbiAgICAgICAgcmV0dXJuIGJ1dHRvbjE7XG4gICAgICBjYXNlIDI6XG4gICAgICAgIHJldHVybiBidXR0b24yO1xuICAgICAgY2FzZSAzOlxuICAgICAgICByZXR1cm4gYnV0dG9uMztcbiAgICAgIGNhc2UgNDpcbiAgICAgICAgcmV0dXJuIGJ1dHRvbjQ7XG4gICAgICBjYXNlIDU6XG4gICAgICAgIHJldHVybiBidXR0b241O1xuICAgICAgY2FzZSA2OlxuICAgICAgICByZXR1cm4gYnV0dG9uNjtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBpbml0S2V5Ym9hcmRTaG9ydGN1dHMoKSB7XG4gICAgd2luZG93LmFkZEV2ZW50TGlzdGVuZXIoXCJrZXlkb3duXCIsIChldmVudCkgPT4ge1xuICAgICAgY29uc3Qga2V5ID0gZXZlbnQua2V5O1xuICAgICAgaWYgKGtleSA+PSBcIjFcIiAmJiBrZXkgPD0gXCI2XCIpIHtcbiAgICAgICAgLy8gVHJpZ2dlciBjbGljayBldmVudCBvbiBjb3JyZXNwb25kaW5nIGJ1dHRvblxuICAgICAgICBjb25zdCBidXR0b24gPSBnZXRCdXR0b24ocGFyc2VJbnQoa2V5KSk7XG4gICAgICAgIGJ1dHRvbi5jbGljaygpO1xuICAgICAgfVxuICAgIH0pO1xuICB9XG5cbiAgZnVuY3Rpb24gc3RhcnRUaW1lZEdhbWUoKSB7XG4gICAgcmVzZXQoKTtcbiAgICBnYW1lUnVubmluZyA9IHRydWU7XG4gICAgbmV3UG9zaXRpb24oKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGVuZEdhbWUoKSB7XG4gICAgaWYgKGNvcnJlY3RDb3VudCA+IGhpZ2hTY29yZSAmJiBnYW1lUnVubmluZykge1xuICAgICAgaGlnaFNjb3JlID0gY29ycmVjdENvdW50O1xuICAgIH1cblxuICAgIGdhbWVSdW5uaW5nID0gZmFsc2U7XG4gICAgdGltZVJlbWFpbmluZyA9IG51bGw7XG4gICAgY29ycmVjdENvdW50ID0gMDtcbiAgICBpbmNvcnJlY3RDb3VudCA9IDA7XG4gIH1cblxuICBmdW5jdGlvbiByZXNldCgpIHtcbiAgICBjb3JyZWN0Q291bnQgPSAwO1xuICAgIGluY29ycmVjdENvdW50ID0gMDtcbiAgICBnYW1lUnVubmluZyA9IGZhbHNlO1xuICB9XG5cbiAgZnVuY3Rpb24gZ2V0UmFuZG9tSW5kZXgobWF4KSB7XG4gICAgcmV0dXJuIE1hdGguZmxvb3IoTWF0aC5yYW5kb20oKSAqIG1heCk7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRSYW5kb21FbGVtZW50KGFycmF5KSB7XG4gICAgY29uc3QgaW5kZXggPSBnZXRSYW5kb21JbmRleChhcnJheS5sZW5ndGgpO1xuICAgIHJldHVybiBhcnJheVtpbmRleF07XG4gIH1cblxuICBmdW5jdGlvbiBzb3J0UmFuZG9tbHkoYXJyYXkpIHtcbiAgICByZXR1cm4gYXJyYXkuc29ydCgoKSA9PiBNYXRoLnJhbmRvbSgpIC0gMC41KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGdldE1pbmltdW1Nb3Zlc0ZvckN1cnJlbnRQb3NpdGlvbigpIHtcbiAgICByZXR1cm4gcG9zaXRpb25EYXRhLm1pbl9sZW5ndGg7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRQYXRoc0ZvckN1cnJlbnRQb3NpdGlvbigpIHtcbiAgICByZXR1cm4gcG9zaXRpb25EYXRhLnBhdGhzO1xuICB9XG5cbiAgZnVuY3Rpb24gcHJvY2Vzc0J1dHRvbihpZCkge1xuICAgIGlmIChhbmltYXRpbmcpIHtcbiAgICAgIHJldHVybjtcbiAgICB9XG4gICAgY29uc3QgbnVtYmVyID0gcGFyc2VJbnQoaWQpO1xuICAgIGNvbnN0IG1pbmltdW0gPSBnZXRNaW5pbXVtTW92ZXNGb3JDdXJyZW50UG9zaXRpb24oKTtcbiAgICBjb25zdCBidXR0b24gPSBnZXRCdXR0b24obnVtYmVyKTtcbiAgICBpZiAobnVtYmVyID09PSBtaW5pbXVtKSB7XG4gICAgICBjb3JyZWN0Q291bnQgKz0gMTtcbiAgICAgIGFuaW1hdGVFbGVtZW50KGJ1dHRvbiwgXCJjb3JyZWN0QW5zd2VyXCIpO1xuICAgICAgbmV3UG9zaXRpb24oKTtcbiAgICB9IGVsc2Uge1xuICAgICAgaW5jb3JyZWN0Q291bnQgKz0gMTtcbiAgICAgIGFuaW1hdGVFbGVtZW50KGJ1dHRvbiwgXCJpbmNvcnJlY3RBbnN3ZXJcIik7XG4gICAgICBpZiAoZ2FtZVJ1bm5pbmcpIHtcbiAgICAgICAgZW5kR2FtZSgpO1xuICAgICAgfSBlbHNlIHtcbiAgICAgIH1cbiAgICAgIGNvbnN0IGNvcnJlY3RQYXRocyA9IHBvc2l0aW9uRGF0YS5wYXRocztcbiAgICAgIGNvbnN0IHJhbmRvbWx5U29ydGVkID0gc29ydFJhbmRvbWx5KGNvcnJlY3RQYXRocyk7XG4gICAgICBjb25zdCBwYXRoVG9BbmltYXRlID0gcmFuZG9tbHlTb3J0ZWRbMF07XG4gICAgICBjb25zdCBtb3ZlUGFpcnMgPSBnZXRNb3ZlUGFpcnNGcm9tUGF0aChwYXRoVG9BbmltYXRlKTtcbiAgICAgIGRyYXdDb3JyZWN0QXJyb3dzKHJhbmRvbWx5U29ydGVkKTtcbiAgICAgIG1ha2VTZXF1ZW50aWFsTW92ZXMobW92ZVBhaXJzLCAoKSA9PiB7XG4gICAgICAgIG5ld1Bvc2l0aW9uKCk7XG4gICAgICB9KTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBkcmF3Q29ycmVjdEFycm93cyh2YWxpZFBhdGhzKSB7XG4gICAgY2xlYXJEcmF3aW5ncygpO1xuICAgIGNvbnN0IHNoYXBlcyA9IFtdO1xuICAgIGNvbnN0IGFscmVhZHlEcmF3biA9IG5ldyBTZXQoKTtcbiAgICBjb25zdCBicnVzaEtleXMgPSBPYmplY3Qua2V5cyhjdXN0b21CcnVzaGVzKTtcbiAgICBsZXQgbWF4UGF0aHNUb1Nob3cgPSBtYXhQYXRoc1RvRGlzcGxheU9wdGlvbi5nZXRWYWx1ZSgpO1xuICAgIGlmIChtYXhQYXRoc1RvU2hvdyA8IDEpIHtcbiAgICAgIG1heFBhdGhzVG9TaG93ID0gMTtcbiAgICB9XG4gICAgbWF4UGF0aHNUb1Nob3cgPSA1MDtcblxuICAgIHZhbGlkUGF0aHMuZm9yRWFjaCgocGF0aCwgaW5kZXgpID0+IHtcbiAgICAgIGlmIChpbmRleCArIDEgPiBtYXhQYXRoc1RvU2hvdykge1xuICAgICAgICByZXR1cm47XG4gICAgICB9XG4gICAgICBjb25zdCBtb3ZlUGFpcnMgPSBnZXRNb3ZlUGFpcnNGcm9tUGF0aChwYXRoKTtcbiAgICAgIGNvbnN0IGJydXNoS2V5ID0gYnJ1c2hLZXlzW2luZGV4ICUgYnJ1c2hLZXlzLmxlbmd0aF07XG4gICAgICBtb3ZlUGFpcnMuZm9yRWFjaCgocGFpcikgPT4ge1xuICAgICAgICBpZiAoYWxyZWFkeURyYXduLmhhcyhwYWlyKSkge1xuICAgICAgICAgIHJldHVybjtcbiAgICAgICAgfVxuICAgICAgICBjb25zdCBzaGFwZSA9IHtcbiAgICAgICAgICBvcmlnOiBwYWlyWzBdLFxuICAgICAgICAgIGRlc3Q6IHBhaXJbMV0sXG4gICAgICAgICAgYnJ1c2g6IGJydXNoS2V5LFxuICAgICAgICAgIG1vZGlmaWVyczogeyBsaW5lV2lkdGg6IDEwIH0sXG4gICAgICAgIH07XG4gICAgICAgIHNoYXBlcy5wdXNoKHNoYXBlKTtcbiAgICAgICAgYWxyZWFkeURyYXduLmFkZChwYWlyKTtcbiAgICAgIH0pO1xuICAgIH0pO1xuXG4gICAgY29uc3QgbWFpblBhdGggPSB2YWxpZFBhdGhzWzBdO1xuICAgIGNvbnN0IG1haW5Nb3ZlUGFpcnMgPSBnZXRNb3ZlUGFpcnNGcm9tUGF0aChtYWluUGF0aCk7XG4gICAgbWFpbk1vdmVQYWlycy5mb3JFYWNoKChwYWlyKSA9PiB7XG4gICAgICBjb25zdCBzaGFwZSA9IHtcbiAgICAgICAgb3JpZzogcGFpclswXSxcbiAgICAgICAgZGVzdDogcGFpclsxXSxcbiAgICAgICAgYnJ1c2g6IFwiZ3JlZW5cIixcbiAgICAgICAgbW9kaWZpZXJzOiB7IGluZVdpZHRoOiAxMCB9LFxuICAgICAgfTtcbiAgICAgIHNoYXBlcy5wdXNoKHNoYXBlKTtcbiAgICB9KTtcblxuICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICBkcmF3YWJsZToge1xuICAgICAgICBzaGFwZXM6IHNoYXBlcyxcbiAgICAgIH0sXG4gICAgfSk7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRNb3ZlUGFpcnNGcm9tUGF0aChwYXRoKSB7XG4gICAgY29uc3QgcGFpcnMgPSBbXTtcbiAgICBmb3IgKGxldCBpID0gMDsgaSA8IHBhdGgubGVuZ3RoIC0gMTsgaSsrKSB7XG4gICAgICBwYWlycy5wdXNoKFtwYXRoW2ldLCBwYXRoW2kgKyAxXV0pO1xuICAgIH1cbiAgICByZXR1cm4gcGFpcnM7XG4gIH1cblxuICBmdW5jdGlvbiBnZXRHcm91cGVkUGF0aHMocGF0aHMpIHtcbiAgICBsZXQgZ3JvdXBzID0gW107XG5cbiAgICBmb3IgKGxldCBwYXRoIG9mIHBhdGhzKSB7XG4gICAgICBsZXQgYWRkZWRUb0dyb3VwID0gZmFsc2U7XG5cbiAgICAgIGZvciAobGV0IGdyb3VwIG9mIGdyb3Vwcykge1xuICAgICAgICBsZXQgb3ZlcmxhcCA9IGdyb3VwLnNvbWUoKGdyb3VwUGF0aCkgPT4ge1xuICAgICAgICAgIGZvciAobGV0IGkgPSAwOyBpIDwgZ3JvdXBQYXRoLmxlbmd0aCAtIDE7IGkrKykge1xuICAgICAgICAgICAgZm9yIChsZXQgaiA9IDA7IGogPCBwYXRoLmxlbmd0aCAtIDE7IGorKykge1xuICAgICAgICAgICAgICBpZiAoXG4gICAgICAgICAgICAgICAgZ3JvdXBQYXRoW2ldID09PSBwYXRoW2pdICYmXG4gICAgICAgICAgICAgICAgZ3JvdXBQYXRoW2kgKyAxXSA9PT0gcGF0aFtqICsgMV1cbiAgICAgICAgICAgICAgKSB7XG4gICAgICAgICAgICAgICAgcmV0dXJuIHRydWU7XG4gICAgICAgICAgICAgIH1cbiAgICAgICAgICAgIH1cbiAgICAgICAgICB9XG4gICAgICAgICAgcmV0dXJuIGZhbHNlO1xuICAgICAgICB9KTtcblxuICAgICAgICBpZiAoIW92ZXJsYXApIHtcbiAgICAgICAgICBncm91cC5wdXNoKHBhdGgpO1xuICAgICAgICAgIGFkZGVkVG9Hcm91cCA9IHRydWU7XG4gICAgICAgICAgYnJlYWs7XG4gICAgICAgIH1cbiAgICAgIH1cblxuICAgICAgaWYgKCFhZGRlZFRvR3JvdXApIHtcbiAgICAgICAgZ3JvdXBzLnB1c2goW3BhdGhdKTtcbiAgICAgIH1cbiAgICB9XG5cbiAgICByZXR1cm4gZ3JvdXBzO1xuICB9XG5cbiAgZnVuY3Rpb24gaW5jcmVtZW50R3JvdXBJbmRleCgpIHtcbiAgICBpZiAoZ3JvdXBJbmRleCA8IGdyb3VwZWRQYXRocy5sZW5ndGggLSAxKSB7XG4gICAgICBncm91cEluZGV4Kys7XG4gICAgfVxuICB9XG5cbiAgZnVuY3Rpb24gZGVjcmVtZW50R3JvdXBJbmRleCgpIHtcbiAgICBpZiAoZ3JvdXBJbmRleCA+IDApIHtcbiAgICAgIGdyb3VwSW5kZXgtLTtcbiAgICB9XG4gIH1cblxuICBmdW5jdGlvbiBtYWtlU2VxdWVudGlhbE1vdmVzKG1vdmVQYWlycyA9IFtdLCBjYWxsYmFjayA9IG51bGwpIHtcbiAgICBhbmltYXRpbmcgPSB0cnVlO1xuICAgIGlmIChtb3ZlUGFpcnMubGVuZ3RoIDwgMSkge1xuICAgICAgYW5pbWF0aW5nID0gZmFsc2U7XG4gICAgICBpZiAoY2FsbGJhY2spIHtcbiAgICAgICAgY2FsbGJhY2soKTtcbiAgICAgIH1cbiAgICAgIHJldHVybjtcbiAgICB9XG5cbiAgICAvLyBzaGlmdCBtdXRhdGVzIHRoZSBhcnJheVxuICAgIGNvbnN0IG1vdmUgPSBtb3ZlUGFpcnMuc2hpZnQoKTtcblxuICAgIGNoZXNzZ3JvdW5kLm1vdmUobW92ZVswXSwgbW92ZVsxXSk7XG5cbiAgICBzZXRUaW1lb3V0KFxuICAgICAgKCkgPT4gbWFrZVNlcXVlbnRpYWxNb3Zlcyhtb3ZlUGFpcnMsIGNhbGxiYWNrKSxcbiAgICAgIGFuaW1hdGlvbkxlbmd0aE9wdGlvbi5nZXRWYWx1ZSgpLFxuICAgICk7XG4gIH1cblxuICBmdW5jdGlvbiBjbGVhckRyYXdpbmdzKCkge1xuICAgIGNoZXNzZ3JvdW5kLnNldCh7XG4gICAgICBkcmF3YWJsZToge1xuICAgICAgICBzaGFwZXM6IFtdLFxuICAgICAgfSxcbiAgICB9KTtcbiAgfVxuXG4gIGZ1bmN0aW9uIG5ld1Bvc2l0aW9uKCkge1xuICAgIGNsZWFyRHJhd2luZ3MoKTtcbiAgICBhbnN3ZXJTaG93biA9IGZhbHNlO1xuICAgIGNvbnN0IGtleXMgPSBPYmplY3Qua2V5cyhqc29uRGF0YSk7XG4gICAgY29uc3QgaW5kZXggPSBnZXRSYW5kb21JbmRleChrZXlzLmxlbmd0aCk7XG4gICAgY29uc3Qga2V5ID0ga2V5c1tpbmRleF07XG4gICAgY29uc3QgcHJldmlvdXNLbmlnaHRTcXVhcmUgPSBrbmlnaHRTcXVhcmU7XG4gICAgY29uc3QgcHJldmlvdXNLaW5nU3F1YXJlID0ga2luZ1NxdWFyZTtcbiAgICBjb25zdCBzcXVhcmVzID0ga2V5LnNwbGl0KFwiLlwiKTtcbiAgICBrbmlnaHRTcXVhcmUgPSBzcXVhcmVzWzBdO1xuICAgIGtpbmdTcXVhcmUgPSBzcXVhcmVzWzFdO1xuICAgIHBvc2l0aW9uRGF0YSA9IGpzb25EYXRhW2tleV07XG4gICAgY29uc3Qga2luZyA9IHtcbiAgICAgIHJvbGU6IFwia2luZ1wiLFxuICAgICAgY29sb3I6IFwiYmxhY2tcIixcbiAgICB9O1xuICAgIGNvbnN0IGtuaWdodCA9IHtcbiAgICAgIHJvbGU6IFwia25pZ2h0XCIsXG4gICAgICBjb2xvcjogXCJ3aGl0ZVwiLFxuICAgIH07XG4gICAgY29uc3QgcGllY2VzRGlmZiA9IG5ldyBNYXAoKTtcbiAgICBpZiAocHJldmlvdXNLbmlnaHRTcXVhcmUgJiYgcHJldmlvdXNLaW5nU3F1YXJlKSB7XG4gICAgICBwaWVjZXNEaWZmLnNldChwcmV2aW91c0tuaWdodFNxdWFyZSwgdW5kZWZpbmVkKTtcbiAgICAgIHBpZWNlc0RpZmYuc2V0KHByZXZpb3VzS2luZ1NxdWFyZSwgdW5kZWZpbmVkKTtcbiAgICB9XG4gICAgcGllY2VzRGlmZi5zZXQoa2luZ1NxdWFyZSwga2luZyk7XG4gICAgcGllY2VzRGlmZi5zZXQoa25pZ2h0U3F1YXJlLCBrbmlnaHQpO1xuICAgIGNoZXNzZ3JvdW5kLnNldFBpZWNlcyhwaWVjZXNEaWZmKTtcbiAgICBjaGVzc2dyb3VuZC5zZXRQaWVjZXMobmV3IE1hcCgpKTtcbiAgfVxuXG4gIGZ1bmN0aW9uIGFuaW1hdGVFbGVtZW50KGVsZW1lbnQsIGFuaW1hdGlvbkNsYXNzKSB7XG4gICAgZWxlbWVudC5jbGFzc0xpc3QuYWRkKGFuaW1hdGlvbkNsYXNzKTtcblxuICAgIC8vIExpc3RlbiBmb3IgdGhlIGFuaW1hdGlvbmVuZCBldmVudFxuICAgIGVsZW1lbnQuYWRkRXZlbnRMaXN0ZW5lcihcbiAgICAgIFwiYW5pbWF0aW9uZW5kXCIsXG4gICAgICBmdW5jdGlvbiAoKSB7XG4gICAgICAgIC8vIE9uY2UgdGhlIGFuaW1hdGlvbiBlbmRzLCByZW1vdmUgdGhlIGNsYXNzXG4gICAgICAgIGVsZW1lbnQuY2xhc3NMaXN0LnJlbW92ZShhbmltYXRpb25DbGFzcyk7XG4gICAgICB9LFxuICAgICAgeyBvbmNlOiB0cnVlIH0sXG4gICAgKTsgLy8gVGhlIGxpc3RlbmVyIGlzIHJlbW92ZWQgYWZ0ZXIgaXQncyBpbnZva2VkIG9uY2VcbiAgfVxuXG4gIGZ1bmN0aW9uIGluaXRDb25maWcoKSB7XG4gICAgY29uZmlnID0gbmV3IENvbmZpZyhcImtuaWdodF9tb3Zlc19nYW1lXCIpO1xuICAgIGFuaW1hdGlvbkxlbmd0aE9wdGlvbiA9IGNvbmZpZy5nZXRDb25maWdPcHRpb24oXG4gICAgICBcIkFuaW1hdGlvbiBsZW5ndGggKG1zKVwiLFxuICAgICAgMzAwLFxuICAgICk7XG5cbiAgICBtYXhQYXRoc1RvRGlzcGxheU9wdGlvbiA9IGNvbmZpZy5nZXRDb25maWdPcHRpb24oXCJNYXggcGF0aHMgdG8gc2hvd1wiLCA2KTtcblxuICAgIGNvbmZpZ0Zvcm0gPSBuZXcgQ29uZmlnRm9ybShjb25maWcpO1xuICAgIGNvbmZpZ0Zvcm0uYWRkTGlua1RvRE9NKFwiY29uZmlnXCIpO1xuICB9XG48L3NjcmlwdD5cblxuPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy9tZXJpZGEuY3NzXCIgcmVsPVwic3R5bGVzaGVldFwiIC8+XG5cbjxkaXYgY2xhc3M9XCJjb2x1bW5zXCI+XG4gIDxkaXYgY2xhc3M9XCJjb2x1bW4gY29sdW1uMiBpcy02LWRlc2t0b3BcIj5cbiAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgIDxDaGVzc2JvYXJkIHtjaGVzc2dyb3VuZENvbmZpZ30gYmluZDpjaGVzc2dyb3VuZCBiaW5kOnNpemU9e2JvYXJkV2lkdGh9IC8+XG4gICAgPC9kaXY+XG5cbiAgICB7I2lmIGdhbWVSdW5uaW5nfVxuICAgICAgPFByb2dyZXNzVGltZXIgbWF4PVwiMzBcIiB3aWR0aD17Ym9hcmRXaWR0aH0gb246Y29tcGxldGU9e2VuZEdhbWV9IC8+XG4gICAgey9pZn1cblxuICAgIDxkaXYgY2xhc3M9XCJmaXhlZC1ncmlkIGhhcy0zLWNvbHNcIiBzdHlsZT1cIndpZHRoOiB7Ym9hcmRXaWR0aH1weFwiPlxuICAgICAgPGRpdiBjbGFzcz1cImdyaWRcIj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNlbGxcIj5cbiAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCJcbiAgICAgICAgICAgIGlkPVwiMVwiXG4gICAgICAgICAgICBvbjpjbGljaz17KCkgPT4gcHJvY2Vzc0J1dHRvbihcIjFcIil9XG4gICAgICAgICAgICBiaW5kOnRoaXM9e2J1dHRvbjF9PjE8L2J1dHRvblxuICAgICAgICAgID5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgPGJ1dHRvblxuICAgICAgICAgICAgY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiXG4gICAgICAgICAgICBpZD1cIjJcIlxuICAgICAgICAgICAgb246Y2xpY2s9eygpID0+IHByb2Nlc3NCdXR0b24oXCIyXCIpfVxuICAgICAgICAgICAgYmluZDp0aGlzPXtidXR0b24yfT4yPC9idXR0b25cbiAgICAgICAgICA+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIlxuICAgICAgICAgICAgaWQ9XCIzXCJcbiAgICAgICAgICAgIG9uOmNsaWNrPXsoKSA9PiBwcm9jZXNzQnV0dG9uKFwiM1wiKX1cbiAgICAgICAgICAgIGJpbmQ6dGhpcz17YnV0dG9uM30+MzwvYnV0dG9uXG4gICAgICAgICAgPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzcz1cImNlbGxcIj5cbiAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICBjbGFzcz1cImJ1dHRvbiBpcy1wcmltYXJ5XCJcbiAgICAgICAgICAgIGlkPVwiNFwiXG4gICAgICAgICAgICBvbjpjbGljaz17KCkgPT4gcHJvY2Vzc0J1dHRvbihcIjRcIil9XG4gICAgICAgICAgICBiaW5kOnRoaXM9e2J1dHRvbjR9PjQ8L2J1dHRvblxuICAgICAgICAgID5cbiAgICAgICAgPC9kaXY+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjZWxsXCI+XG4gICAgICAgICAgPGJ1dHRvblxuICAgICAgICAgICAgY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiXG4gICAgICAgICAgICBpZD1cIjVcIlxuICAgICAgICAgICAgb246Y2xpY2s9eygpID0+IHByb2Nlc3NCdXR0b24oXCI1XCIpfVxuICAgICAgICAgICAgYmluZDp0aGlzPXtidXR0b241fT41PC9idXR0b25cbiAgICAgICAgICA+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICA8ZGl2IGNsYXNzPVwiY2VsbFwiPlxuICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgIGNsYXNzPVwiYnV0dG9uIGlzLXByaW1hcnlcIlxuICAgICAgICAgICAgaWQ9XCI2XCJcbiAgICAgICAgICAgIG9uOmNsaWNrPXsoKSA9PiBwcm9jZXNzQnV0dG9uKFwiNlwiKX1cbiAgICAgICAgICAgIGJpbmQ6dGhpcz17YnV0dG9uNn0+NjwvYnV0dG9uXG4gICAgICAgICAgPlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvZGl2PlxuICAgIDwvZGl2PlxuICA8L2Rpdj5cblxuICA8ZGl2IGNsYXNzPVwiY29sdW1uIGNvbHVtbjEgaXMtMy1kZXNrdG9wXCI+XG4gICAgPGRpdiBjbGFzcz1cImJveCBzY29yZS1jb250YWluZXJcIj5cbiAgICAgIDxkaXYgY2xhc3M9XCJjb250YWluZXIgaGFzLXRleHQtY2VudGVyZWRcIj5cbiAgICAgICAgPGgyIGNsYXNzPVwiaXMtc2l6ZS01XCI+Q29ycmVjdDwvaDI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJzY29yZSBpcy1zaXplLTJcIj57Y29ycmVjdENvdW50fTwvZGl2PlxuICAgICAgICA8aDIgY2xhc3M9XCJpcy1zaXplLTVcIj5JbmNvcnJlY3Q8L2gyPlxuICAgICAgICA8ZGl2IGNsYXNzPVwic2NvcmUgaXMtc2l6ZS0yXCI+e2luY29ycmVjdENvdW50fTwvZGl2PlxuICAgICAgPC9kaXY+XG4gICAgPC9kaXY+XG4gICAgPGRpdiBjbGFzcz1cImJveFwiPlxuICAgICAgPGRpdiBjbGFzcz1cImNvbnRhaW5lciBoYXMtdGV4dC1jZW50ZXJlZFwiPlxuICAgICAgICA8aDIgY2xhc3M9XCJpcy1zaXplLTVcIj5IaWdoIFNjb3JlPC9oMj5cbiAgICAgICAgPGRpdiBjbGFzcz1cInNjb3JlIGlzLXNpemUtMlwiPntoaWdoU2NvcmV9PC9kaXY+XG4gICAgICAgIHsjaWYgIWdhbWVSdW5uaW5nfVxuICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgIGlkPVwic3RhcnRUaW1lZEdhbWVcIlxuICAgICAgICAgICAgb246Y2xpY2s9e3N0YXJ0VGltZWRHYW1lfVxuICAgICAgICAgICAgY2xhc3M9XCJidXR0b24gaXMtcHJpbWFyeVwiXG4gICAgICAgICAgICA+U3RhcnQgVGltZWQgR2FtZVxuICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICB7L2lmfVxuICAgICAgICB7I2lmIHRpbWVSZW1haW5pbmcgPiAwfVxuICAgICAgICAgIDxkaXYgaWQ9XCJ0aW1lclwiPnt0aW1lUmVtYWluaW5nfTwvZGl2PlxuICAgICAgICB7L2lmfVxuICAgICAgPC9kaXY+XG4gICAgPC9kaXY+XG4gICAgPGRpdiBjbGFzcz1cImJveFwiPlxuICAgICAgPGRpdiBjbGFzcz1cImNvbnRhaW5lciBoYXMtdGV4dC1jZW50ZXJlZFwiPlxuICAgICAgICB7I2lmICFhbnN3ZXJTaG93bn1cbiAgICAgICAgICA8ZGl2IGNsYXNzPVwiYmxvY2tcIj5cbiAgICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgICAgY2xhc3M9XCJidXR0b24gaXMtaW5mb1wiXG4gICAgICAgICAgICAgIGRpc2FibGVkPXthbnN3ZXJTaG93biB8fCBnYW1lUnVubmluZ31cbiAgICAgICAgICAgICAgb246Y2xpY2t8cHJldmVudERlZmF1bHQ9eygpID0+IHtcbiAgICAgICAgICAgICAgICBpZiAocG9zaXRpb25EYXRhKSB7XG4gICAgICAgICAgICAgICAgICBhbnN3ZXJTaG93biA9IHRydWU7XG4gICAgICAgICAgICAgICAgICBjb25zdCBjb3JyZWN0UGF0aHMgPSBwb3NpdGlvbkRhdGEucGF0aHM7XG4gICAgICAgICAgICAgICAgICBjb25zdCByYW5kb21seVNvcnRlZCA9IHNvcnRSYW5kb21seShjb3JyZWN0UGF0aHMpO1xuICAgICAgICAgICAgICAgICAgZ3JvdXBlZFBhdGhzID0gc29ydFJhbmRvbWx5KGdldEdyb3VwZWRQYXRocyhyYW5kb21seVNvcnRlZCkpO1xuICAgICAgICAgICAgICAgICAgZ3JvdXBJbmRleCA9IDA7XG4gICAgICAgICAgICAgICAgfVxuICAgICAgICAgICAgICB9fVxuICAgICAgICAgICAgICA+U2hvdyBhbnN3ZXJcbiAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICB7OmVsc2V9XG4gICAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrXCI+XG4gICAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICAgIGNsYXNzPVwiYnV0dG9uIGlzLWxpbmtcIlxuICAgICAgICAgICAgICBvbjpjbGljaz17KCkgPT4ge1xuICAgICAgICAgICAgICAgIGNsZWFyRHJhd2luZ3MoKTtcbiAgICAgICAgICAgICAgICBhbnN3ZXJTaG93biA9IGZhbHNlO1xuICAgICAgICAgICAgICB9fVxuICAgICAgICAgICAgPlxuICAgICAgICAgICAgICBDbGVhclxuICAgICAgICAgICAgPC9idXR0b24+XG4gICAgICAgICAgICB7I2lmIGdyb3VwZWRQYXRocy5sZW5ndGggPiAxfVxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwiYnV0dG9ucyBoYXMtYWRkb25zXCI+XG4gICAgICAgICAgICAgICAgPGJ1dHRvblxuICAgICAgICAgICAgICAgICAgY2xhc3M9XCJidXR0b25cIlxuICAgICAgICAgICAgICAgICAgb246Y2xpY2s9e2RlY3JlbWVudEdyb3VwSW5kZXh9XG4gICAgICAgICAgICAgICAgICBkaXNhYmxlZD17ZGlzYWJsZVByZXZ9PiZsYXF1bzs8L2J1dHRvblxuICAgICAgICAgICAgICAgID5cbiAgICAgICAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICAgICAgICBjbGFzcz1cImJ1dHRvblwiXG4gICAgICAgICAgICAgICAgICBvbjpjbGljaz17aW5jcmVtZW50R3JvdXBJbmRleH1cbiAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtkaXNhYmxlTmV4dH0+JnJhcXVvOzwvYnV0dG9uXG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIHsvaWZ9XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgPGRpdiBjbGFzcz1cImJsb2NrIGhhcy10ZXh0LWxlZnRcIj5cbiAgICAgICAgICAgIDxkaXY+XG4gICAgICAgICAgICAgIE1pbmltdW0gIyBvZiBtb3Zlczoge2dldE1pbmltdW1Nb3Zlc0ZvckN1cnJlbnRQb3NpdGlvbigpfVxuICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICA8ZGl2PlxuICAgICAgICAgICAgICBUb3RhbCB1bmlxdWUgcGF0aHM6IHtwb3NpdGlvbkRhdGEucGF0aHMubGVuZ3RofVxuICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgIHsvaWZ9XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgPC9kaXY+XG48L2Rpdj5cblxuPHN0eWxlPlxuICAuY2VsbCBidXR0b24ge1xuICAgIHdpZHRoOiAxMDAlO1xuICAgIGRpc3BsYXk6IGlubGluZS1ibG9jaztcbiAgfVxuXG4gIEBrZXlmcmFtZXMgaW5jb3JyZWN0QW5zd2VyIHtcbiAgICAyNSUge1xuICAgICAgYmFja2dyb3VuZC1jb2xvcjogcmVkO1xuICAgICAgdHJhbnNmb3JtOiB0cmFuc2xhdGVYKC0xMHB4KTtcbiAgICB9XG4gICAgNTAlIHtcbiAgICAgIGJhY2tncm91bmQtY29sb3I6IHJlZDtcbiAgICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlWCgxMHB4KTtcbiAgICB9XG4gICAgNzUlIHtcbiAgICAgIGJhY2tncm91bmQtY29sb3I6IHJlZDtcbiAgICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlWCgtMTBweCk7XG4gICAgfVxuICAgIDEwMCUge1xuICAgICAgdHJhbnNmb3JtOiB0cmFuc2xhdGVYKDBweCk7XG4gICAgfVxuICB9XG5cbiAgLmluY29ycmVjdEFuc3dlciB7XG4gICAgYW5pbWF0aW9uOiBpbmNvcnJlY3RBbnN3ZXIgMXMgbGluZWFyO1xuICB9XG5cbiAgQGtleWZyYW1lcyBjb3JyZWN0QW5zd2VyIHtcbiAgICA1MCUge1xuICAgICAgYmFja2dyb3VuZC1jb2xvcjogZ3JlZW47XG4gICAgICB0cmFuc2Zvcm06IHNjYWxlKDEuMDEpO1xuICAgIH1cbiAgICAxMDAlIHtcbiAgICAgIHRyYW5zZm9ybTogc2NhbGUoMSk7XG4gICAgfVxuICB9XG5cbiAgLmNvcnJlY3RBbnN3ZXIge1xuICAgIGFuaW1hdGlvbjogY29ycmVjdEFuc3dlciAwLjc1cyBsaW5lYXI7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBd2tCRSxvQkFBSyxDQUFDLHFCQUFPLENBQ1gsS0FBSyxDQUFFLElBQUksQ0FDWCxPQUFPLENBQUUsWUFDWCxDQUVBLFdBQVcsOEJBQWdCLENBQ3pCLEdBQUksQ0FDRixnQkFBZ0IsQ0FBRSxHQUFHLENBQ3JCLFNBQVMsQ0FBRSxXQUFXLEtBQUssQ0FDN0IsQ0FDQSxHQUFJLENBQ0YsZ0JBQWdCLENBQUUsR0FBRyxDQUNyQixTQUFTLENBQUUsV0FBVyxJQUFJLENBQzVCLENBQ0EsR0FBSSxDQUNGLGdCQUFnQixDQUFFLEdBQUcsQ0FDckIsU0FBUyxDQUFFLFdBQVcsS0FBSyxDQUM3QixDQUNBLElBQUssQ0FDSCxTQUFTLENBQUUsV0FBVyxHQUFHLENBQzNCLENBQ0YsQ0FNQSxXQUFXLDRCQUFjLENBQ3ZCLEdBQUksQ0FDRixnQkFBZ0IsQ0FBRSxLQUFLLENBQ3ZCLFNBQVMsQ0FBRSxNQUFNLElBQUksQ0FDdkIsQ0FDQSxJQUFLLENBQ0gsU0FBUyxDQUFFLE1BQU0sQ0FBQyxDQUNwQixDQUNGIn0= */");
+}
+
+// (441:4) {#if gameRunning}
+function create_if_block_4(ctx) {
+	let progresstimer;
+	let current;
+
+	progresstimer = new ProgressTimer({
+			props: { max: "30", width: /*boardWidth*/ ctx[12] },
+			$$inline: true
+		});
+
+	progresstimer.$on("complete", /*endGame*/ ctx[21]);
+
+	const block = {
+		c: function create() {
+			create_component(progresstimer.$$.fragment);
+		},
+		m: function mount(target, anchor) {
+			mount_component(progresstimer, target, anchor);
+			current = true;
+		},
+		p: function update(ctx, dirty) {
+			const progresstimer_changes = {};
+			if (dirty[0] & /*boardWidth*/ 4096) progresstimer_changes.width = /*boardWidth*/ ctx[12];
+			progresstimer.$set(progresstimer_changes);
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(progresstimer.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(progresstimer.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			destroy_component(progresstimer, detaching);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_4.name,
+		type: "if",
+		source: "(441:4) {#if gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+// (512:8) {#if !gameRunning}
+function create_if_block_3(ctx) {
+	let button;
+	let mounted;
+	let dispose;
+
+	const block = {
+		c: function create() {
+			button = element("button");
+			button.textContent = "Start Timed Game";
+			attr_dev(button, "id", "startTimedGame");
+			attr_dev(button, "class", "button is-primary");
+			add_location(button, file$5, 512, 10, 12149);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, button, anchor);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", /*startTimedGame*/ ctx[20], false, false, false, false);
+				mounted = true;
+			}
+		},
+		p: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(button);
+			}
+
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_3.name,
+		type: "if",
+		source: "(512:8) {#if !gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+// (520:8) {#if timeRemaining > 0}
+function create_if_block_2$1(ctx) {
+	let div;
+	let t;
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			t = text(/*timeRemaining*/ ctx[8]);
+			attr_dev(div, "id", "timer");
+			add_location(div, file$5, 520, 10, 12371);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, t);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*timeRemaining*/ 256) set_data_dev(t, /*timeRemaining*/ ctx[8]);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_2$1.name,
+		type: "if",
+		source: "(520:8) {#if timeRemaining > 0}",
+		ctx
+	});
+
+	return block;
+}
+
+// (544:8) {:else}
+function create_else_block$1(ctx) {
+	let div0;
+	let button;
+	let t1;
+	let t2;
+	let div3;
+	let div1;
+	let t5;
+	let div2;
+	let t6;
+	let t7_value = /*positionData*/ ctx[4].paths.length + "";
+	let t7;
+	let mounted;
+	let dispose;
+	let if_block = /*groupedPaths*/ ctx[1].length > 1 && create_if_block_1$1(ctx);
+
+	const block = {
+		c: function create() {
+			div0 = element("div");
+			button = element("button");
+			button.textContent = "Clear";
+			t1 = space();
+			if (if_block) if_block.c();
+			t2 = space();
+			div3 = element("div");
+			div1 = element("div");
+			div1.textContent = `Minimum # of moves: ${/*getMinimumMovesForCurrentPosition*/ ctx[22]()}`;
+			t5 = space();
+			div2 = element("div");
+			t6 = text("Total unique paths: ");
+			t7 = text(t7_value);
+			attr_dev(button, "class", "button is-link");
+			add_location(button, file$5, 545, 12, 13205);
+			attr_dev(div0, "class", "block");
+			add_location(div0, file$5, 544, 10, 13173);
+			add_location(div1, file$5, 570, 12, 13988);
+			add_location(div2, file$5, 573, 12, 14097);
+			attr_dev(div3, "class", "block has-text-left");
+			add_location(div3, file$5, 569, 10, 13942);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div0, anchor);
+			append_dev(div0, button);
+			append_dev(div0, t1);
+			if (if_block) if_block.m(div0, null);
+			insert_dev(target, t2, anchor);
+			insert_dev(target, div3, anchor);
+			append_dev(div3, div1);
+			append_dev(div3, t5);
+			append_dev(div3, div2);
+			append_dev(div2, t6);
+			append_dev(div2, t7);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", /*click_handler_7*/ ctx[42], false, false, false, false);
+				mounted = true;
+			}
+		},
+		p: function update(ctx, dirty) {
+			if (/*groupedPaths*/ ctx[1].length > 1) {
+				if (if_block) {
+					if_block.p(ctx, dirty);
+				} else {
+					if_block = create_if_block_1$1(ctx);
+					if_block.c();
+					if_block.m(div0, null);
+				}
+			} else if (if_block) {
+				if_block.d(1);
+				if_block = null;
+			}
+
+			if (dirty[0] & /*positionData*/ 16 && t7_value !== (t7_value = /*positionData*/ ctx[4].paths.length + "")) set_data_dev(t7, t7_value);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div0);
+				detach_dev(t2);
+				detach_dev(div3);
+			}
+
+			if (if_block) if_block.d();
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_else_block$1.name,
+		type: "else",
+		source: "(544:8) {:else}",
+		ctx
+	});
+
+	return block;
+}
+
+// (527:8) {#if !answerShown}
+function create_if_block$3(ctx) {
+	let div;
+	let button;
+	let t;
+	let button_disabled_value;
+	let mounted;
+	let dispose;
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			button = element("button");
+			t = text("Show answer");
+			attr_dev(button, "class", "button is-info");
+			button.disabled = button_disabled_value = /*answerShown*/ ctx[0] || /*gameRunning*/ ctx[7];
+			add_location(button, file$5, 528, 12, 12586);
+			attr_dev(div, "class", "block");
+			add_location(div, file$5, 527, 10, 12554);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, button);
+			append_dev(button, t);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", prevent_default(/*click_handler_6*/ ctx[41]), false, true, false, false);
+				mounted = true;
+			}
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*answerShown, gameRunning*/ 129 && button_disabled_value !== (button_disabled_value = /*answerShown*/ ctx[0] || /*gameRunning*/ ctx[7])) {
+				prop_dev(button, "disabled", button_disabled_value);
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block$3.name,
+		type: "if",
+		source: "(527:8) {#if !answerShown}",
+		ctx
+	});
+
+	return block;
+}
+
+// (555:12) {#if groupedPaths.length > 1}
+function create_if_block_1$1(ctx) {
+	let div;
+	let button0;
+	let t0;
+	let t1;
+	let button1_1;
+	let t2;
+	let mounted;
+	let dispose;
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			button0 = element("button");
+			t0 = text("«");
+			t1 = space();
+			button1_1 = element("button");
+			t2 = text("»");
+			attr_dev(button0, "class", "button");
+			button0.disabled = /*disablePrev*/ ctx[10];
+			add_location(button0, file$5, 556, 16, 13530);
+			attr_dev(button1_1, "class", "button");
+			button1_1.disabled = /*disableNext*/ ctx[9];
+			add_location(button1_1, file$5, 561, 16, 13711);
+			attr_dev(div, "class", "buttons has-addons");
+			add_location(div, file$5, 555, 14, 13481);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, button0);
+			append_dev(button0, t0);
+			append_dev(div, t1);
+			append_dev(div, button1_1);
+			append_dev(button1_1, t2);
+
+			if (!mounted) {
+				dispose = [
+					listen_dev(button0, "click", /*decrementGroupIndex*/ ctx[25], false, false, false, false),
+					listen_dev(button1_1, "click", /*incrementGroupIndex*/ ctx[24], false, false, false, false)
+				];
+
+				mounted = true;
+			}
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*disablePrev*/ 1024) {
+				prop_dev(button0, "disabled", /*disablePrev*/ ctx[10]);
+			}
+
+			if (dirty[0] & /*disableNext*/ 512) {
+				prop_dev(button1_1, "disabled", /*disableNext*/ ctx[9]);
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			mounted = false;
+			run_all(dispose);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_1$1.name,
+		type: "if",
+		source: "(555:12) {#if groupedPaths.length > 1}",
+		ctx
+	});
+
+	return block;
+}
+
+function create_fragment$6(ctx) {
+	let link;
+	let t0;
+	let div20;
+	let div9;
+	let div0;
+	let chessboard;
+	let updating_chessground;
+	let updating_size;
+	let t1;
+	let t2;
+	let div8;
+	let div7;
+	let div1;
+	let button0;
+	let t4;
+	let div2;
+	let button1_1;
+	let t6;
+	let div3;
+	let button2_1;
+	let t8;
+	let div4;
+	let button3_1;
+	let t10;
+	let div5;
+	let button4_1;
+	let t12;
+	let div6;
+	let button5_1;
+	let t14;
+	let div19;
+	let div13;
+	let div12;
+	let h20;
+	let t16;
+	let div10;
+	let t17;
+	let t18;
+	let h21;
+	let t20;
+	let div11;
+	let t21;
+	let t22;
+	let div16;
+	let div15;
+	let h22;
+	let t24;
+	let div14;
+	let t25;
+	let t26;
+	let t27;
+	let t28;
+	let div18;
+	let div17;
+	let current;
+	let mounted;
+	let dispose;
+
+	function chessboard_chessground_binding(value) {
+		/*chessboard_chessground_binding*/ ctx[27](value);
+	}
+
+	function chessboard_size_binding(value) {
+		/*chessboard_size_binding*/ ctx[28](value);
+	}
+
+	let chessboard_props = {
+		chessgroundConfig: /*chessgroundConfig*/ ctx[19]
+	};
+
+	if (/*chessground*/ ctx[3] !== void 0) {
+		chessboard_props.chessground = /*chessground*/ ctx[3];
+	}
+
+	if (/*boardWidth*/ ctx[12] !== void 0) {
+		chessboard_props.size = /*boardWidth*/ ctx[12];
+	}
+
+	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
+	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
+	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
+	let if_block0 = /*gameRunning*/ ctx[7] && create_if_block_4(ctx);
+	let if_block1 = !/*gameRunning*/ ctx[7] && create_if_block_3(ctx);
+	let if_block2 = /*timeRemaining*/ ctx[8] > 0 && create_if_block_2$1(ctx);
+
+	function select_block_type(ctx, dirty) {
+		if (!/*answerShown*/ ctx[0]) return create_if_block$3;
+		return create_else_block$1;
+	}
+
+	let current_block_type = select_block_type(ctx);
+	let if_block3 = current_block_type(ctx);
+
+	const block = {
+		c: function create() {
+			link = element("link");
+			t0 = space();
+			div20 = element("div");
+			div9 = element("div");
+			div0 = element("div");
+			create_component(chessboard.$$.fragment);
+			t1 = space();
+			if (if_block0) if_block0.c();
+			t2 = space();
+			div8 = element("div");
+			div7 = element("div");
+			div1 = element("div");
+			button0 = element("button");
+			button0.textContent = "1";
+			t4 = space();
+			div2 = element("div");
+			button1_1 = element("button");
+			button1_1.textContent = "2";
+			t6 = space();
+			div3 = element("div");
+			button2_1 = element("button");
+			button2_1.textContent = "3";
+			t8 = space();
+			div4 = element("div");
+			button3_1 = element("button");
+			button3_1.textContent = "4";
+			t10 = space();
+			div5 = element("div");
+			button4_1 = element("button");
+			button4_1.textContent = "5";
+			t12 = space();
+			div6 = element("div");
+			button5_1 = element("button");
+			button5_1.textContent = "6";
+			t14 = space();
+			div19 = element("div");
+			div13 = element("div");
+			div12 = element("div");
+			h20 = element("h2");
+			h20.textContent = "Correct";
+			t16 = space();
+			div10 = element("div");
+			t17 = text(/*correctCount*/ ctx[5]);
+			t18 = space();
+			h21 = element("h2");
+			h21.textContent = "Incorrect";
+			t20 = space();
+			div11 = element("div");
+			t21 = text(/*incorrectCount*/ ctx[6]);
+			t22 = space();
+			div16 = element("div");
+			div15 = element("div");
+			h22 = element("h2");
+			h22.textContent = "High Score";
+			t24 = space();
+			div14 = element("div");
+			t25 = text(/*highScore*/ ctx[11]);
+			t26 = space();
+			if (if_block1) if_block1.c();
+			t27 = space();
+			if (if_block2) if_block2.c();
+			t28 = space();
+			div18 = element("div");
+			div17 = element("div");
+			if_block3.c();
+			attr_dev(link, "id", "piece-sprite");
+			attr_dev(link, "href", "/piece-css/merida.css");
+			attr_dev(link, "rel", "stylesheet");
+			add_location(link, file$5, 432, 0, 9774);
+			attr_dev(div0, "class", "block");
+			add_location(div0, file$5, 436, 4, 9918);
+			attr_dev(button0, "class", "button is-primary svelte-119er7j");
+			attr_dev(button0, "id", "1");
+			add_location(button0, file$5, 447, 10, 10270);
+			attr_dev(div1, "class", "cell svelte-119er7j");
+			add_location(div1, file$5, 446, 8, 10241);
+			attr_dev(button1_1, "class", "button is-primary svelte-119er7j");
+			attr_dev(button1_1, "id", "2");
+			add_location(button1_1, file$5, 455, 10, 10489);
+			attr_dev(div2, "class", "cell svelte-119er7j");
+			add_location(div2, file$5, 454, 8, 10460);
+			attr_dev(button2_1, "class", "button is-primary svelte-119er7j");
+			attr_dev(button2_1, "id", "3");
+			add_location(button2_1, file$5, 463, 10, 10708);
+			attr_dev(div3, "class", "cell svelte-119er7j");
+			add_location(div3, file$5, 462, 8, 10679);
+			attr_dev(button3_1, "class", "button is-primary svelte-119er7j");
+			attr_dev(button3_1, "id", "4");
+			add_location(button3_1, file$5, 471, 10, 10927);
+			attr_dev(div4, "class", "cell svelte-119er7j");
+			add_location(div4, file$5, 470, 8, 10898);
+			attr_dev(button4_1, "class", "button is-primary svelte-119er7j");
+			attr_dev(button4_1, "id", "5");
+			add_location(button4_1, file$5, 479, 10, 11146);
+			attr_dev(div5, "class", "cell svelte-119er7j");
+			add_location(div5, file$5, 478, 8, 11117);
+			attr_dev(button5_1, "class", "button is-primary svelte-119er7j");
+			attr_dev(button5_1, "id", "6");
+			add_location(button5_1, file$5, 487, 10, 11365);
+			attr_dev(div6, "class", "cell svelte-119er7j");
+			add_location(div6, file$5, 486, 8, 11336);
+			attr_dev(div7, "class", "grid");
+			add_location(div7, file$5, 445, 6, 10214);
+			attr_dev(div8, "class", "fixed-grid has-3-cols");
+			set_style(div8, "width", /*boardWidth*/ ctx[12] + "px");
+			add_location(div8, file$5, 444, 4, 10142);
+			attr_dev(div9, "class", "column column2 is-6-desktop");
+			add_location(div9, file$5, 435, 2, 9872);
+			attr_dev(h20, "class", "is-size-5");
+			add_location(h20, file$5, 501, 8, 11719);
+			attr_dev(div10, "class", "score is-size-2");
+			add_location(div10, file$5, 502, 8, 11762);
+			attr_dev(h21, "class", "is-size-5");
+			add_location(h21, file$5, 503, 8, 11820);
+			attr_dev(div11, "class", "score is-size-2");
+			add_location(div11, file$5, 504, 8, 11865);
+			attr_dev(div12, "class", "container has-text-centered");
+			add_location(div12, file$5, 500, 6, 11669);
+			attr_dev(div13, "class", "box score-container");
+			add_location(div13, file$5, 499, 4, 11629);
+			attr_dev(h22, "class", "is-size-5");
+			add_location(h22, file$5, 509, 8, 12019);
+			attr_dev(div14, "class", "score is-size-2");
+			add_location(div14, file$5, 510, 8, 12065);
+			attr_dev(div15, "class", "container has-text-centered");
+			add_location(div15, file$5, 508, 6, 11969);
+			attr_dev(div16, "class", "box");
+			add_location(div16, file$5, 507, 4, 11945);
+			attr_dev(div17, "class", "container has-text-centered");
+			add_location(div17, file$5, 525, 6, 12475);
+			attr_dev(div18, "class", "box");
+			add_location(div18, file$5, 524, 4, 12451);
+			attr_dev(div19, "class", "column column1 is-3-desktop");
+			add_location(div19, file$5, 498, 2, 11583);
+			attr_dev(div20, "class", "columns");
+			add_location(div20, file$5, 434, 0, 9848);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, link, anchor);
+			insert_dev(target, t0, anchor);
+			insert_dev(target, div20, anchor);
+			append_dev(div20, div9);
+			append_dev(div9, div0);
+			mount_component(chessboard, div0, null);
+			append_dev(div9, t1);
+			if (if_block0) if_block0.m(div9, null);
+			append_dev(div9, t2);
+			append_dev(div9, div8);
+			append_dev(div8, div7);
+			append_dev(div7, div1);
+			append_dev(div1, button0);
+			/*button0_binding*/ ctx[30](button0);
+			append_dev(div7, t4);
+			append_dev(div7, div2);
+			append_dev(div2, button1_1);
+			/*button1_1_binding*/ ctx[32](button1_1);
+			append_dev(div7, t6);
+			append_dev(div7, div3);
+			append_dev(div3, button2_1);
+			/*button2_1_binding*/ ctx[34](button2_1);
+			append_dev(div7, t8);
+			append_dev(div7, div4);
+			append_dev(div4, button3_1);
+			/*button3_1_binding*/ ctx[36](button3_1);
+			append_dev(div7, t10);
+			append_dev(div7, div5);
+			append_dev(div5, button4_1);
+			/*button4_1_binding*/ ctx[38](button4_1);
+			append_dev(div7, t12);
+			append_dev(div7, div6);
+			append_dev(div6, button5_1);
+			/*button5_1_binding*/ ctx[40](button5_1);
+			append_dev(div20, t14);
+			append_dev(div20, div19);
+			append_dev(div19, div13);
+			append_dev(div13, div12);
+			append_dev(div12, h20);
+			append_dev(div12, t16);
+			append_dev(div12, div10);
+			append_dev(div10, t17);
+			append_dev(div12, t18);
+			append_dev(div12, h21);
+			append_dev(div12, t20);
+			append_dev(div12, div11);
+			append_dev(div11, t21);
+			append_dev(div19, t22);
+			append_dev(div19, div16);
+			append_dev(div16, div15);
+			append_dev(div15, h22);
+			append_dev(div15, t24);
+			append_dev(div15, div14);
+			append_dev(div14, t25);
+			append_dev(div15, t26);
+			if (if_block1) if_block1.m(div15, null);
+			append_dev(div15, t27);
+			if (if_block2) if_block2.m(div15, null);
+			append_dev(div19, t28);
+			append_dev(div19, div18);
+			append_dev(div18, div17);
+			if_block3.m(div17, null);
+			current = true;
+
+			if (!mounted) {
+				dispose = [
+					listen_dev(button0, "click", /*click_handler*/ ctx[29], false, false, false, false),
+					listen_dev(button1_1, "click", /*click_handler_1*/ ctx[31], false, false, false, false),
+					listen_dev(button2_1, "click", /*click_handler_2*/ ctx[33], false, false, false, false),
+					listen_dev(button3_1, "click", /*click_handler_3*/ ctx[35], false, false, false, false),
+					listen_dev(button4_1, "click", /*click_handler_4*/ ctx[37], false, false, false, false),
+					listen_dev(button5_1, "click", /*click_handler_5*/ ctx[39], false, false, false, false)
+				];
+
+				mounted = true;
+			}
+		},
+		p: function update(ctx, dirty) {
+			const chessboard_changes = {};
+
+			if (!updating_chessground && dirty[0] & /*chessground*/ 8) {
+				updating_chessground = true;
+				chessboard_changes.chessground = /*chessground*/ ctx[3];
+				add_flush_callback(() => updating_chessground = false);
+			}
+
+			if (!updating_size && dirty[0] & /*boardWidth*/ 4096) {
+				updating_size = true;
+				chessboard_changes.size = /*boardWidth*/ ctx[12];
+				add_flush_callback(() => updating_size = false);
+			}
+
+			chessboard.$set(chessboard_changes);
+
+			if (/*gameRunning*/ ctx[7]) {
+				if (if_block0) {
+					if_block0.p(ctx, dirty);
+
+					if (dirty[0] & /*gameRunning*/ 128) {
+						transition_in(if_block0, 1);
+					}
+				} else {
+					if_block0 = create_if_block_4(ctx);
+					if_block0.c();
+					transition_in(if_block0, 1);
+					if_block0.m(div9, t2);
+				}
+			} else if (if_block0) {
+				group_outros();
+
+				transition_out(if_block0, 1, 1, () => {
+					if_block0 = null;
+				});
+
+				check_outros();
+			}
+
+			if (!current || dirty[0] & /*boardWidth*/ 4096) {
+				set_style(div8, "width", /*boardWidth*/ ctx[12] + "px");
+			}
+
+			if (!current || dirty[0] & /*correctCount*/ 32) set_data_dev(t17, /*correctCount*/ ctx[5]);
+			if (!current || dirty[0] & /*incorrectCount*/ 64) set_data_dev(t21, /*incorrectCount*/ ctx[6]);
+			if (!current || dirty[0] & /*highScore*/ 2048) set_data_dev(t25, /*highScore*/ ctx[11]);
+
+			if (!/*gameRunning*/ ctx[7]) {
+				if (if_block1) {
+					if_block1.p(ctx, dirty);
+				} else {
+					if_block1 = create_if_block_3(ctx);
+					if_block1.c();
+					if_block1.m(div15, t27);
+				}
+			} else if (if_block1) {
+				if_block1.d(1);
+				if_block1 = null;
+			}
+
+			if (/*timeRemaining*/ ctx[8] > 0) {
+				if (if_block2) {
+					if_block2.p(ctx, dirty);
+				} else {
+					if_block2 = create_if_block_2$1(ctx);
+					if_block2.c();
+					if_block2.m(div15, null);
+				}
+			} else if (if_block2) {
+				if_block2.d(1);
+				if_block2 = null;
+			}
+
+			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block3) {
+				if_block3.p(ctx, dirty);
+			} else {
+				if_block3.d(1);
+				if_block3 = current_block_type(ctx);
+
+				if (if_block3) {
+					if_block3.c();
+					if_block3.m(div17, null);
+				}
+			}
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(chessboard.$$.fragment, local);
+			transition_in(if_block0);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(chessboard.$$.fragment, local);
+			transition_out(if_block0);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(link);
+				detach_dev(t0);
+				detach_dev(div20);
+			}
+
+			destroy_component(chessboard);
+			if (if_block0) if_block0.d();
+			/*button0_binding*/ ctx[30](null);
+			/*button1_1_binding*/ ctx[32](null);
+			/*button2_1_binding*/ ctx[34](null);
+			/*button3_1_binding*/ ctx[36](null);
+			/*button4_1_binding*/ ctx[38](null);
+			/*button5_1_binding*/ ctx[40](null);
+			if (if_block1) if_block1.d();
+			if (if_block2) if_block2.d();
+			if_block3.d();
+			mounted = false;
+			run_all(dispose);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$6.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function getRandomIndex(max) {
+	return Math.floor(Math.random() * max);
+}
+
+function getRandomElement(array) {
+	const index = getRandomIndex(array.length);
+	return array[index];
+}
+
+function sortRandomly(array) {
+	return array.sort(() => Math.random() - 0.5);
+}
+
+function getMovePairsFromPath(path) {
+	const pairs = [];
+
+	for (let i = 0; i < path.length - 1; i++) {
+		pairs.push([path[i], path[i + 1]]);
+	}
+
+	return pairs;
+}
+
+function getGroupedPaths(paths) {
+	let groups = [];
+
+	for (let path of paths) {
+		let addedToGroup = false;
+
+		for (let group of groups) {
+			let overlap = group.some(groupPath => {
+				for (let i = 0; i < groupPath.length - 1; i++) {
+					for (let j = 0; j < path.length - 1; j++) {
+						if (groupPath[i] === path[j] && groupPath[i + 1] === path[j + 1]) {
+							return true;
+						}
+					}
+				}
+
+				return false;
+			});
+
+			if (!overlap) {
+				group.push(path);
+				addedToGroup = true;
+				break;
+			}
+		}
+
+		if (!addedToGroup) {
+			groups.push([path]);
+		}
+	}
+
+	return groups;
+}
+
+function animateElement(element, animationClass) {
+	element.classList.add(animationClass);
+
+	// Listen for the animationend event
+	element.addEventListener(
+		"animationend",
+		function () {
+			// Once the animation ends, remove the class
+			element.classList.remove(animationClass);
+		},
+		{ once: true }
+	); // The listener is removed after it's invoked once
+}
+
+function instance$6($$self, $$props, $$invalidate) {
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('KnightMoves', slots, []);
+	let chessground;
+	let jsonData = knightMovesData;
+	let positionData = null;
+	let correctCount = 0;
+	let incorrectCount = 0;
+	let gameRunning = false;
+	let timeRemaining = null;
+	let animating = false;
+	let answerShown;
+	let groupedPaths = [];
+	let groupIndex = 0;
+	let disableNext = false;
+	let disablePrev = true;
+	let highScore = 0;
+	let maxPathsToDisplayOption;
+	let animationLengthOption;
+	let knightSquare;
+	let kingSquare;
+	let config;
+	let configForm;
+	let boardWidth;
+	let button1;
+	let button2;
+	let button3;
+	let button4;
+	let button5;
+	let button6;
+
+	const customBrushes = {
+		brand1: {
+			key: "brand1",
+			color: Util.getRootCssVarValue("--brand-color-1"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand2: {
+			key: "brand2",
+			color: Util.getRootCssVarValue("--brand-color-2"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand3: {
+			key: "brand3",
+			color: Util.getRootCssVarValue("--brand-color-3"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand4: {
+			key: "brand4",
+			color: Util.getRootCssVarValue("--brand-color-4"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand5: {
+			key: "brand5",
+			color: Util.getRootCssVarValue("--brand-color-5"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand6: {
+			key: "brand6",
+			color: Util.getRootCssVarValue("--brand-color-6"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand7: {
+			key: "brand7",
+			color: Util.getRootCssVarValue("--brand-color-7"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand8: {
+			key: "brand8",
+			color: Util.getRootCssVarValue("--brand-color-8"),
+			opacity: 1,
+			lineWidth: 15
+		},
+		brand9: {
+			key: "brand9",
+			color: Util.getRootCssVarValue("--brand-color-9"),
+			opacity: 1,
+			lineWidth: 15
+		}
+	};
+
+	initConfig();
+
+	let chessgroundConfig = {
+		fen: "8/8/8/8/8/8/8/8",
+		animation: {
+			enabled: true,
+			duration: animationLengthOption.getValue()
+		},
+		highlight: { lastMove: false },
+		draggable: false,
+		selectable: false,
+		drawable: { brushes: customBrushes }
+	};
+
+	onMount(() => {
+		initKeyboardShortcuts();
+		newPosition();
+	});
+
+	function getButton(id) {
+		switch (id) {
+			case 1:
+				return button1;
+			case 2:
+				return button2;
+			case 3:
+				return button3;
+			case 4:
+				return button4;
+			case 5:
+				return button5;
+			case 6:
+				return button6;
+		}
+	}
+
+	function initKeyboardShortcuts() {
+		window.addEventListener("keydown", event => {
+			const key = event.key;
+
+			if (key >= "1" && key <= "6") {
+				// Trigger click event on corresponding button
+				const button = getButton(parseInt(key));
+
+				button.click();
+			}
+		});
+	}
+
+	function startTimedGame() {
+		reset();
+		$$invalidate(7, gameRunning = true);
+		newPosition();
+	}
+
+	function endGame() {
+		if (correctCount > highScore && gameRunning) {
+			$$invalidate(11, highScore = correctCount);
+		}
+
+		$$invalidate(7, gameRunning = false);
+		$$invalidate(8, timeRemaining = null);
+		$$invalidate(5, correctCount = 0);
+		$$invalidate(6, incorrectCount = 0);
+	}
+
+	function reset() {
+		$$invalidate(5, correctCount = 0);
+		$$invalidate(6, incorrectCount = 0);
+		$$invalidate(7, gameRunning = false);
+	}
+
+	function getMinimumMovesForCurrentPosition() {
+		return positionData.min_length;
+	}
+
+	function getPathsForCurrentPosition() {
+		return positionData.paths;
+	}
+
+	function processButton(id) {
+		if (animating) {
+			return;
+		}
+
+		const number = parseInt(id);
+		const minimum = getMinimumMovesForCurrentPosition();
+		const button = getButton(number);
+
+		if (number === minimum) {
+			$$invalidate(5, correctCount += 1);
+			animateElement(button, "correctAnswer");
+			newPosition();
+		} else {
+			$$invalidate(6, incorrectCount += 1);
+			animateElement(button, "incorrectAnswer");
+
+			if (gameRunning) {
+				endGame();
+			}
+
+			const correctPaths = positionData.paths;
+			const randomlySorted = sortRandomly(correctPaths);
+			const pathToAnimate = randomlySorted[0];
+			const movePairs = getMovePairsFromPath(pathToAnimate);
+			drawCorrectArrows(randomlySorted);
+
+			makeSequentialMoves(movePairs, () => {
+				newPosition();
+			});
+		}
+	}
+
+	function drawCorrectArrows(validPaths) {
+		clearDrawings();
+		const shapes = [];
+		const alreadyDrawn = new Set();
+		const brushKeys = Object.keys(customBrushes);
+		let maxPathsToShow = maxPathsToDisplayOption.getValue();
+
+		if (maxPathsToShow < 1) {
+			maxPathsToShow = 1;
+		}
+
+		maxPathsToShow = 50;
+
+		validPaths.forEach((path, index) => {
+			if (index + 1 > maxPathsToShow) {
+				return;
+			}
+
+			const movePairs = getMovePairsFromPath(path);
+			const brushKey = brushKeys[index % brushKeys.length];
+
+			movePairs.forEach(pair => {
+				if (alreadyDrawn.has(pair)) {
+					return;
+				}
+
+				const shape = {
+					orig: pair[0],
+					dest: pair[1],
+					brush: brushKey,
+					modifiers: { lineWidth: 10 }
+				};
+
+				shapes.push(shape);
+				alreadyDrawn.add(pair);
+			});
+		});
+
+		const mainPath = validPaths[0];
+		const mainMovePairs = getMovePairsFromPath(mainPath);
+
+		mainMovePairs.forEach(pair => {
+			const shape = {
+				orig: pair[0],
+				dest: pair[1],
+				brush: "green",
+				modifiers: { ineWidth: 10 }
+			};
+
+			shapes.push(shape);
+		});
+
+		chessground.set({ drawable: { shapes } });
+	}
+
+	function incrementGroupIndex() {
+		if (groupIndex < groupedPaths.length - 1) {
+			$$invalidate(2, groupIndex++, groupIndex);
+		}
+	}
+
+	function decrementGroupIndex() {
+		if (groupIndex > 0) {
+			$$invalidate(2, groupIndex--, groupIndex);
+		}
+	}
+
+	function makeSequentialMoves(movePairs = [], callback = null) {
+		animating = true;
+
+		if (movePairs.length < 1) {
+			animating = false;
+
+			if (callback) {
+				callback();
+			}
+
+			return;
+		}
+
+		// shift mutates the array
+		const move = movePairs.shift();
+
+		chessground.move(move[0], move[1]);
+		setTimeout(() => makeSequentialMoves(movePairs, callback), animationLengthOption.getValue());
+	}
+
+	function clearDrawings() {
+		chessground.set({ drawable: { shapes: [] } });
+	}
+
+	function newPosition() {
+		clearDrawings();
+		$$invalidate(0, answerShown = false);
+		const keys = Object.keys(jsonData);
+		const index = getRandomIndex(keys.length);
+		const key = keys[index];
+		const previousKnightSquare = knightSquare;
+		const previousKingSquare = kingSquare;
+		const squares = key.split(".");
+		knightSquare = squares[0];
+		kingSquare = squares[1];
+		$$invalidate(4, positionData = jsonData[key]);
+		const king = { role: "king", color: "black" };
+		const knight = { role: "knight", color: "white" };
+		const piecesDiff = new Map();
+
+		if (previousKnightSquare && previousKingSquare) {
+			piecesDiff.set(previousKnightSquare, undefined);
+			piecesDiff.set(previousKingSquare, undefined);
+		}
+
+		piecesDiff.set(kingSquare, king);
+		piecesDiff.set(knightSquare, knight);
+		chessground.setPieces(piecesDiff);
+		chessground.setPieces(new Map());
+	}
+
+	function initConfig() {
+		config = new Config("knight_moves_game");
+		animationLengthOption = config.getConfigOption("Animation length (ms)", 300);
+		maxPathsToDisplayOption = config.getConfigOption("Max paths to show", 6);
+		configForm = new ConfigForm(config);
+		configForm.addLinkToDOM("config");
+	}
+
+	const writable_props = [];
+
+	Object_1$1.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<KnightMoves> was created with unknown prop '${key}'`);
+	});
+
+	function chessboard_chessground_binding(value) {
+		chessground = value;
+		$$invalidate(3, chessground);
+	}
+
+	function chessboard_size_binding(value) {
+		boardWidth = value;
+		$$invalidate(12, boardWidth);
+	}
+
+	const click_handler = () => processButton("1");
+
+	function button0_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button1 = $$value;
+			$$invalidate(13, button1);
+		});
+	}
+
+	const click_handler_1 = () => processButton("2");
+
+	function button1_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button2 = $$value;
+			$$invalidate(14, button2);
+		});
+	}
+
+	const click_handler_2 = () => processButton("3");
+
+	function button2_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button3 = $$value;
+			$$invalidate(15, button3);
+		});
+	}
+
+	const click_handler_3 = () => processButton("4");
+
+	function button3_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button4 = $$value;
+			$$invalidate(16, button4);
+		});
+	}
+
+	const click_handler_4 = () => processButton("5");
+
+	function button4_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button5 = $$value;
+			$$invalidate(17, button5);
+		});
+	}
+
+	const click_handler_5 = () => processButton("6");
+
+	function button5_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			button6 = $$value;
+			$$invalidate(18, button6);
+		});
+	}
+
+	const click_handler_6 = () => {
+		if (positionData) {
+			$$invalidate(0, answerShown = true);
+			const correctPaths = positionData.paths;
+			const randomlySorted = sortRandomly(correctPaths);
+			$$invalidate(1, groupedPaths = sortRandomly(getGroupedPaths(randomlySorted)));
+			$$invalidate(2, groupIndex = 0);
+		}
+	};
+
+	const click_handler_7 = () => {
+		clearDrawings();
+		$$invalidate(0, answerShown = false);
+	};
+
+	$$self.$capture_state = () => ({
+		onMount,
+		Chessboard,
+		ProgressTimer,
+		knightMovesData,
+		Config,
+		ConfigForm,
+		Util,
+		chessground,
+		jsonData,
+		positionData,
+		correctCount,
+		incorrectCount,
+		gameRunning,
+		timeRemaining,
+		animating,
+		answerShown,
+		groupedPaths,
+		groupIndex,
+		disableNext,
+		disablePrev,
+		highScore,
+		maxPathsToDisplayOption,
+		animationLengthOption,
+		knightSquare,
+		kingSquare,
+		config,
+		configForm,
+		boardWidth,
+		button1,
+		button2,
+		button3,
+		button4,
+		button5,
+		button6,
+		customBrushes,
+		chessgroundConfig,
+		getButton,
+		initKeyboardShortcuts,
+		startTimedGame,
+		endGame,
+		reset,
+		getRandomIndex,
+		getRandomElement,
+		sortRandomly,
+		getMinimumMovesForCurrentPosition,
+		getPathsForCurrentPosition,
+		processButton,
+		drawCorrectArrows,
+		getMovePairsFromPath,
+		getGroupedPaths,
+		incrementGroupIndex,
+		decrementGroupIndex,
+		makeSequentialMoves,
+		clearDrawings,
+		newPosition,
+		animateElement,
+		initConfig
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('chessground' in $$props) $$invalidate(3, chessground = $$props.chessground);
+		if ('jsonData' in $$props) jsonData = $$props.jsonData;
+		if ('positionData' in $$props) $$invalidate(4, positionData = $$props.positionData);
+		if ('correctCount' in $$props) $$invalidate(5, correctCount = $$props.correctCount);
+		if ('incorrectCount' in $$props) $$invalidate(6, incorrectCount = $$props.incorrectCount);
+		if ('gameRunning' in $$props) $$invalidate(7, gameRunning = $$props.gameRunning);
+		if ('timeRemaining' in $$props) $$invalidate(8, timeRemaining = $$props.timeRemaining);
+		if ('animating' in $$props) animating = $$props.animating;
+		if ('answerShown' in $$props) $$invalidate(0, answerShown = $$props.answerShown);
+		if ('groupedPaths' in $$props) $$invalidate(1, groupedPaths = $$props.groupedPaths);
+		if ('groupIndex' in $$props) $$invalidate(2, groupIndex = $$props.groupIndex);
+		if ('disableNext' in $$props) $$invalidate(9, disableNext = $$props.disableNext);
+		if ('disablePrev' in $$props) $$invalidate(10, disablePrev = $$props.disablePrev);
+		if ('highScore' in $$props) $$invalidate(11, highScore = $$props.highScore);
+		if ('maxPathsToDisplayOption' in $$props) maxPathsToDisplayOption = $$props.maxPathsToDisplayOption;
+		if ('animationLengthOption' in $$props) animationLengthOption = $$props.animationLengthOption;
+		if ('knightSquare' in $$props) knightSquare = $$props.knightSquare;
+		if ('kingSquare' in $$props) kingSquare = $$props.kingSquare;
+		if ('config' in $$props) config = $$props.config;
+		if ('configForm' in $$props) configForm = $$props.configForm;
+		if ('boardWidth' in $$props) $$invalidate(12, boardWidth = $$props.boardWidth);
+		if ('button1' in $$props) $$invalidate(13, button1 = $$props.button1);
+		if ('button2' in $$props) $$invalidate(14, button2 = $$props.button2);
+		if ('button3' in $$props) $$invalidate(15, button3 = $$props.button3);
+		if ('button4' in $$props) $$invalidate(16, button4 = $$props.button4);
+		if ('button5' in $$props) $$invalidate(17, button5 = $$props.button5);
+		if ('button6' in $$props) $$invalidate(18, button6 = $$props.button6);
+		if ('chessgroundConfig' in $$props) $$invalidate(19, chessgroundConfig = $$props.chessgroundConfig);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty[0] & /*groupIndex, groupedPaths*/ 6) {
+			{
+				$$invalidate(9, disableNext = groupIndex >= groupedPaths.length - 1);
+				$$invalidate(10, disablePrev = groupIndex <= 0);
+			}
+		}
+
+		if ($$self.$$.dirty[0] & /*answerShown, groupedPaths, groupIndex*/ 7) {
+			{
+				if (answerShown && groupedPaths.length > 0 && groupIndex >= 0) {
+					drawCorrectArrows(groupedPaths[groupIndex]);
+				}
+			}
+		}
+	};
+
+	return [
+		answerShown,
+		groupedPaths,
+		groupIndex,
+		chessground,
+		positionData,
+		correctCount,
+		incorrectCount,
+		gameRunning,
+		timeRemaining,
+		disableNext,
+		disablePrev,
+		highScore,
+		boardWidth,
+		button1,
+		button2,
+		button3,
+		button4,
+		button5,
+		button6,
+		chessgroundConfig,
+		startTimedGame,
+		endGame,
+		getMinimumMovesForCurrentPosition,
+		processButton,
+		incrementGroupIndex,
+		decrementGroupIndex,
+		clearDrawings,
+		chessboard_chessground_binding,
+		chessboard_size_binding,
+		click_handler,
+		button0_binding,
+		click_handler_1,
+		button1_1_binding,
+		click_handler_2,
+		button2_1_binding,
+		click_handler_3,
+		button3_1_binding,
+		click_handler_4,
+		button4_1_binding,
+		click_handler_5,
+		button5_1_binding,
+		click_handler_6,
+		click_handler_7
+	];
+}
+
+class KnightMoves extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$6, create_fragment$6, safe_not_equal, {}, add_css$1, [-1, -1]);
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "KnightMoves",
+			options,
+			id: create_fragment$6.name
+		});
+	}
+}
+
+/* svelte/components/Counter.svelte generated by Svelte v4.2.18 */
+const file$4 = "svelte/components/Counter.svelte";
+
+// (13:6) {#key number}
+function create_key_block(ctx) {
+	let div;
+	let t;
+	let div_intro;
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			t = text(/*number*/ ctx[0]);
+			attr_dev(div, "class", "is-size-3 number");
+			add_location(div, file$4, 13, 8, 329);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, t);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty & /*number*/ 1) set_data_dev(t, /*number*/ ctx[0]);
+		},
+		i: function intro(local) {
+			if (local) {
+				if (!div_intro) {
+					add_render_callback(() => {
+						div_intro = create_in_transition(div, fly, { y: 15, duration: 500, easing: cubicOut });
+						div_intro.start();
+					});
+				}
+			}
+		},
+		o: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_key_block.name,
+		type: "key",
+		source: "(13:6) {#key number}",
+		ctx
+	});
+
+	return block;
+}
+
+function create_fragment$5(ctx) {
+	let div2;
+	let div1;
+	let h2;
+	let t0;
+	let t1;
+	let div0;
+	let previous_key = /*number*/ ctx[0];
+	let key_block = create_key_block(ctx);
+
+	const block = {
+		c: function create() {
+			div2 = element("div");
+			div1 = element("div");
+			h2 = element("h2");
+			t0 = text(/*title*/ ctx[1]);
+			t1 = space();
+			div0 = element("div");
+			key_block.c();
+			attr_dev(h2, "class", "is-size-5");
+			add_location(h2, file$4, 10, 4, 231);
+			attr_dev(div0, "class", "number-container");
+			add_location(div0, file$4, 11, 4, 270);
+			attr_dev(div1, "class", "container has-text-centered");
+			add_location(div1, file$4, 9, 2, 185);
+			attr_dev(div2, "class", "box score-container");
+			add_location(div2, file$4, 8, 0, 149);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div2, anchor);
+			append_dev(div2, div1);
+			append_dev(div1, h2);
+			append_dev(h2, t0);
+			append_dev(div1, t1);
+			append_dev(div1, div0);
+			key_block.m(div0, null);
+		},
+		p: function update(ctx, [dirty]) {
+			if (dirty & /*title*/ 2) set_data_dev(t0, /*title*/ ctx[1]);
+
+			if (dirty & /*number*/ 1 && safe_not_equal(previous_key, previous_key = /*number*/ ctx[0])) {
+				group_outros();
+				transition_out(key_block, 1, 1, noop);
+				check_outros();
+				key_block = create_key_block(ctx);
+				key_block.c();
+				transition_in(key_block, 1);
+				key_block.m(div0, null);
+			} else {
+				key_block.p(ctx, dirty);
+			}
+		},
+		i: function intro(local) {
+			transition_in(key_block);
+		},
+		o: function outro(local) {
+			transition_out(key_block);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div2);
+			}
+
+			key_block.d(detaching);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$5.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$5($$self, $$props, $$invalidate) {
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('Counter', slots, []);
+	let { number } = $$props;
+	let { title } = $$props;
+
+	$$self.$$.on_mount.push(function () {
+		if (number === undefined && !('number' in $$props || $$self.$$.bound[$$self.$$.props['number']])) {
+			console.warn("<Counter> was created without expected prop 'number'");
+		}
+
+		if (title === undefined && !('title' in $$props || $$self.$$.bound[$$self.$$.props['title']])) {
+			console.warn("<Counter> was created without expected prop 'title'");
+		}
+	});
+
+	const writable_props = ['number', 'title'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Counter> was created with unknown prop '${key}'`);
+	});
+
+	$$self.$$set = $$props => {
+		if ('number' in $$props) $$invalidate(0, number = $$props.number);
+		if ('title' in $$props) $$invalidate(1, title = $$props.title);
+	};
+
+	$$self.$capture_state = () => ({ fly, cubicOut, number, title });
+
+	$$self.$inject_state = $$props => {
+		if ('number' in $$props) $$invalidate(0, number = $$props.number);
+		if ('title' in $$props) $$invalidate(1, title = $$props.title);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	return [number, title];
+}
+
+class Counter extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$5, create_fragment$5, safe_not_equal, { number: 0, title: 1 });
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "Counter",
+			options,
+			id: create_fragment$5.name
+		});
+	}
+
+	get number() {
+		throw new Error("<Counter>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set number(value) {
+		throw new Error("<Counter>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get title() {
+		throw new Error("<Counter>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set title(value) {
+		throw new Error("<Counter>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+}
+
+/* svelte/components/DisappearingContent.svelte generated by Svelte v4.2.18 */
+const file$3 = "svelte/components/DisappearingContent.svelte";
+
+// (22:0) {#if showContent}
+function create_if_block$2(ctx) {
+	let div;
+	let div_transition;
+	let current;
+	const default_slot_template = /*#slots*/ ctx[4].default;
+	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[3], null);
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			if (default_slot) default_slot.c();
+			add_location(div, file$3, 22, 2, 332);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+
+			if (default_slot) {
+				default_slot.m(div, null);
+			}
+
+			current = true;
+		},
+		p: function update(ctx, dirty) {
+			if (default_slot) {
+				if (default_slot.p && (!current || dirty & /*$$scope*/ 8)) {
+					update_slot_base(
+						default_slot,
+						default_slot_template,
+						ctx,
+						/*$$scope*/ ctx[3],
+						!current
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[3])
+						: get_slot_changes(default_slot_template, /*$$scope*/ ctx[3], dirty, null),
+						null
+					);
+				}
+			}
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(default_slot, local);
+
+			if (local) {
+				add_render_callback(() => {
+					if (!current) return;
+					if (!div_transition) div_transition = create_bidirectional_transition(div, fade, { duration: 100 }, true);
+					div_transition.run(1);
+				});
+			}
+
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(default_slot, local);
+
+			if (local) {
+				if (!div_transition) div_transition = create_bidirectional_transition(div, fade, { duration: 100 }, false);
+				div_transition.run(0);
+			}
+
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			if (default_slot) default_slot.d(detaching);
+			if (detaching && div_transition) div_transition.end();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block$2.name,
+		type: "if",
+		source: "(22:0) {#if showContent}",
+		ctx
+	});
+
+	return block;
+}
+
+function create_fragment$4(ctx) {
+	let if_block_anchor;
+	let current;
+	let if_block = /*showContent*/ ctx[0] && create_if_block$2(ctx);
+
+	const block = {
+		c: function create() {
+			if (if_block) if_block.c();
+			if_block_anchor = empty();
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			if (if_block) if_block.m(target, anchor);
+			insert_dev(target, if_block_anchor, anchor);
+			current = true;
+		},
+		p: function update(ctx, [dirty]) {
+			if (/*showContent*/ ctx[0]) {
+				if (if_block) {
+					if_block.p(ctx, dirty);
+
+					if (dirty & /*showContent*/ 1) {
+						transition_in(if_block, 1);
+					}
+				} else {
+					if_block = create_if_block$2(ctx);
+					if_block.c();
+					transition_in(if_block, 1);
+					if_block.m(if_block_anchor.parentNode, if_block_anchor);
+				}
+			} else if (if_block) {
+				group_outros();
+
+				transition_out(if_block, 1, 1, () => {
+					if_block = null;
+				});
+
+				check_outros();
+			}
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(if_block);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(if_block);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(if_block_anchor);
+			}
+
+			if (if_block) if_block.d(detaching);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$4.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$4($$self, $$props, $$invalidate) {
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('DisappearingContent', slots, ['default']);
+	let { duration = 1000 } = $$props;
+	let { key } = $$props;
+	let showContent = true;
+
+	$$self.$$.on_mount.push(function () {
+		if (key === undefined && !('key' in $$props || $$self.$$.bound[$$self.$$.props['key']])) {
+			console.warn("<DisappearingContent> was created without expected prop 'key'");
+		}
+	});
+
+	const writable_props = ['duration', 'key'];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<DisappearingContent> was created with unknown prop '${key}'`);
+	});
+
+	$$self.$$set = $$props => {
+		if ('duration' in $$props) $$invalidate(1, duration = $$props.duration);
+		if ('key' in $$props) $$invalidate(2, key = $$props.key);
+		if ('$$scope' in $$props) $$invalidate(3, $$scope = $$props.$$scope);
+	};
+
+	$$self.$capture_state = () => ({ fade, duration, key, showContent });
+
+	$$self.$inject_state = $$props => {
+		if ('duration' in $$props) $$invalidate(1, duration = $$props.duration);
+		if ('key' in $$props) $$invalidate(2, key = $$props.key);
+		if ('showContent' in $$props) $$invalidate(0, showContent = $$props.showContent);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*key*/ 4) {
+			{
+				if (key) {
+					$$invalidate(0, showContent = true);
+				}
+			}
+		}
+
+		if ($$self.$$.dirty & /*showContent, duration*/ 3) {
+			{
+				if (showContent) {
+					setTimeout(
+						() => {
+							$$invalidate(0, showContent = false);
+						},
+						duration
+					);
+				}
+			}
+		}
+	};
+
+	return [showContent, duration, key, $$scope, slots];
+}
+
+class DisappearingContent extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$4, create_fragment$4, safe_not_equal, { duration: 1, key: 2 });
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "DisappearingContent",
+			options,
+			id: create_fragment$4.name
+		});
+	}
+
+	get duration() {
+		throw new Error("<DisappearingContent>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set duration(value) {
+		throw new Error("<DisappearingContent>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get key() {
+		throw new Error("<DisappearingContent>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	set key(value) {
+		throw new Error("<DisappearingContent>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+}
+
+/* svelte/NotationTrainer.svelte generated by Svelte v4.2.18 */
+const file$2 = "svelte/NotationTrainer.svelte";
+
+// (218:8) <DisappearingContent key={nextMove} slot="centered-content">
+function create_default_slot(ctx) {
+	let span;
+	let t;
+	let span_class_value;
+
+	const block = {
+		c: function create() {
+			span = element("span");
+			t = text(/*nextMove*/ ctx[3]);
+			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4]);
+			add_location(span, file$2, 218, 10, 5646);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, span, anchor);
+			append_dev(span, t);
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*nextMove*/ 8) set_data_dev(t, /*nextMove*/ ctx[3]);
+
+			if (dirty[0] & /*colorToMove*/ 16 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4])) {
+				attr_dev(span, "class", span_class_value);
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(span);
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_default_slot.name,
+		type: "slot",
+		source: "(218:8) <DisappearingContent key={nextMove} slot=\\\"centered-content\\\">",
+		ctx
+	});
+
+	return block;
+}
+
+// (218:8) 
+function create_centered_content_slot(ctx) {
+	let disappearingcontent;
+	let current;
+
+	disappearingcontent = new DisappearingContent({
+			props: {
+				key: /*nextMove*/ ctx[3],
+				slot: "centered-content",
+				$$slots: { default: [create_default_slot] },
+				$$scope: { ctx }
+			},
+			$$inline: true
+		});
+
+	const block = {
+		c: function create() {
+			create_component(disappearingcontent.$$.fragment);
+		},
+		m: function mount(target, anchor) {
+			mount_component(disappearingcontent, target, anchor);
+			current = true;
+		},
+		p: function update(ctx, dirty) {
+			const disappearingcontent_changes = {};
+			if (dirty[0] & /*nextMove*/ 8) disappearingcontent_changes.key = /*nextMove*/ ctx[3];
+
+			if (dirty[0] & /*colorToMove, nextMove*/ 24 | dirty[1] & /*$$scope*/ 2) {
+				disappearingcontent_changes.$$scope = { dirty, ctx };
+			}
+
+			disappearingcontent.$set(disappearingcontent_changes);
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(disappearingcontent.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(disappearingcontent.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			destroy_component(disappearingcontent, detaching);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_centered_content_slot.name,
+		type: "slot",
+		source: "(218:8) ",
+		ctx
+	});
+
+	return block;
+}
+
+// (232:6) {#if !gameRunning}
+function create_if_block_2(ctx) {
+	let button;
+	let mounted;
+	let dispose;
+
+	const block = {
+		c: function create() {
+			button = element("button");
+			button.textContent = "Start Game";
+			attr_dev(button, "class", "button is-primary");
+			add_location(button, file$2, 232, 8, 6022);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, button, anchor);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[18], false, false, false, false);
+				mounted = true;
+			}
+		},
+		p: noop,
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(button);
+			}
+
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_2.name,
+		type: "if",
+		source: "(232:6) {#if !gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+// (237:6) {#if !gameRunning}
+function create_if_block_1(ctx) {
+	let button;
+	let t0;
+	let t1;
+	let button_class_value;
+	let mounted;
+	let dispose;
+
+	const block = {
+		c: function create() {
+			button = element("button");
+			t0 = text("Play ");
+			t1 = text(/*otherColor*/ ctx[5]);
+			attr_dev(button, "class", button_class_value = "button is-" + /*otherColor*/ ctx[5] + " change-orientation-button ml-3");
+			add_location(button, file$2, 237, 8, 6162);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, button, anchor);
+			append_dev(button, t0);
+			append_dev(button, t1);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[23], false, false, false, false);
+				mounted = true;
+			}
+		},
+		p: function update(ctx, dirty) {
+			if (dirty[0] & /*otherColor*/ 32) set_data_dev(t1, /*otherColor*/ ctx[5]);
+
+			if (dirty[0] & /*otherColor*/ 32 && button_class_value !== (button_class_value = "button is-" + /*otherColor*/ ctx[5] + " change-orientation-button ml-3")) {
+				attr_dev(button, "class", button_class_value);
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(button);
+			}
+
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block_1.name,
+		type: "if",
+		source: "(237:6) {#if !gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+// (248:4) {#if gameRunning}
+function create_if_block$1(ctx) {
+	let progresstimer;
+	let current;
+
+	progresstimer = new ProgressTimer({
+			props: {
+				max: /*maxTime*/ ctx[10],
+				width: /*boardSize*/ ctx[6]
+			},
+			$$inline: true
+		});
+
+	progresstimer.$on("complete", /*endGame*/ ctx[19]);
+
+	const block = {
+		c: function create() {
+			create_component(progresstimer.$$.fragment);
+		},
+		m: function mount(target, anchor) {
+			mount_component(progresstimer, target, anchor);
+			current = true;
+		},
+		p: function update(ctx, dirty) {
+			const progresstimer_changes = {};
+			if (dirty[0] & /*maxTime*/ 1024) progresstimer_changes.max = /*maxTime*/ ctx[10];
+			if (dirty[0] & /*boardSize*/ 64) progresstimer_changes.width = /*boardSize*/ ctx[6];
+			progresstimer.$set(progresstimer_changes);
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(progresstimer.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(progresstimer.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			destroy_component(progresstimer, detaching);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block$1.name,
+		type: "if",
+		source: "(248:4) {#if gameRunning}",
+		ctx
+	});
+
+	return block;
+}
+
+function create_fragment$3(ctx) {
+	let div5;
+	let div2;
+	let div0;
+	let chessboard;
+	let updating_fen;
+	let updating_chessground;
+	let updating_size;
+	let t0;
+	let div1;
+	let span;
+	let t1;
+	let span_class_value;
+	let t2;
+	let t3;
+	let t4;
+	let t5;
+	let div4;
+	let div3;
+	let counter0;
+	let t6;
+	let counter1;
+	let t7;
+	let counter2;
+	let t8;
+	let counter3;
+	let current;
+
+	function chessboard_fen_binding(value) {
+		/*chessboard_fen_binding*/ ctx[20](value);
+	}
+
+	function chessboard_chessground_binding(value) {
+		/*chessboard_chessground_binding*/ ctx[21](value);
+	}
+
+	function chessboard_size_binding(value) {
+		/*chessboard_size_binding*/ ctx[22](value);
+	}
+
+	let chessboard_props = {
+		chessgroundConfig: /*chessgroundConfig*/ ctx[16],
+		orientation: /*$orientation*/ ctx[0],
+		$$slots: {
+			"centered-content": [create_centered_content_slot]
+		},
+		$$scope: { ctx }
+	};
+
+	if (/*fen*/ ctx[8] !== void 0) {
+		chessboard_props.fen = /*fen*/ ctx[8];
+	}
+
+	if (/*chessground*/ ctx[7] !== void 0) {
+		chessboard_props.chessground = /*chessground*/ ctx[7];
+	}
+
+	if (/*boardSize*/ ctx[6] !== void 0) {
+		chessboard_props.size = /*boardSize*/ ctx[6];
+	}
+
+	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
+	binding_callbacks.push(() => bind(chessboard, 'fen', chessboard_fen_binding));
+	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
+	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
+	let if_block0 = !/*gameRunning*/ ctx[9] && create_if_block_2(ctx);
+	let if_block1 = !/*gameRunning*/ ctx[9] && create_if_block_1(ctx);
+	let if_block2 = /*gameRunning*/ ctx[9] && create_if_block$1(ctx);
+
+	counter0 = new Counter({
+			props: {
+				number: /*correctCount*/ ctx[1],
+				title: "Correct"
+			},
+			$$inline: true
+		});
+
+	counter1 = new Counter({
+			props: {
+				number: /*incorrectCount*/ ctx[2],
+				title: "Incorrect"
+			},
+			$$inline: true
+		});
+
+	counter2 = new Counter({
+			props: {
+				number: /*$highScoreWhite*/ ctx[12],
+				title: "High Score (white)"
+			},
+			$$inline: true
+		});
+
+	counter3 = new Counter({
+			props: {
+				number: /*$highScoreBlack*/ ctx[11],
+				title: "High Score (black)"
+			},
+			$$inline: true
+		});
+
+	const block = {
+		c: function create() {
+			div5 = element("div");
+			div2 = element("div");
+			div0 = element("div");
+			create_component(chessboard.$$.fragment);
+			t0 = space();
+			div1 = element("div");
+			span = element("span");
+			t1 = text(/*nextMove*/ ctx[3]);
+			t2 = space();
+			if (if_block0) if_block0.c();
+			t3 = space();
+			if (if_block1) if_block1.c();
+			t4 = space();
+			if (if_block2) if_block2.c();
+			t5 = space();
+			div4 = element("div");
+			div3 = element("div");
+			create_component(counter0.$$.fragment);
+			t6 = space();
+			create_component(counter1.$$.fragment);
+			t7 = space();
+			create_component(counter2.$$.fragment);
+			t8 = space();
+			create_component(counter3.$$.fragment);
+			attr_dev(div0, "class", "block");
+			add_location(div0, file$2, 209, 4, 5386);
+			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4] + " mr-3");
+			add_location(span, file$2, 228, 6, 5905);
+			attr_dev(div1, "class", "block is-flex is-justify-content-center");
+			set_style(div1, "width", /*boardSize*/ ctx[6] + "px");
+			add_location(div1, file$2, 224, 4, 5799);
+			attr_dev(div2, "class", "column is-6-desktop");
+			add_location(div2, file$2, 208, 2, 5348);
+			attr_dev(div3, "class", "block");
+			add_location(div3, file$2, 253, 4, 6601);
+			attr_dev(div4, "class", "column is-2-desktop");
+			add_location(div4, file$2, 252, 2, 6563);
+			attr_dev(div5, "class", "columns is-centered");
+			add_location(div5, file$2, 207, 0, 5312);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div5, anchor);
+			append_dev(div5, div2);
+			append_dev(div2, div0);
+			mount_component(chessboard, div0, null);
+			append_dev(div2, t0);
+			append_dev(div2, div1);
+			append_dev(div1, span);
+			append_dev(span, t1);
+			append_dev(div1, t2);
+			if (if_block0) if_block0.m(div1, null);
+			append_dev(div1, t3);
+			if (if_block1) if_block1.m(div1, null);
+			append_dev(div2, t4);
+			if (if_block2) if_block2.m(div2, null);
+			append_dev(div5, t5);
+			append_dev(div5, div4);
+			append_dev(div4, div3);
+			mount_component(counter0, div3, null);
+			append_dev(div3, t6);
+			mount_component(counter1, div3, null);
+			append_dev(div3, t7);
+			mount_component(counter2, div3, null);
+			append_dev(div3, t8);
+			mount_component(counter3, div3, null);
+			current = true;
+		},
+		p: function update(ctx, dirty) {
+			const chessboard_changes = {};
+			if (dirty[0] & /*$orientation*/ 1) chessboard_changes.orientation = /*$orientation*/ ctx[0];
+
+			if (dirty[0] & /*nextMove, colorToMove*/ 24 | dirty[1] & /*$$scope*/ 2) {
+				chessboard_changes.$$scope = { dirty, ctx };
+			}
+
+			if (!updating_fen && dirty[0] & /*fen*/ 256) {
+				updating_fen = true;
+				chessboard_changes.fen = /*fen*/ ctx[8];
+				add_flush_callback(() => updating_fen = false);
+			}
+
+			if (!updating_chessground && dirty[0] & /*chessground*/ 128) {
+				updating_chessground = true;
+				chessboard_changes.chessground = /*chessground*/ ctx[7];
+				add_flush_callback(() => updating_chessground = false);
+			}
+
+			if (!updating_size && dirty[0] & /*boardSize*/ 64) {
+				updating_size = true;
+				chessboard_changes.size = /*boardSize*/ ctx[6];
+				add_flush_callback(() => updating_size = false);
+			}
+
+			chessboard.$set(chessboard_changes);
+			if (!current || dirty[0] & /*nextMove*/ 8) set_data_dev(t1, /*nextMove*/ ctx[3]);
+
+			if (!current || dirty[0] & /*colorToMove*/ 16 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4] + " mr-3")) {
+				attr_dev(span, "class", span_class_value);
+			}
+
+			if (!/*gameRunning*/ ctx[9]) {
+				if (if_block0) {
+					if_block0.p(ctx, dirty);
+				} else {
+					if_block0 = create_if_block_2(ctx);
+					if_block0.c();
+					if_block0.m(div1, t3);
+				}
+			} else if (if_block0) {
+				if_block0.d(1);
+				if_block0 = null;
+			}
+
+			if (!/*gameRunning*/ ctx[9]) {
+				if (if_block1) {
+					if_block1.p(ctx, dirty);
+				} else {
+					if_block1 = create_if_block_1(ctx);
+					if_block1.c();
+					if_block1.m(div1, null);
+				}
+			} else if (if_block1) {
+				if_block1.d(1);
+				if_block1 = null;
+			}
+
+			if (!current || dirty[0] & /*boardSize*/ 64) {
+				set_style(div1, "width", /*boardSize*/ ctx[6] + "px");
+			}
+
+			if (/*gameRunning*/ ctx[9]) {
+				if (if_block2) {
+					if_block2.p(ctx, dirty);
+
+					if (dirty[0] & /*gameRunning*/ 512) {
+						transition_in(if_block2, 1);
+					}
+				} else {
+					if_block2 = create_if_block$1(ctx);
+					if_block2.c();
+					transition_in(if_block2, 1);
+					if_block2.m(div2, null);
+				}
+			} else if (if_block2) {
+				group_outros();
+
+				transition_out(if_block2, 1, 1, () => {
+					if_block2 = null;
+				});
+
+				check_outros();
+			}
+
+			const counter0_changes = {};
+			if (dirty[0] & /*correctCount*/ 2) counter0_changes.number = /*correctCount*/ ctx[1];
+			counter0.$set(counter0_changes);
+			const counter1_changes = {};
+			if (dirty[0] & /*incorrectCount*/ 4) counter1_changes.number = /*incorrectCount*/ ctx[2];
+			counter1.$set(counter1_changes);
+			const counter2_changes = {};
+			if (dirty[0] & /*$highScoreWhite*/ 4096) counter2_changes.number = /*$highScoreWhite*/ ctx[12];
+			counter2.$set(counter2_changes);
+			const counter3_changes = {};
+			if (dirty[0] & /*$highScoreBlack*/ 2048) counter3_changes.number = /*$highScoreBlack*/ ctx[11];
+			counter3.$set(counter3_changes);
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(chessboard.$$.fragment, local);
+			transition_in(if_block2);
+			transition_in(counter0.$$.fragment, local);
+			transition_in(counter1.$$.fragment, local);
+			transition_in(counter2.$$.fragment, local);
+			transition_in(counter3.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(chessboard.$$.fragment, local);
+			transition_out(if_block2);
+			transition_out(counter0.$$.fragment, local);
+			transition_out(counter1.$$.fragment, local);
+			transition_out(counter2.$$.fragment, local);
+			transition_out(counter3.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div5);
+			}
+
+			destroy_component(chessboard);
+			if (if_block0) if_block0.d();
+			if (if_block1) if_block1.d();
+			if (if_block2) if_block2.d();
+			destroy_component(counter0);
+			destroy_component(counter1);
+			destroy_component(counter2);
+			destroy_component(counter3);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$3.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function whoseMoveIsIt(ply) {
+	return ply % 2 === 0 ? "white" : "black";
+}
+
+function instance$3($$self, $$props, $$invalidate) {
+	let $highScoreBlack;
+	let $highScoreWhite;
+	let $orientation;
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('NotationTrainer', slots, []);
+	const orientation = persisted("notation.orientation", "white");
+	validate_store(orientation, 'orientation');
+	component_subscribe($$self, orientation, value => $$invalidate(0, $orientation = value));
+	const highScoreBlack = persisted("notation.highScoreBlack", 0);
+	validate_store(highScoreBlack, 'highScoreBlack');
+	component_subscribe($$self, highScoreBlack, value => $$invalidate(11, $highScoreBlack = value));
+	const highScoreWhite = persisted("notation.highScoreWhite", 0);
+	validate_store(highScoreWhite, 'highScoreWhite');
+	component_subscribe($$self, highScoreWhite, value => $$invalidate(12, $highScoreWhite = value));
+	let correctCount = 0;
+	let incorrectCount = 0;
+	let nextMove;
+	let colorToMove;
+	let otherColor = Util.otherColor($orientation);
+	let positionShownAt;
+
+	class Answer {
+		constructor(givenAnswer, correctAnswer, timeToAnswer, orientation) {
+			this.givenAnswer = givenAnswer;
+			this.correctAnswer = correctAnswer;
+			this.timeToAnswer = timeToAnswer;
+			this.orientation = orientation;
+		}
+
+		isCorrect() {
+			return this.givenAnswer === this.correctAnswer;
+		}
+	}
+
+	/** @type {Answer[]} */
+	let answers = [];
+
+	let chessgroundConfig = {
+		fen: "8/8/8/8/8/8/8/8",
+		coordinates: false,
+		animation: { enabled: true },
+		highlight: { lastMove: true, check: true },
+		draggable: { enabled: true },
+		selectable: { enabled: true },
+		movable: {
+			free: false,
+			color: "both",
+			dests: new Map(),
+			events: { after: handleUserMove }
+		},
+		orientation: $orientation
+	};
+
+	let boardSize;
+	let chessground;
+	let fen;
+
+	// Game stuff
+	let gameRunning = false;
+
+	let maxTime = 0;
+	let correctBonus = 0;
+	let incorrectPenalty = 10;
+
+	function handleUserMove(orig, dest) {
+		const setup = parseFen(fen).unwrap();
+		const chess = Chess.fromSetup(setup).unwrap();
+		const origSquare = parseSquare(orig);
+		const destSquare = parseSquare(dest);
+		const move = { from: origSquare, to: destSquare };
+		const san = makeSan(chess, move);
+		handleAnswer(san, nextMove);
+	}
+
+	function newPosition() {
+		const game = getRandomGame();
+		const pgnGame = parsePgn(game.pgn)[0];
+		const totalPlies = [...pgnGame.moves.mainline()].length;
+		const random = Util.getRandomIntBetween(1, totalPlies - 1);
+		const positionResult = startingPosition(pgnGame.headers);
+		const position = positionResult.unwrap();
+		const allNodes = [...pgnGame.moves.mainlineNodes()];
+		const previousMove = nextMove;
+		const candidateMove = allNodes[random].data.san;
+
+		if (candidateMove.includes("=") || // no promotions
+		candidateMove === previousMove || // do not repeat moves
+		whoseMoveIsIt(random) !== $orientation || // only show moves for current view
+		["O-O", "O-O-O"].includes(candidateMove)) {
+			return newPosition(); // no castles
+		}
+
+		$$invalidate(3, nextMove = candidateMove);
+		$$invalidate(4, colorToMove = whoseMoveIsIt(random));
+		let i;
+		let move;
+
+		for (i = 0; i < random; i++) {
+			const node = allNodes[i];
+			move = parseSan(position, node.data.san);
+			position.play(move);
+		}
+
+		// Bound to Chessboard, automatically updates
+		$$invalidate(8, fen = makeFen(position.toSetup()));
+
+		const legalMoves = getLegalMovesForFen(fen);
+		chessground.set({ movable: { dests: legalMoves } });
+		positionShownAt = new Date().getTime();
+	}
+
+	function handleAnswer(userSan, answerSan) {
+		const isCorrect = userSan === answerSan;
+		correctBonus = correctBonus * 0.98;
+		let timeToAnswer = new Date().getTime() - positionShownAt;
+		answers = [...answers, new Answer(userSan, answerSan, timeToAnswer, $orientation)];
+
+		if (isCorrect) {
+			$$invalidate(10, maxTime += correctBonus);
+			$$invalidate(1, correctCount++, correctCount);
+		} else {
+			$$invalidate(10, maxTime -= incorrectPenalty);
+			$$invalidate(2, incorrectCount++, incorrectCount);
+		}
+
+		newPosition();
+	}
+
+	function startGame() {
+		answers = [];
+		$$invalidate(9, gameRunning = true);
+		$$invalidate(10, maxTime = 30);
+		$$invalidate(1, correctCount = 0);
+		$$invalidate(2, incorrectCount = 0);
+		correctBonus = 2.75;
+		newPosition();
+	}
+
+	function endGame() {
+		$$invalidate(9, gameRunning = false);
+
+		if ($orientation === "white") {
+			if (correctCount > $highScoreWhite) {
+				highScoreWhite.set(correctCount);
+			}
+		} else {
+			if (correctCount > $highScoreBlack) {
+				highScoreBlack.set(correctCount);
+			}
+		}
+	}
+
+	function getLegalMovesForFen(fen) {
+		const setup = parseFen(fen).unwrap();
+		const chess = Chess.fromSetup(setup).unwrap();
+		const destsMap = chess.allDests();
+		const destsMapInSan = new Map();
+
+		for (const [key, value] of destsMap.entries()) {
+			const destsArray = Array.from(value).map(sq => makeSquare(sq));
+			destsMapInSan.set(makeSquare(key), destsArray);
+		}
+
+		return destsMapInSan;
+	}
+
+	onMount(() => {
+		newPosition();
+	});
+
+	const writable_props = [];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<NotationTrainer> was created with unknown prop '${key}'`);
+	});
+
+	function chessboard_fen_binding(value) {
+		fen = value;
+		$$invalidate(8, fen);
+	}
+
+	function chessboard_chessground_binding(value) {
+		chessground = value;
+		$$invalidate(7, chessground);
+	}
+
+	function chessboard_size_binding(value) {
+		boardSize = value;
+		$$invalidate(6, boardSize);
+	}
+
+	const click_handler = () => {
+		orientation.set(otherColor);
+		newPosition();
+	};
+
+	$$self.$capture_state = () => ({
+		onMount,
+		Chessboard,
+		parsePgn,
+		startingPosition,
+		Util,
+		getRandomGame,
+		makeSan,
+		parseSan,
+		makeFen,
+		parseFen,
+		makeSquare,
+		parseSquare,
+		persisted,
+		ProgressTimer,
+		Chess,
+		Counter,
+		DisappearingContent,
+		orientation,
+		highScoreBlack,
+		highScoreWhite,
+		correctCount,
+		incorrectCount,
+		nextMove,
+		colorToMove,
+		otherColor,
+		positionShownAt,
+		Answer,
+		answers,
+		chessgroundConfig,
+		boardSize,
+		chessground,
+		fen,
+		gameRunning,
+		maxTime,
+		correctBonus,
+		incorrectPenalty,
+		handleUserMove,
+		newPosition,
+		whoseMoveIsIt,
+		handleAnswer,
+		startGame,
+		endGame,
+		getLegalMovesForFen,
+		$highScoreBlack,
+		$highScoreWhite,
+		$orientation
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('correctCount' in $$props) $$invalidate(1, correctCount = $$props.correctCount);
+		if ('incorrectCount' in $$props) $$invalidate(2, incorrectCount = $$props.incorrectCount);
+		if ('nextMove' in $$props) $$invalidate(3, nextMove = $$props.nextMove);
+		if ('colorToMove' in $$props) $$invalidate(4, colorToMove = $$props.colorToMove);
+		if ('otherColor' in $$props) $$invalidate(5, otherColor = $$props.otherColor);
+		if ('positionShownAt' in $$props) positionShownAt = $$props.positionShownAt;
+		if ('answers' in $$props) answers = $$props.answers;
+		if ('chessgroundConfig' in $$props) $$invalidate(16, chessgroundConfig = $$props.chessgroundConfig);
+		if ('boardSize' in $$props) $$invalidate(6, boardSize = $$props.boardSize);
+		if ('chessground' in $$props) $$invalidate(7, chessground = $$props.chessground);
+		if ('fen' in $$props) $$invalidate(8, fen = $$props.fen);
+		if ('gameRunning' in $$props) $$invalidate(9, gameRunning = $$props.gameRunning);
+		if ('maxTime' in $$props) $$invalidate(10, maxTime = $$props.maxTime);
+		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
+		if ('incorrectPenalty' in $$props) incorrectPenalty = $$props.incorrectPenalty;
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty[0] & /*$orientation*/ 1) {
+			{
+				$$invalidate(5, otherColor = Util.otherColor($orientation));
+			}
+		}
+	};
+
+	return [
+		$orientation,
+		correctCount,
+		incorrectCount,
+		nextMove,
+		colorToMove,
+		otherColor,
+		boardSize,
+		chessground,
+		fen,
+		gameRunning,
+		maxTime,
+		$highScoreBlack,
+		$highScoreWhite,
+		orientation,
+		highScoreBlack,
+		highScoreWhite,
+		chessgroundConfig,
+		newPosition,
+		startGame,
+		endGame,
+		chessboard_fen_binding,
+		chessboard_chessground_binding,
+		chessboard_size_binding,
+		click_handler
+	];
+}
+
+class NotationTrainer extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$3, create_fragment$3, safe_not_equal, {}, null, [-1, -1]);
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "NotationTrainer",
+			options,
+			id: create_fragment$3.name
+		});
+	}
+}
+
+/* svelte/ThemeSwitcher.svelte generated by Svelte v4.2.18 */
+const file$1 = "svelte/ThemeSwitcher.svelte";
+
+function add_css(target) {
+	append_styles(target, "svelte-x6infa", "svg.svelte-x6infa{position:absolute}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiVGhlbWVTd2l0Y2hlci5zdmVsdGUiLCJzb3VyY2VzIjpbIlRoZW1lU3dpdGNoZXIuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCBDb25maWcgZnJvbSBcInNyYy9sb2NhbF9jb25maWdcIjtcbiAgaW1wb3J0IHsgYmx1ciB9IGZyb20gXCJzdmVsdGUvdHJhbnNpdGlvblwiO1xuICBpbXBvcnQgeyBib2FyZFN0eWxlIH0gZnJvbSBcIi4vc3RvcmVzXCI7XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG5cbiAgY29uc3QgY29uZmlnID0gbmV3IENvbmZpZygpO1xuICBjb25zdCB0aGVtZU9wdGlvbiA9IGNvbmZpZy5nZXRDb25maWdPcHRpb24oXCJ0aGVtZVwiLCBcImRhcmtcIik7XG4gIHRoZW1lT3B0aW9uLnNldEFsbG93ZWRWYWx1ZXMoXCJsaWdodFwiLCBcImRhcmtcIik7XG5cbiAgbGV0IHRoZW1lID0gdGhlbWVPcHRpb24uZ2V0VmFsdWUoKTtcblxuICBsZXQgb3RoZXJUaGVtZSA9IHRoZW1lID09PSBcImRhcmtcIiA/IFwibGlnaHRcIiA6IFwiZGFya1wiO1xuXG4gICQ6IHtcbiAgICBvdGhlclRoZW1lID0gdGhlbWUgPT09IFwiZGFya1wiID8gXCJsaWdodFwiIDogXCJkYXJrXCI7XG4gIH1cblxuICAkOiB7XG4gICAgY29uc3Qgb3JpZ2luYWxUcmFuc2l0aW9uID0gZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LnN0eWxlLnRyYW5zaXRpb247XG4gICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LnN0eWxlLnRyYW5zaXRpb24gPSBcImFsbCAwLjVzIGVhc2VcIjtcbiAgICBkb2N1bWVudC5kb2N1bWVudEVsZW1lbnQuY2xhc3NMaXN0LmFkZCh0aGVtZSk7XG4gICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LmRhdGFzZXQudGhlbWUgPSB0aGVtZTtcbiAgICB0aGVtZU9wdGlvbi5zZXRWYWx1ZSh0aGVtZSk7XG4gICAgaWYgKHRoZW1lID09PSBcImxpZ2h0XCIpIHtcbiAgICAgIGRvY3VtZW50LmRvY3VtZW50RWxlbWVudC5jbGFzc0xpc3QucmVtb3ZlKFwiZGFya1wiKTtcbiAgICB9IGVsc2Uge1xuICAgICAgZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LmNsYXNzTGlzdC5yZW1vdmUoXCJsaWdodFwiKTtcbiAgICB9XG4gICAgc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBkb2N1bWVudC5kb2N1bWVudEVsZW1lbnQuc3R5bGUudHJhbnNpdGlvbiA9IG9yaWdpbmFsVHJhbnNpdGlvbjtcbiAgICB9LCA1MDApO1xuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgZG9jdW1lbnQuYm9keS5kYXRhc2V0LmJvYXJkID0gJGJvYXJkU3R5bGU7XG4gIH0pO1xuPC9zY3JpcHQ+XG5cbjxkaXY+XG4gIDxidXR0b25cbiAgICBjbGFzcz1cImljb25cIlxuICAgIHRpdGxlPVwiU3dpdGNoIHRvIHtvdGhlclRoZW1lfSBtb2RlXCJcbiAgICBvbjpjbGljaz17KCkgPT4ge1xuICAgICAgdGhlbWUgPSBvdGhlclRoZW1lO1xuICAgIH19XG4gID5cbiAgICB7I2lmIHRoZW1lID09PSBcImxpZ2h0XCJ9XG4gICAgICA8IS0tIE1vb24gLS0+XG4gICAgICA8c3ZnXG4gICAgICAgIHRyYW5zaXRpb246Ymx1clxuICAgICAgICBzdHlsZT1cImZpbGw6IHZhcigtLWJ1bG1hLWxpbmspXCJcbiAgICAgICAgeG1sbnM9XCJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Z1wiXG4gICAgICAgIHZpZXdCb3g9XCIwIDAgMzg0IDUxMlwiXG4gICAgICA+XG4gICAgICAgIDxwYXRoXG4gICAgICAgICAgZD1cIk0yMjMuNSAzMkMxMDAgMzIgMCAxMzIuMyAwIDI1NlMxMDAgNDgwIDIyMy41IDQ4MGM2MC42IDAgMTE1LjUtMjQuMiAxNTUuOC02My40YzUtNC45IDYuMy0xMi41IDMuMS0xOC43cy0xMC4xLTkuNy0xNy04LjVjLTkuOCAxLjctMTkuOCAyLjYtMzAuMSAyLjZjLTk2LjkgMC0xNzUuNS03OC44LTE3NS41LTE3NmMwLTY1LjggMzYtMTIzLjEgODkuMy0xNTMuM2M2LjEtMy41IDkuMi0xMC41IDcuNy0xNy4zcy03LjMtMTEuOS0xNC4zLTEyLjVjLTYuMy0uNS0xMi42LS44LTE5LS44elwiXG4gICAgICAgIC8+XG4gICAgICA8L3N2Zz5cbiAgICB7OmVsc2V9XG4gICAgICA8IS0tIFN1biAtLT5cbiAgICAgIDxzdmdcbiAgICAgICAgdHJhbnNpdGlvbjpibHVyXG4gICAgICAgIHN0eWxlPVwiZmlsbDogdmFyKC0tYnVsbWEtd2FybmluZylcIlxuICAgICAgICB4bWxucz1cImh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnXCJcbiAgICAgICAgdmlld0JveD1cIjAgMCA1MTIgNTEyXCJcbiAgICAgID5cbiAgICAgICAgPHBhdGhcbiAgICAgICAgICBkPVwiTTM3NS43IDE5LjdjLTEuNS04LTYuOS0xNC43LTE0LjQtMTcuOHMtMTYuMS0yLjItMjIuOCAyLjRMMjU2IDYxLjEgMTczLjUgNC4yYy02LjctNC42LTE1LjMtNS41LTIyLjgtMi40cy0xMi45IDkuOC0xNC40IDE3LjhsLTE4LjEgOTguNUwxOS43IDEzNi4zYy04IDEuNS0xNC43IDYuOS0xNy44IDE0LjRzLTIuMiAxNi4xIDIuNCAyMi44TDYxLjEgMjU2IDQuMiAzMzguNWMtNC42IDYuNy01LjUgMTUuMy0yLjQgMjIuOHM5LjggMTMgMTcuOCAxNC40bDk4LjUgMTguMSAxOC4xIDk4LjVjMS41IDggNi45IDE0LjcgMTQuNCAxNy44czE2LjEgMi4yIDIyLjgtMi40TDI1NiA0NTAuOWw4Mi41IDU2LjljNi43IDQuNiAxNS4zIDUuNSAyMi44IDIuNHMxMi45LTkuOCAxNC40LTE3LjhsMTguMS05OC41IDk4LjUtMTguMWM4LTEuNSAxNC43LTYuOSAxNy44LTE0LjRzMi4yLTE2LjEtMi40LTIyLjhMNDUwLjkgMjU2bDU2LjktODIuNWM0LjYtNi43IDUuNS0xNS4zIDIuNC0yMi44cy05LjgtMTIuOS0xNy44LTE0LjRsLTk4LjUtMTguMUwzNzUuNyAxOS43ek0yNjkuNiAxMTBsNjUuNi00NS4yIDE0LjQgNzguM2MxLjggOS44IDkuNSAxNy41IDE5LjMgMTkuM2w3OC4zIDE0LjRMNDAyIDI0Mi40Yy01LjcgOC4yLTUuNyAxOSAwIDI3LjJsNDUuMiA2NS42LTc4LjMgMTQuNGMtOS44IDEuOC0xNy41IDkuNS0xOS4zIDE5LjNsLTE0LjQgNzguM0wyNjkuNiA0MDJjLTguMi01LjctMTktNS43LTI3LjIgMGwtNjUuNiA0NS4yLTE0LjQtNzguM2MtMS44LTkuOC05LjUtMTcuNS0xOS4zLTE5LjNMNjQuOCAzMzUuMiAxMTAgMjY5LjZjNS43LTguMiA1LjctMTkgMC0yNy4yTDY0LjggMTc2LjhsNzguMy0xNC40YzkuOC0xLjggMTcuNS05LjUgMTkuMy0xOS4zbDE0LjQtNzguM0wyNDIuNCAxMTBjOC4yIDUuNyAxOSA1LjcgMjcuMiAwek0yNTYgMzY4YTExMiAxMTIgMCAxIDAgMC0yMjQgMTEyIDExMiAwIDEgMCAwIDIyNHpNMTkyIDI1NmE2NCA2NCAwIDEgMSAxMjggMCA2NCA2NCAwIDEgMSAtMTI4IDB6XCJcbiAgICAgICAgLz5cbiAgICAgIDwvc3ZnPlxuICAgIHsvaWZ9XG4gIDwvYnV0dG9uPlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgc3ZnIHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBNEVFLGlCQUFJLENBQ0YsUUFBUSxDQUFFLFFBQ1oifQ== */");
+}
+
+// (60:4) {:else}
+function create_else_block(ctx) {
+	let svg;
+	let path;
+	let svg_transition;
+	let current;
+
+	const block = {
+		c: function create() {
+			svg = svg_element("svg");
+			path = svg_element("path");
+			attr_dev(path, "d", "M375.7 19.7c-1.5-8-6.9-14.7-14.4-17.8s-16.1-2.2-22.8 2.4L256 61.1 173.5 4.2c-6.7-4.6-15.3-5.5-22.8-2.4s-12.9 9.8-14.4 17.8l-18.1 98.5L19.7 136.3c-8 1.5-14.7 6.9-17.8 14.4s-2.2 16.1 2.4 22.8L61.1 256 4.2 338.5c-4.6 6.7-5.5 15.3-2.4 22.8s9.8 13 17.8 14.4l98.5 18.1 18.1 98.5c1.5 8 6.9 14.7 14.4 17.8s16.1 2.2 22.8-2.4L256 450.9l82.5 56.9c6.7 4.6 15.3 5.5 22.8 2.4s12.9-9.8 14.4-17.8l18.1-98.5 98.5-18.1c8-1.5 14.7-6.9 17.8-14.4s2.2-16.1-2.4-22.8L450.9 256l56.9-82.5c4.6-6.7 5.5-15.3 2.4-22.8s-9.8-12.9-17.8-14.4l-98.5-18.1L375.7 19.7zM269.6 110l65.6-45.2 14.4 78.3c1.8 9.8 9.5 17.5 19.3 19.3l78.3 14.4L402 242.4c-5.7 8.2-5.7 19 0 27.2l45.2 65.6-78.3 14.4c-9.8 1.8-17.5 9.5-19.3 19.3l-14.4 78.3L269.6 402c-8.2-5.7-19-5.7-27.2 0l-65.6 45.2-14.4-78.3c-1.8-9.8-9.5-17.5-19.3-19.3L64.8 335.2 110 269.6c5.7-8.2 5.7-19 0-27.2L64.8 176.8l78.3-14.4c9.8-1.8 17.5-9.5 19.3-19.3l14.4-78.3L242.4 110c8.2 5.7 19 5.7 27.2 0zM256 368a112 112 0 1 0 0-224 112 112 0 1 0 0 224zM192 256a64 64 0 1 1 128 0 64 64 0 1 1 -128 0z");
+			add_location(path, file$1, 67, 8, 1973);
+			set_style(svg, "fill", "var(--bulma-warning)");
+			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
+			attr_dev(svg, "viewBox", "0 0 512 512");
+			attr_dev(svg, "class", "svelte-x6infa");
+			add_location(svg, file$1, 61, 6, 1812);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, svg, anchor);
+			append_dev(svg, path);
+			current = true;
+		},
+		i: function intro(local) {
+			if (current) return;
+
+			if (local) {
+				add_render_callback(() => {
+					if (!current) return;
+					if (!svg_transition) svg_transition = create_bidirectional_transition(svg, blur, {}, true);
+					svg_transition.run(1);
+				});
+			}
+
+			current = true;
+		},
+		o: function outro(local) {
+			if (local) {
+				if (!svg_transition) svg_transition = create_bidirectional_transition(svg, blur, {}, false);
+				svg_transition.run(0);
+			}
+
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(svg);
+			}
+
+			if (detaching && svg_transition) svg_transition.end();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_else_block.name,
+		type: "else",
+		source: "(60:4) {:else}",
+		ctx
+	});
+
+	return block;
+}
+
+// (48:4) {#if theme === "light"}
+function create_if_block(ctx) {
+	let svg;
+	let path;
+	let svg_transition;
+	let current;
+
+	const block = {
+		c: function create() {
+			svg = svg_element("svg");
+			path = svg_element("path");
+			attr_dev(path, "d", "M223.5 32C100 32 0 132.3 0 256S100 480 223.5 480c60.6 0 115.5-24.2 155.8-63.4c5-4.9 6.3-12.5 3.1-18.7s-10.1-9.7-17-8.5c-9.8 1.7-19.8 2.6-30.1 2.6c-96.9 0-175.5-78.8-175.5-176c0-65.8 36-123.1 89.3-153.3c6.1-3.5 9.2-10.5 7.7-17.3s-7.3-11.9-14.3-12.5c-6.3-.5-12.6-.8-19-.8z");
+			add_location(path, file$1, 55, 8, 1460);
+			set_style(svg, "fill", "var(--bulma-link)");
+			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
+			attr_dev(svg, "viewBox", "0 0 384 512");
+			attr_dev(svg, "class", "svelte-x6infa");
+			add_location(svg, file$1, 49, 6, 1302);
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, svg, anchor);
+			append_dev(svg, path);
+			current = true;
+		},
+		i: function intro(local) {
+			if (current) return;
+
+			if (local) {
+				add_render_callback(() => {
+					if (!current) return;
+					if (!svg_transition) svg_transition = create_bidirectional_transition(svg, blur, {}, true);
+					svg_transition.run(1);
+				});
+			}
+
+			current = true;
+		},
+		o: function outro(local) {
+			if (local) {
+				if (!svg_transition) svg_transition = create_bidirectional_transition(svg, blur, {}, false);
+				svg_transition.run(0);
+			}
+
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(svg);
+			}
+
+			if (detaching && svg_transition) svg_transition.end();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_if_block.name,
+		type: "if",
+		source: "(48:4) {#if theme === \\\"light\\\"}",
+		ctx
+	});
+
+	return block;
+}
+
+function create_fragment$2(ctx) {
+	let div;
+	let button;
+	let current_block_type_index;
+	let if_block;
+	let button_title_value;
+	let mounted;
+	let dispose;
+	const if_block_creators = [create_if_block, create_else_block];
+	const if_blocks = [];
+
+	function select_block_type(ctx, dirty) {
+		if (/*theme*/ ctx[0] === "light") return 0;
+		return 1;
+	}
+
+	current_block_type_index = select_block_type(ctx);
+	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+
+	const block = {
+		c: function create() {
+			div = element("div");
+			button = element("button");
+			if_block.c();
+			attr_dev(button, "class", "icon");
+			attr_dev(button, "title", button_title_value = "Switch to " + /*otherTheme*/ ctx[1] + " mode");
+			add_location(button, file$1, 40, 2, 1124);
+			add_location(div, file$1, 39, 0, 1116);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div, anchor);
+			append_dev(div, button);
+			if_blocks[current_block_type_index].m(button, null);
+
+			if (!mounted) {
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[2], false, false, false, false);
+				mounted = true;
+			}
+		},
+		p: function update(ctx, [dirty]) {
+			let previous_block_index = current_block_type_index;
+			current_block_type_index = select_block_type(ctx);
+
+			if (current_block_type_index !== previous_block_index) {
+				group_outros();
+
+				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+					if_blocks[previous_block_index] = null;
+				});
+
+				check_outros();
+				if_block = if_blocks[current_block_type_index];
+
+				if (!if_block) {
+					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+					if_block.c();
+				}
+
+				transition_in(if_block, 1);
+				if_block.m(button, null);
+			}
+
+			if (dirty & /*otherTheme*/ 2 && button_title_value !== (button_title_value = "Switch to " + /*otherTheme*/ ctx[1] + " mode")) {
+				attr_dev(button, "title", button_title_value);
+			}
+		},
+		i: function intro(local) {
+			transition_in(if_block);
+		},
+		o: function outro(local) {
+			transition_out(if_block);
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div);
+			}
+
+			if_blocks[current_block_type_index].d();
+			mounted = false;
+			dispose();
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$2.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$2($$self, $$props, $$invalidate) {
+	let $boardStyle;
+	validate_store(boardStyle, 'boardStyle');
+	component_subscribe($$self, boardStyle, $$value => $$invalidate(3, $boardStyle = $$value));
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('ThemeSwitcher', slots, []);
+	const config = new Config();
+	const themeOption = config.getConfigOption("theme", "dark");
+	themeOption.setAllowedValues("light", "dark");
+	let theme = themeOption.getValue();
+	let otherTheme = theme === "dark" ? "light" : "dark";
+
+	onMount(() => {
+		document.body.dataset.board = $boardStyle;
+	});
+
+	const writable_props = [];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ThemeSwitcher> was created with unknown prop '${key}'`);
+	});
+
+	const click_handler = () => {
+		$$invalidate(0, theme = otherTheme);
+	};
+
+	$$self.$capture_state = () => ({
+		Config,
+		blur,
+		boardStyle,
+		onMount,
+		config,
+		themeOption,
+		theme,
+		otherTheme,
+		$boardStyle
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('theme' in $$props) $$invalidate(0, theme = $$props.theme);
+		if ('otherTheme' in $$props) $$invalidate(1, otherTheme = $$props.otherTheme);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*theme*/ 1) {
+			{
+				$$invalidate(1, otherTheme = theme === "dark" ? "light" : "dark");
+			}
+		}
+
+		if ($$self.$$.dirty & /*theme*/ 1) {
+			{
+				const originalTransition = document.documentElement.style.transition;
+				document.documentElement.style.transition = "all 0.5s ease";
+				document.documentElement.classList.add(theme);
+				document.documentElement.dataset.theme = theme;
+				themeOption.setValue(theme);
+
+				if (theme === "light") {
+					document.documentElement.classList.remove("dark");
+				} else {
+					document.documentElement.classList.remove("light");
+				}
+
+				setTimeout(
+					() => {
+						document.documentElement.style.transition = originalTransition;
+					},
+					500
+				);
+			}
+		}
+	};
+
+	return [theme, otherTheme, click_handler];
+}
+
+class ThemeSwitcher extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$2, create_fragment$2, safe_not_equal, {}, add_css);
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "ThemeSwitcher",
+			options,
+			id: create_fragment$2.name
+		});
+	}
+}
+
+/* svelte/GlobalConfig.svelte generated by Svelte v4.2.18 */
+const file = "svelte/GlobalConfig.svelte";
+
+function get_each_context(ctx, list, i) {
+	const child_ctx = ctx.slice();
+	child_ctx[16] = list[i];
+	return child_ctx;
+}
+
+function get_each_context_1(ctx, list, i) {
+	const child_ctx = ctx.slice();
+	child_ctx[16] = list[i];
+	return child_ctx;
+}
+
+// (32:4) {#each pieceSetOptions as option (option)}
+function create_each_block_1(key_1, ctx) {
+	let label;
+	let div;
+	let input;
+	let t0;
+	let t1;
+	let t2;
+	let binding_group;
+	let mounted;
+	let dispose;
+
+	function mouseenter_handler() {
+		return /*mouseenter_handler*/ ctx[7](/*option*/ ctx[16]);
+	}
+
+	function focus_handler() {
+		return /*focus_handler*/ ctx[8](/*option*/ ctx[16]);
+	}
+
+	binding_group = init_binding_group(/*$$binding_groups*/ ctx[6][1]);
+
+	const block = {
+		key: key_1,
+		first: null,
+		c: function create() {
+			label = element("label");
+			div = element("div");
+			input = element("input");
+			t0 = space();
+			t1 = text(/*option*/ ctx[16]);
+			t2 = space();
+			attr_dev(input, "name", "pieceSet");
+			attr_dev(input, "type", "radio");
+			input.__value = /*option*/ ctx[16];
+			set_input_value(input, input.__value);
+			add_location(input, file, 39, 10, 1170);
+			add_location(div, file, 38, 8, 1154);
+			add_location(label, file, 32, 6, 916);
+			binding_group.p(input);
+			this.first = label;
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, label, anchor);
+			append_dev(label, div);
+			append_dev(div, input);
+			input.checked = input.__value === /*$pieceSet*/ ctx[2];
+			append_dev(div, t0);
+			append_dev(div, t1);
+			append_dev(label, t2);
+
+			if (!mounted) {
+				dispose = [
+					listen_dev(input, "change", /*input_change_handler*/ ctx[5]),
+					listen_dev(label, "mouseenter", mouseenter_handler, false, false, false, false),
+					listen_dev(label, "focus", focus_handler, false, false, false, false),
+					listen_dev(label, "mouseout", /*mouseout_handler*/ ctx[9], false, false, false, false),
+					listen_dev(label, "blur", /*blur_handler*/ ctx[10], false, false, false, false)
+				];
+
+				mounted = true;
+			}
+		},
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
+
+			if (dirty & /*$pieceSet*/ 4) {
+				input.checked = input.__value === /*$pieceSet*/ ctx[2];
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(label);
+			}
+
+			binding_group.r();
+			mounted = false;
+			run_all(dispose);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_each_block_1.name,
+		type: "each",
+		source: "(32:4) {#each pieceSetOptions as option (option)}",
+		ctx
+	});
+
+	return block;
+}
+
+// (53:4) {#each boardOptions as option (option)}
+function create_each_block(key_1, ctx) {
+	let label;
+	let div;
+	let input;
+	let t0;
+	let t1;
+	let t2;
+	let binding_group;
+	let mounted;
+	let dispose;
+
+	function mouseenter_handler_1() {
+		return /*mouseenter_handler_1*/ ctx[12](/*option*/ ctx[16]);
+	}
+
+	function focus_handler_1() {
+		return /*focus_handler_1*/ ctx[13](/*option*/ ctx[16]);
+	}
+
+	binding_group = init_binding_group(/*$$binding_groups*/ ctx[6][0]);
+
+	const block = {
+		key: key_1,
+		first: null,
+		c: function create() {
+			label = element("label");
+			div = element("div");
+			input = element("input");
+			t0 = space();
+			t1 = text(/*option*/ ctx[16]);
+			t2 = space();
+			attr_dev(input, "name", "boardStyle");
+			attr_dev(input, "type", "radio");
+			input.__value = /*option*/ ctx[16];
+			set_input_value(input, input.__value);
+			add_location(input, file, 60, 10, 1766);
+			add_location(div, file, 59, 8, 1750);
+			add_location(label, file, 53, 6, 1504);
+			binding_group.p(input);
+			this.first = label;
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, label, anchor);
+			append_dev(label, div);
+			append_dev(div, input);
+			input.checked = input.__value === /*$boardStyle*/ ctx[3];
+			append_dev(div, t0);
+			append_dev(div, t1);
+			append_dev(label, t2);
+
+			if (!mounted) {
+				dispose = [
+					listen_dev(input, "change", /*input_change_handler_1*/ ctx[11]),
+					listen_dev(label, "mouseenter", mouseenter_handler_1, false, false, false, false),
+					listen_dev(label, "focus", focus_handler_1, false, false, false, false),
+					listen_dev(label, "mouseout", /*mouseout_handler_1*/ ctx[14], false, false, false, false),
+					listen_dev(label, "blur", /*blur_handler_1*/ ctx[15], false, false, false, false)
+				];
+
+				mounted = true;
+			}
+		},
+		p: function update(new_ctx, dirty) {
+			ctx = new_ctx;
+
+			if (dirty & /*$boardStyle*/ 8) {
+				input.checked = input.__value === /*$boardStyle*/ ctx[3];
+			}
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(label);
+			}
+
+			binding_group.r();
+			mounted = false;
+			run_all(dispose);
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_each_block.name,
+		type: "each",
+		source: "(53:4) {#each boardOptions as option (option)}",
+		ctx
+	});
+
+	return block;
+}
+
+function create_fragment$1(ctx) {
+	let div3;
+	let div0;
+	let h20;
+	let t1;
+	let chessboard;
+	let t2;
+	let div1;
+	let h21;
+	let t4;
+	let each_blocks_1 = [];
+	let each0_lookup = new Map();
+	let t5;
+	let div2;
+	let h22;
+	let t7;
+	let each_blocks = [];
+	let each1_lookup = new Map();
+	let current;
+
+	chessboard = new Chessboard({
+			props: {
+				pieceSetOverride: /*pieceSetOverride*/ ctx[1],
+				boardStyleOverride: /*boardStyleOverride*/ ctx[0]
+			},
+			$$inline: true
+		});
+
+	let each_value_1 = ensure_array_like_dev(pieceSetOptions);
+	const get_key = ctx => /*option*/ ctx[16];
+	validate_each_keys(ctx, each_value_1, get_each_context_1, get_key);
+
+	for (let i = 0; i < each_value_1.length; i += 1) {
+		let child_ctx = get_each_context_1(ctx, each_value_1, i);
+		let key = get_key(child_ctx);
+		each0_lookup.set(key, each_blocks_1[i] = create_each_block_1(key, child_ctx));
+	}
+
+	let each_value = ensure_array_like_dev(boardOptions);
+	const get_key_1 = ctx => /*option*/ ctx[16];
+	validate_each_keys(ctx, each_value, get_each_context, get_key_1);
+
+	for (let i = 0; i < each_value.length; i += 1) {
+		let child_ctx = get_each_context(ctx, each_value, i);
+		let key = get_key_1(child_ctx);
+		each1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
+	}
+
+	const block = {
+		c: function create() {
+			div3 = element("div");
+			div0 = element("div");
+			h20 = element("h2");
+			h20.textContent = "Example Board";
+			t1 = space();
+			create_component(chessboard.$$.fragment);
+			t2 = space();
+			div1 = element("div");
+			h21 = element("h2");
+			h21.textContent = "Piece Set";
+			t4 = space();
+
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				each_blocks_1[i].c();
+			}
+
+			t5 = space();
+			div2 = element("div");
+			h22 = element("h2");
+			h22.textContent = "Board Style";
+			t7 = space();
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].c();
+			}
+
+			attr_dev(h20, "class", "is-size-2");
+			add_location(h20, file, 26, 4, 677);
+			attr_dev(div0, "class", "column is-one-third");
+			add_location(div0, file, 25, 2, 639);
+			attr_dev(h21, "class", "is-size-2");
+			add_location(h21, file, 30, 4, 826);
+			attr_dev(div1, "class", "column is-one-third");
+			add_location(div1, file, 29, 2, 788);
+			attr_dev(h22, "class", "is-size-2");
+			add_location(h22, file, 51, 4, 1415);
+			attr_dev(div2, "class", "column is-one-third");
+			add_location(div2, file, 50, 2, 1377);
+			attr_dev(div3, "class", "columns");
+			add_location(div3, file, 24, 0, 615);
+		},
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: function mount(target, anchor) {
+			insert_dev(target, div3, anchor);
+			append_dev(div3, div0);
+			append_dev(div0, h20);
+			append_dev(div0, t1);
+			mount_component(chessboard, div0, null);
+			append_dev(div3, t2);
+			append_dev(div3, div1);
+			append_dev(div1, h21);
+			append_dev(div1, t4);
+
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				if (each_blocks_1[i]) {
+					each_blocks_1[i].m(div1, null);
+				}
+			}
+
+			append_dev(div3, t5);
+			append_dev(div3, div2);
+			append_dev(div2, h22);
+			append_dev(div2, t7);
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				if (each_blocks[i]) {
+					each_blocks[i].m(div2, null);
+				}
+			}
+
+			current = true;
+		},
+		p: function update(ctx, [dirty]) {
+			const chessboard_changes = {};
+			if (dirty & /*pieceSetOverride*/ 2) chessboard_changes.pieceSetOverride = /*pieceSetOverride*/ ctx[1];
+			if (dirty & /*boardStyleOverride*/ 1) chessboard_changes.boardStyleOverride = /*boardStyleOverride*/ ctx[0];
+			chessboard.$set(chessboard_changes);
+
+			if (dirty & /*pieceSetOverride, $pieceSet*/ 6) {
+				each_value_1 = ensure_array_like_dev(pieceSetOptions);
+				validate_each_keys(ctx, each_value_1, get_each_context_1, get_key);
+				each_blocks_1 = update_keyed_each(each_blocks_1, dirty, get_key, 1, ctx, each_value_1, each0_lookup, div1, destroy_block, create_each_block_1, null, get_each_context_1);
+			}
+
+			if (dirty & /*boardStyleOverride, $boardStyle*/ 9) {
+				each_value = ensure_array_like_dev(boardOptions);
+				validate_each_keys(ctx, each_value, get_each_context, get_key_1);
+				each_blocks = update_keyed_each(each_blocks, dirty, get_key_1, 1, ctx, each_value, each1_lookup, div2, destroy_block, create_each_block, null, get_each_context);
+			}
+		},
+		i: function intro(local) {
+			if (current) return;
+			transition_in(chessboard.$$.fragment, local);
+			current = true;
+		},
+		o: function outro(local) {
+			transition_out(chessboard.$$.fragment, local);
+			current = false;
+		},
+		d: function destroy(detaching) {
+			if (detaching) {
+				detach_dev(div3);
+			}
+
+			destroy_component(chessboard);
+
+			for (let i = 0; i < each_blocks_1.length; i += 1) {
+				each_blocks_1[i].d();
+			}
+
+			for (let i = 0; i < each_blocks.length; i += 1) {
+				each_blocks[i].d();
+			}
+		}
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment$1.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance$1($$self, $$props, $$invalidate) {
+	let $pieceSet;
+	let $boardStyle;
+	validate_store(pieceSet, 'pieceSet');
+	component_subscribe($$self, pieceSet, $$value => $$invalidate(2, $pieceSet = $$value));
+	validate_store(boardStyle, 'boardStyle');
+	component_subscribe($$self, boardStyle, $$value => $$invalidate(3, $boardStyle = $$value));
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('GlobalConfig', slots, []);
+	let pieceSetOverride;
+	let boardStyleOverride;
+	let originalBoard;
+
+	onMount(() => {
+		$$invalidate(4, originalBoard = document.body.dataset.board);
+	});
+
+	const writable_props = [];
+
+	Object.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<GlobalConfig> was created with unknown prop '${key}'`);
+	});
+
+	const $$binding_groups = [[], []];
+
+	function input_change_handler() {
+		$pieceSet = this.__value;
+		pieceSet.set($pieceSet);
+	}
+
+	const mouseenter_handler = option => $$invalidate(1, pieceSetOverride = option);
+	const focus_handler = option => $$invalidate(1, pieceSetOverride = option);
+	const mouseout_handler = () => $$invalidate(1, pieceSetOverride = null);
+	const blur_handler = () => $$invalidate(1, pieceSetOverride = null);
+
+	function input_change_handler_1() {
+		$boardStyle = this.__value;
+		boardStyle.set($boardStyle);
+	}
+
+	const mouseenter_handler_1 = option => $$invalidate(0, boardStyleOverride = option);
+	const focus_handler_1 = option => $$invalidate(0, boardStyleOverride = option);
+	const mouseout_handler_1 = () => $$invalidate(0, boardStyleOverride = null);
+	const blur_handler_1 = () => $$invalidate(0, boardStyleOverride = null);
+
+	$$self.$capture_state = () => ({
+		Chessboard,
+		boardOptions,
+		pieceSetOptions,
+		boardStyle,
+		pieceSet,
+		onMount,
+		pieceSetOverride,
+		boardStyleOverride,
+		originalBoard,
+		$pieceSet,
+		$boardStyle
+	});
+
+	$$self.$inject_state = $$props => {
+		if ('pieceSetOverride' in $$props) $$invalidate(1, pieceSetOverride = $$props.pieceSetOverride);
+		if ('boardStyleOverride' in $$props) $$invalidate(0, boardStyleOverride = $$props.boardStyleOverride);
+		if ('originalBoard' in $$props) $$invalidate(4, originalBoard = $$props.originalBoard);
+	};
+
+	if ($$props && "$$inject" in $$props) {
+		$$self.$inject_state($$props.$$inject);
+	}
+
+	$$self.$$.update = () => {
+		if ($$self.$$.dirty & /*boardStyleOverride, originalBoard*/ 17) {
+			{
+				if (boardStyleOverride && document.body) {
+					document.body.dataset.board = boardStyleOverride;
+				}
+
+				if (boardStyleOverride === null && document.body) {
+					document.body.dataset.board = originalBoard;
+				}
+			}
+		}
+	};
+
+	return [
+		boardStyleOverride,
+		pieceSetOverride,
+		$pieceSet,
+		$boardStyle,
+		originalBoard,
+		input_change_handler,
+		$$binding_groups,
+		mouseenter_handler,
+		focus_handler,
+		mouseout_handler,
+		blur_handler,
+		input_change_handler_1,
+		mouseenter_handler_1,
+		focus_handler_1,
+		mouseout_handler_1,
+		blur_handler_1
+	];
+}
+
+class GlobalConfig extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "GlobalConfig",
+			options,
+			id: create_fragment$1.name
+		});
+	}
+}
+
+/* svelte/App.svelte generated by Svelte v4.2.18 */
+
+const { Object: Object_1 } = globals;
+
+function create_fragment(ctx) {
+	const block = {
+		c: noop,
+		l: function claim(nodes) {
+			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+		},
+		m: noop,
+		p: noop,
+		i: noop,
+		o: noop,
+		d: noop
+	};
+
+	dispatch_dev("SvelteRegisterBlock", {
+		block,
+		id: create_fragment.name,
+		type: "component",
+		source: "",
+		ctx
+	});
+
+	return block;
+}
+
+function instance($$self, $$props, $$invalidate) {
+	let { $$slots: slots = {}, $$scope } = $$props;
+	validate_slots('App', slots, []);
+
+	const idsToComponentMap = {
+		puzzles: Puzzles,
+		"daily-games": DailyGames,
+		"knight-moves": KnightMoves,
+		"notation-trainer": NotationTrainer,
+		"theme-switcher": ThemeSwitcher,
+		"global-config": GlobalConfig
+	};
+
+	function mountComponentsById() {
+		Object.entries(idsToComponentMap).forEach(([id, Component]) => {
+			const element = document.getElementById(id);
+
+			if (element) {
+				new Component({ target: element });
+			}
+		});
+	}
+
+	onMount(() => {
+		mountComponentsById();
+	});
+
+	const writable_props = [];
+
+	Object_1.keys($$props).forEach(key => {
+		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<App> was created with unknown prop '${key}'`);
+	});
+
+	$$self.$capture_state = () => ({
+		onMount,
+		Puzzles,
+		DailyGames,
+		KnightMoves,
+		NotationTrainer,
+		ThemeSwitcher,
+		GlobalConfig,
+		idsToComponentMap,
+		mountComponentsById
+	});
+
+	return [];
+}
+
+class App extends SvelteComponentDev {
+	constructor(options) {
+		super(options);
+		init(this, options, instance, create_fragment, safe_not_equal, {});
+
+		dispatch_dev("SvelteRegisterComponent", {
+			component: this,
+			tagName: "App",
 			options,
 			id: create_fragment.name
 		});
 	}
 }
 
-export { Puzzles as default };
-//# sourceMappingURL=puzzles.js.map
+export { App as default };
+//# sourceMappingURL=app.js.map

@@ -11,10 +11,10 @@
   <link id="piece-sprite" href="/piece-css/merida.css" rel="stylesheet">
 
   <script type=module>
-    import ThemeSwitcher from 'dist/theme_switcher';
+    import App from 'dist/app';
     document.addEventListener('DOMContentLoaded', () => {
-      new ThemeSwitcher({
-        target: document.getElementById('theme-switcher'),
+      new App({
+        target: document.getElementById('app'),
       })
     });
   </script>
@@ -69,6 +69,8 @@
     </div>
   </nav>
 </header>
+<!-- Main App mount point -->
+<div id="app"></div>
 <div class="container mt-1">
   <%= yield %>
 </div>

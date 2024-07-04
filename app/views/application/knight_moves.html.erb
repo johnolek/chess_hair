@@ -1,14 +1,2 @@
 <% content_for :title, 'Knight Moves' %>
-<% content_for :head do %>
-  <%= javascript_import_module_tag 'dist/knight_moves' %>
-  <script type="module">
-    import KnightMoves from 'dist/knight_moves';
-    document.addEventListener('DOMContentLoaded', () => {
-      new KnightMoves({
-        target: document.getElementById('main'),
-      })
-    });
-  </script>
-<% end %>
-
-<div id="main"></div>
+<div id="knight-moves"></div>
