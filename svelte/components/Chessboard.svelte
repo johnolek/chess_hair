@@ -10,6 +10,7 @@
   export let orientation = "white";
 
   export let fen;
+  export let lastMove = null;
   export let chessground;
   export let size;
 
@@ -29,7 +30,15 @@
 
   $: {
     if (fen && chessground) {
-      chessInstance.load(fen);
+      if (lastMove) {
+        chessInstance.load(lastMove.before);
+        setTimeout(() => {
+          move(lastMove.san);
+          chessground.set({ lastMove: [lastMove.from, lastMove.to] });
+        }, 500);
+      } else {
+        chessInstance.load(fen);
+      }
       updateChessground();
     }
   }
@@ -49,6 +58,7 @@
     chessground.set({
       fen: chessInstance.fen(),
       movable: {
+        free: false,
         dests: legalMoves,
       },
     });

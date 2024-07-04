@@ -139,6 +139,7 @@
 
   // Chess board stuff
   let fen;
+  let lastMove;
   let chessboard;
   let orientation = "white";
   let chessgroundConfig = {
@@ -186,7 +187,6 @@
 
   // Current puzzle state
   let moves;
-  let position;
   let madeMistake = false;
   let puzzleComplete = false;
 
@@ -392,6 +392,8 @@
 
     const chessInstance = new Chess();
     chessInstance.loadPgn(next.game.pgn);
+    const history = chessInstance.history({ verbose: true });
+    lastMove = history[history.length - 1];
     fen = chessInstance.fen();
 
     setTimeout(() => {
@@ -485,6 +487,7 @@
       {#if activePuzzles.length > 0 && currentPuzzle}
         <Chessboard
           {fen}
+          {lastMove}
           {chessgroundConfig}
           {orientation}
           bind:this={chessboard}
