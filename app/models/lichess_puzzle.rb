@@ -1,6 +1,4 @@
 class LichessPuzzle < ApplicationRecord
-  self.primary_key = 'puzzle_id'
-
   has_many :lichess_puzzle_tags
   has_many :tags, through: :lichess_puzzle_tags
 
