@@ -12,6 +12,7 @@
 
   <script type=module>
     import App from 'dist/app';
+
     document.addEventListener('DOMContentLoaded', () => {
       new App({
         target: document.getElementById('app'),
@@ -62,6 +63,20 @@
 
       <div class="navbar-end">
         <div class="navbar-item">
+          <div class="buttons">
+            <% if user_signed_in? %>
+              <div class="navbar-item">
+                <%= button_to 'Logout', destroy_user_session_path, method: :delete, class: "button is-light" %>
+              </div>
+            <% else %>
+              <div class="buttons">
+                <%= link_to 'Sign up', new_user_registration_path, class: "button is-primary" %>
+                <%= link_to 'Log in', new_user_session_path, class: "button is-light" %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+        <div class="navbar-item">
           <div id="theme-switcher">
           </div>
         </div>
@@ -72,6 +87,21 @@
 <!-- Main App mount point -->
 <div id="app"></div>
 <div class="container mt-1">
+  <div class="container">
+    <% if notice %>
+      <div class="notification is-info">
+        <button class="delete"></button>
+        <%= notice %>
+      </div>
+    <% end %>
+
+    <% if alert %>
+      <div class="notification is-danger">
+        <button class="delete"></button>
+        <%= alert %>
+      </div>
+    <% end %>
+  </div>
   <%= yield %>
 </div>
 </body>
@@ -83,7 +113,7 @@
       const $navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
 
       // Add a click event on each of them
-      $navbarBurgers.forEach( el => {
+      $navbarBurgers.forEach(el => {
         el.addEventListener('click', () => {
 
           // Get the target from the "data-target" attribute
@@ -95,6 +125,15 @@
           $target.classList.toggle('is-active');
 
         });
+      });
+    });
+
+    [...document.querySelectorAll('button.delete')].forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        const container = event.target.parentElement;
+        const parent = container.parentElement;
+        parent.removeChild(container);
       });
     });
   </script>
