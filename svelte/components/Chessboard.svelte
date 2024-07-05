@@ -87,7 +87,7 @@
     let promotion = "q"; // Default to queen
 
     if (isPromotion(from, to)) {
-      const choice = prompt("Promote pawn to (q, r, b, n):");
+      const choice = prompt("Promote pawn to (q, r, b, n):", "q");
       if (["q", "r", "b", "n"].includes(choice)) {
         promotion = choice;
       }
