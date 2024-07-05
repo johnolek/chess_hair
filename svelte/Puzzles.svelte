@@ -540,11 +540,17 @@
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
         <h3>Current Puzzles</h3>
+        <p>Current Puzzle: <strong>{currentPuzzle.puzzleId}</strong></p>
         {#await getPuzzleData(currentPuzzle.puzzleId) then data}
-          Rating: <Spoiler isShown={puzzleComplete}
-            >{data.puzzle.rating}</Spoiler
-          >
+          <p>
+            Rating: <Spoiler isShown={puzzleComplete}
+              >{data.puzzle.rating}</Spoiler
+            >
+          </p>
         {/await}
+        {#if !puzzleComplete && moves && moves.length >= 1}
+          <p>Next move: <Spoiler>{moves[0]}</Spoiler></p>
+        {/if}
         <table class="table is-fullwidth is-narrow is-striped">
           <thead>
             <tr>
