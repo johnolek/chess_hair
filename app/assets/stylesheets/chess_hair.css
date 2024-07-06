@@ -1,5 +1,6 @@
 @charset "UTF-8";
 /* Bulma Utilities */
+@import '~bulma-extensions/bulma-slider/dist/css/bulma-slider.min.css';
 :root {
   --bulma-control-radius: var(--bulma-radius);
   --bulma-control-radius-small: var(--bulma-radius-small);

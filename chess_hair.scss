@@ -20,6 +20,8 @@ $auburn: hsla(358, 64%, 37%, 1);
   $background: $vanilla,
 );
 
+@import '~bulma-extensions/bulma-slider/dist/css/bulma-slider.min.css';
+
 :root {
   --brand-color-1: #{$midnight-green};
   --brand-color-2: #{$dark-cyan};

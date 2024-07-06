@@ -9,6 +9,8 @@
   import PuzzleHistoryProcessor from "./components/PuzzleHistoryProcessor.svelte";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
+  import Form from "./components/forms/Form.svelte";
+  import NumberInput from "./components/forms/NumberInput.svelte";
 
   class Result {
     constructor(puzzleId, seenAt, skipped, madeMistake = false, doneAt = null) {
@@ -108,7 +110,7 @@
       const lastFew = successfulResults.slice(minimumSolves * -1);
       const durations = lastFew.map((result) => result.getDuration());
       const sum = durations.reduce((a, b) => a + b, 0);
-      const average = sum / (lastFew.length || 1);
+      const average = sum / (lastFew.length || 1) / 1000;
       return average;
     }
 
@@ -134,7 +136,7 @@
         return false;
       }
 
-      return this.averageSolveTime() <= timeGoal;
+      return this.averageSolveTime() <= $timeGoal;
     }
   }
 
@@ -171,7 +173,7 @@
   let activePuzzles = [];
 
   $: {
-    if (activePuzzles.length < batchSize && allPuzzles.length > 0) {
+    if (activePuzzles.length < $batchSize && allPuzzles.length > 0) {
       fillActivePuzzles();
     }
   }
@@ -181,8 +183,6 @@
   let puzzleShownAt;
 
   // Behavioral Config
-  let batchSize = 10;
-  let timeGoal = 15000;
   let minimumSolves = 2;
   let alreadyCompleteOdds = 0.3;
 
@@ -199,11 +199,15 @@
   const puzzleIdsToWorkOn = persisted("puzzles.idsToWorkOn", []);
   const results = persisted("puzzles.results", {});
 
+  // Persisted config
+  const batchSize = persisted("puzzles.batchSize", 10);
+  const timeGoal = persisted("puzzles.timeGoal", 15);
+
   function fillActivePuzzles() {
     const completed = Util.sortRandomly(getCompletedPuzzles());
     const incompleteInactive = Util.sortRandomly(getInactiveCompletedPuzzles());
     let puzzleType;
-    while (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
+    while (allPuzzles.length > 0 && activePuzzles.length < $batchSize) {
       puzzleType = Math.random() < 0.2 ? "completed" : "inactive";
       if (incompleteInactive.length < 1 && completed.length < 1) {
         break;
@@ -290,6 +294,7 @@
     const alreadyComplete = activePuzzles.filter((puzzle) =>
       puzzle.isComplete(),
     );
+
     const incomplete = activePuzzles.filter((puzzle) => !puzzle.isComplete());
 
     let candidatePuzzle;
@@ -380,6 +385,10 @@
   async function loadNextPuzzle() {
     puzzleComplete = false;
     madeMistake = false;
+
+    if (allPuzzles.length < 1) {
+      return;
+    }
 
     if (currentPuzzle && currentPuzzle.isComplete()) {
       removeActivePuzzle(currentPuzzle);
@@ -575,12 +584,12 @@
                   ></td
                 >
                 <td
-                  class:has-text-warning={puzzle.averageSolveTime() > timeGoal}
+                  class:has-text-warning={puzzle.averageSolveTime() > $timeGoal}
                   class:has-text-success={puzzle.averageSolveTime() <=
-                    timeGoal && puzzle.averageSolveTime() > 0}
+                    $timeGoal && puzzle.averageSolveTime() > 0}
                 >
                   {puzzle.averageSolveTime()
-                    ? `${(puzzle.averageSolveTime() / 1000).toFixed(2)}s`
+                    ? `${puzzle.averageSolveTime().toFixed(2)}s`
                     : "?"}
                 </td>
                 <td
@@ -608,7 +617,7 @@
         <p><strong>{$puzzleIdsToWorkOn.length}</strong> total puzzles</p>
         <p>Done with <strong>{completedPuzzles.length}</strong> puzzles</p>
         <p>
-          Target solve time: <strong>{(timeGoal / 1000).toFixed(1)}</strong> seconds
+          Target solve time: <strong>{$timeGoal}</strong> seconds
         </p>
         <p>
           Must solve <strong>{minimumSolves}</strong> time{minimumSolves > 1
@@ -630,6 +639,24 @@
         </form>
       </div>
     </div>
+    <CollapsibleBox title="Config" defaultOpen={true}>
+      <NumberInput
+        label="Batch Size"
+        showSlider={true}
+        min={5}
+        max={50}
+        step={1}
+        bind:value={$batchSize}
+      />
+      <NumberInput
+        label="Time Goal"
+        showSlider={true}
+        min={10}
+        max={60}
+        step={1}
+        bind:value={$timeGoal}
+      />
+    </CollapsibleBox>
     <CollapsibleBox title="Puzzle History Helper">
       <PuzzleHistoryProcessor />
     </CollapsibleBox>
