@@ -340,7 +340,7 @@
 
     const puzzleData = await response.json();
     const data = $puzzleDataStore;
-    data[currentPuzzle.puzzleId] = puzzleData;
+    data[puzzleId] = puzzleData;
     puzzleDataStore.set(data);
     return puzzleData;
   }
