@@ -11,5 +11,11 @@ Rails.application.routes.draw do
   get 'puzzles', to: 'application#puzzles'
   get 'config', to: 'application#global_config'
 
+  namespace :api do
+    namespace :v1 do
+      resources :user_puzzles, only: [:create, :show]
+    end
+  end
+
   root "application#knight_moves"
 end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_05_030826) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_06_195351) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -50,6 +50,14 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_05_030826) do
     t.index ["name"], name: "index_tags_on_name", unique: true
   end
 
+  create_table "user_puzzles", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "puzzle_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_user_puzzles_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false
@@ -66,4 +74,5 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_05_030826) do
   add_foreign_key "lichess_puzzle_opening_tags", "opening_tags"
   add_foreign_key "lichess_puzzle_tags", "lichess_puzzles"
   add_foreign_key "lichess_puzzle_tags", "tags"
+  add_foreign_key "user_puzzles", "users"
 end
