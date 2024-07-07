@@ -46,15 +46,15 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_07_195502) do
   end
 
   create_table "puzzle_results", force: :cascade do |t|
-    t.bigint "users_id", null: false
+    t.bigint "user_id", null: false
     t.string "puzzle_id", null: false
-    t.datetime "seen_at", null: false
     t.boolean "skipped", default: false, null: false
     t.boolean "made_mistake", default: false, null: false
-    t.datetime "done_at"
+    t.bigint "seen_at", null: false
+    t.bigint "done_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["users_id"], name: "index_puzzle_results_on_users_id"
+    t.index ["user_id"], name: "index_puzzle_results_on_user_id"
   end
 
   create_table "tags", force: :cascade do |t|
@@ -86,6 +86,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_07_195502) do
   add_foreign_key "lichess_puzzle_opening_tags", "opening_tags"
   add_foreign_key "lichess_puzzle_tags", "lichess_puzzles"
   add_foreign_key "lichess_puzzle_tags", "tags"
-  add_foreign_key "puzzle_results", "users", column: "users_id"
+  add_foreign_key "puzzle_results", "users"
   add_foreign_key "user_puzzles", "users"
 end

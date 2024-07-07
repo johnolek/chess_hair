@@ -354,16 +354,17 @@
 
   async function skip() {
     const result = new Result(currentPuzzle.puzzleId, puzzleShownAt, true);
-    addResult(currentPuzzle.puzzleId, result);
+    await addResult(currentPuzzle.puzzleId, result);
     await loadNextPuzzle();
   }
 
-  function addResult(puzzleId, result) {
+  async function addResult(puzzleId, result) {
     const allResults = $results;
     const existingResults = $results[puzzleId] || [];
     existingResults.push(result);
     allResults[puzzleId] = existingResults;
     results.set(allResults);
+    await savePuzzleResult(result);
   }
 
   function addCompletedPuzzle(puzzleToAdd) {
@@ -410,7 +411,7 @@
     }, 300);
   }
 
-  function handleUserMove(moveEvent) {
+  async function handleUserMove(moveEvent) {
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
     const correctMove = moves[0];
@@ -422,7 +423,7 @@
           chessboard.move(computerMove);
         }, 300);
       } else {
-        return handlePuzzleComplete();
+        return await handlePuzzleComplete();
       }
     } else {
       madeMistake = true;
@@ -433,7 +434,7 @@
     }
   }
 
-  function handlePuzzleComplete() {
+  async function handlePuzzleComplete() {
     puzzleComplete = true;
     const result = new Result(
       currentPuzzle.puzzleId,
@@ -442,7 +443,7 @@
       madeMistake,
       Util.currentMicrotime(),
     );
-    addResult(currentPuzzle.puzzleId, result);
+    await addResult(currentPuzzle.puzzleId, result);
     if (madeMistake) {
       removeCompletedPuzzle(currentPuzzle);
     }
@@ -480,16 +481,36 @@
     fillActivePuzzles();
   }
 
+  function getCommonHeaders() {
+    return {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": csrfToken,
+    };
+  }
+
   async function saveUserPuzzle(puzzleId) {
     await fetch("api/v1/user_puzzles", {
       method: "POST", // Specify the request method
-      headers: {
-        "Content-Type": "application/json", // Specify the content type in the header
-        "X-CSRF-Token": csrfToken, // Add CSRF token for Rails security
-      },
+      headers: { ...getCommonHeaders() },
       body: JSON.stringify({
         user_puzzle: {
           puzzle_id: puzzleId,
+        },
+      }),
+    });
+  }
+
+  async function savePuzzleResult(result) {
+    await fetch("api/v1/puzzle_results", {
+      method: "POST",
+      headers: getCommonHeaders(),
+      body: JSON.stringify({
+        puzzle_result: {
+          puzzle_id: result.puzzleId,
+          seen_at: result.seenAt,
+          skipped: result.skipped,
+          made_mistake: result.madeMistake,
+          done_at: result.doneAt,
         },
       }),
     });
