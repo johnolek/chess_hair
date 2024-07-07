@@ -9,7 +9,6 @@
   import PuzzleHistoryProcessor from "./components/PuzzleHistoryProcessor.svelte";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
-  import Form from "./components/forms/Form.svelte";
   import NumberInput from "./components/forms/NumberInput.svelte";
 
   class Result {

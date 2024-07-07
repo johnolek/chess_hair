@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_06_195351) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_07_195502) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -45,6 +45,18 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_06_195351) do
     t.index ["name"], name: "index_opening_tags_on_name", unique: true
   end
 
+  create_table "puzzle_results", force: :cascade do |t|
+    t.bigint "users_id", null: false
+    t.string "puzzle_id", null: false
+    t.datetime "seen_at", null: false
+    t.boolean "skipped", default: false, null: false
+    t.boolean "made_mistake", default: false, null: false
+    t.datetime "done_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["users_id"], name: "index_puzzle_results_on_users_id"
+  end
+
   create_table "tags", force: :cascade do |t|
     t.string "name"
     t.index ["name"], name: "index_tags_on_name", unique: true
@@ -74,5 +86,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_06_195351) do
   add_foreign_key "lichess_puzzle_opening_tags", "opening_tags"
   add_foreign_key "lichess_puzzle_tags", "lichess_puzzles"
   add_foreign_key "lichess_puzzle_tags", "tags"
+  add_foreign_key "puzzle_results", "users", column: "users_id"
   add_foreign_key "user_puzzles", "users"
 end

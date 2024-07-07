@@ -1,9 +1,4 @@
 class Api::V1::UserPuzzlesController < ApplicationController
-  before_action do
-    authenticate_user!
-    @user = current_user
-  end
-
   def create
     new_puzzle = false
     puzzle = @user.user_puzzles.find_or_create_by(user_puzzle_params) do |p|

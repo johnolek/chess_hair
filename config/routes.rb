@@ -14,6 +14,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :user_puzzles, only: [:create, :show, :index]
+      resources :puzzle_results, only: [:create, :show, :index]
     end
   end
 
