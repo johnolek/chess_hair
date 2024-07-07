@@ -1,21 +1,34 @@
 class Api::V1::UserPuzzlesController < ApplicationController
+  before_action do
+    authenticate_user!
+    @user = current_user
+  end
+
   def create
-    puzzle = UserPuzzle.new(user_puzzle_params)
-    if puzzle.save
-      render json: user_puzzle, status: :created
+    new_puzzle = false
+    puzzle = @user.user_puzzles.find_or_create_by(user_puzzle_params) do |p|
+      new_puzzle = p.new_record?
+    end
+    if puzzle.persisted?
+      render json: puzzle, status: new_puzzle ? :created : :ok
     else
       render json: { errors: puzzle.errors.full_messages }
     end
   end
 
   def show
-    puzzle = UserPuzzle.find_by(params[:id])
+    puzzle = @user.user_puzzles.find_by(params[:id])
     render json: puzzle
+  end
+
+  def index
+    all = @user.user_puzzles.all
+    render json: all
   end
 
   private
 
   def user_puzzle_params
-    params.require(:user_puzzle).permit(:puzzle_id, :user_id, :id)
+    params.require(:user_puzzle).permit(:puzzle_id, :id)
   end
 end

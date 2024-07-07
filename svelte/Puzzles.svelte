@@ -481,8 +481,27 @@
     fillActivePuzzles();
   }
 
+  async function saveUserPuzzle(puzzleId) {
+    await fetch("api/v1/user_puzzles", {
+      method: "POST", // Specify the request method
+      headers: {
+        "Content-Type": "application/json", // Specify the content type in the header
+        "X-CSRF-Token": csrfToken, // Add CSRF token for Rails security
+      },
+      body: JSON.stringify({
+        user_puzzle: {
+          puzzle_id: puzzleId,
+        },
+      }),
+    });
+  }
+
+  let csrfToken;
   onMount(async () => {
     initializePuzzles();
+    csrfToken = document
+      .querySelector('meta[name="csrf-token"]')
+      .getAttribute("content");
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
         event.preventDefault();
