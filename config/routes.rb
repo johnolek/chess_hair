@@ -2,6 +2,7 @@ Rails.application.routes.draw do
   devise_for :users
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
   get "up" => "rails/health#show", as: :rails_health_check
+  get "env", to: "application#env"
 
   get 'knight_moves', to: 'application#knight_moves'
   get 'knight-moves', to: 'application#knight_moves'

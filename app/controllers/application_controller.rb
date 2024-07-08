@@ -4,6 +4,10 @@ class ApplicationController < ActionController::Base
   def knight_moves
   end
 
+  def env
+    render plain: Rails.env
+  end
+
   def daily_games
     username_regex = /[^a-zA-Z0-9_-]/
     @chess_com_username = params[:chess_com_username].gsub(username_regex, '') if params[:chess_com_username]
