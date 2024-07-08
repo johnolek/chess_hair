@@ -1,6 +1,6 @@
 module Api
   module V1
-    class UserPuzzleController < ApiController
+    class UserPuzzlesController < ApiController
       def create
         new_puzzle = false
         puzzle = @user.user_puzzles.find_or_create_by(user_puzzle_params) do |p|

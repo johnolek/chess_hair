@@ -10,6 +10,7 @@
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
   import NumberInput from "./components/forms/NumberInput.svelte";
+  import { writable } from "svelte/store";
 
   class Result {
     constructor(puzzleId, seenAt, skipped, madeMistake = false, doneAt = null) {
@@ -195,7 +196,7 @@
 
   // Persisted data
   const puzzleDataStore = persisted("puzzles.data", {});
-  const puzzleIdsToWorkOn = persisted("puzzles.idsToWorkOn", []);
+  const puzzleIdsToWorkOn = writable([]);
   const results = persisted("puzzles.results", {});
 
   // Persisted config
@@ -472,8 +473,15 @@
     }, duration);
   }
 
-  function initializePuzzles() {
+  async function initializePuzzles() {
     allPuzzles = [];
+    const userPuzzles = await fetch("/api/v1/user_puzzles", {
+      headers: { ...getCommonHeaders() },
+      method: "GET",
+    });
+    const responseJson = await userPuzzles.json();
+    const puzzleIds = responseJson.map((puzzleData) => puzzleData.puzzle_id);
+    puzzleIdsToWorkOn.set(puzzleIds);
     $puzzleIdsToWorkOn.forEach((puzzleId) => {
       allPuzzles.push(new Puzzle(puzzleId));
     });
@@ -490,7 +498,7 @@
 
   async function saveUserPuzzle(puzzleId) {
     await fetch("api/v1/user_puzzles", {
-      method: "POST", // Specify the request method
+      method: "POST",
       headers: { ...getCommonHeaders() },
       body: JSON.stringify({
         user_puzzle: {
@@ -518,7 +526,7 @@
 
   let csrfToken;
   onMount(async () => {
-    initializePuzzles();
+    await initializePuzzles();
     csrfToken = document
       .querySelector('meta[name="csrf-token"]')
       .getAttribute("content");
