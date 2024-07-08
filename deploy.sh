@@ -1,5 +1,5 @@
 #!/bin/bash
-
+export RAILS_ENV=production
 git pull
 bundle install
 rails db:migrate
