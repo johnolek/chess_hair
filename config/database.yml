@@ -80,6 +80,7 @@ test:
 production:
   <<: *default
   adapter: postgresql
+  host: localhost
   database: josy_chesshair
   username: inimical
   password: <%= Rails.application.credentials.prod_postgres_password %>
