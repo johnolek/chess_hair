@@ -81,7 +81,7 @@ production:
   <<: *default
   adapter: postgresql
   database: josy_chesshair
-  username: josy_chesshair
+  username: inimical
   password: <%= Rails.application.credentials.prod_postgres_password %>
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
   timeout: 5000
