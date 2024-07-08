@@ -197,7 +197,7 @@
   // Persisted data
   const puzzleDataStore = persisted("puzzles.data", {});
   const puzzleIdsToWorkOn = writable([]);
-  const results = persisted("puzzles.results", {});
+  const results = writable({});
 
   // Persisted config
   const batchSize = persisted("puzzles.batchSize", 10);
@@ -333,7 +333,9 @@
       return $puzzleDataStore[puzzleId];
     }
 
-    const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`);
+    const response = await Util.fetch(
+      `https://lichess.org/api/puzzle/${puzzleId}`,
+    );
 
     if (response.status === 404) {
       // Remove invalid
@@ -478,9 +480,28 @@
 
   async function initializePuzzles() {
     allPuzzles = [];
-    const userPuzzles = await fetch("/api/v1/user_puzzles", {
+    const userPuzzles = await Util.fetch("/api/v1/user_puzzles", {
       method: "GET",
     });
+    const resultsResponse = await Util.fetch("/api/v1/puzzle_results", {
+      method: "GET",
+    });
+    const resultsJson = await resultsResponse.json();
+    const initialResults = {};
+    resultsJson.forEach((result) => {
+      if (!initialResults[result.puzzle_id]) {
+        initialResults[result.puzzle_id] = [];
+      }
+      initialResults[result.puzzle_id].push({
+        puzzleId: result.puzzle_id,
+        seenAt: result.seen_at,
+        doneAt: result.done_at,
+        skipped: result.skipped,
+        madeMistake: result.made_mistake,
+      });
+    });
+    results.set(initialResults);
+
     const responseJson = await userPuzzles.json();
     const puzzleIds = responseJson.map((puzzleData) => puzzleData.puzzle_id);
     puzzleIdsToWorkOn.set(puzzleIds);
@@ -503,7 +524,7 @@
   }
 
   async function savePuzzleResult(result) {
-    await fetch("api/v1/puzzle_results", {
+    await Util.fetch("api/v1/puzzle_results", {
       method: "POST",
       body: JSON.stringify({
         puzzle_result: {
