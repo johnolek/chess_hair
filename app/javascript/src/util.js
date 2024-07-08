@@ -52,6 +52,23 @@ class Util {
       },
     );
   }
+
+  static async fetch(url, options = {}) {
+    // Ensure options.headers exists and is an object
+    options.headers = options.headers || {};
+
+    // Get CSRF token from meta tag
+    const csrfToken = document
+      .querySelector('meta[name="csrf-token"]')
+      .getAttribute("content");
+
+    // Include CSRF token in headers
+    options.headers["X-CSRF-Token"] = csrfToken;
+    options.headers["Content-Type"] = "application/json";
+
+    // Call the original fetch with the modified options
+    return fetch(url, options);
+  }
 }
 
 export { Util };

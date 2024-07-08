@@ -230,7 +230,10 @@
     }
     const idsToAdd = newPuzzleIds.split(",").map((id) => id.trim());
     const currentPuzzleIds = new Set($puzzleIdsToWorkOn);
-    idsToAdd.forEach((id) => currentPuzzleIds.add(id));
+    idsToAdd.forEach(async (id) => {
+      currentPuzzleIds.add(id);
+      await saveUserPuzzle(id);
+    });
     puzzleIdsToWorkOn.set([...currentPuzzleIds]);
     newPuzzleIds = "";
   }
@@ -476,7 +479,6 @@
   async function initializePuzzles() {
     allPuzzles = [];
     const userPuzzles = await fetch("/api/v1/user_puzzles", {
-      headers: { ...getCommonHeaders() },
       method: "GET",
     });
     const responseJson = await userPuzzles.json();
@@ -489,17 +491,9 @@
     fillActivePuzzles();
   }
 
-  function getCommonHeaders() {
-    return {
-      "Content-Type": "application/json",
-      "X-CSRF-Token": csrfToken,
-    };
-  }
-
   async function saveUserPuzzle(puzzleId) {
-    await fetch("api/v1/user_puzzles", {
+    await Util.fetch("api/v1/user_puzzles", {
       method: "POST",
-      headers: { ...getCommonHeaders() },
       body: JSON.stringify({
         user_puzzle: {
           puzzle_id: puzzleId,
@@ -511,7 +505,6 @@
   async function savePuzzleResult(result) {
     await fetch("api/v1/puzzle_results", {
       method: "POST",
-      headers: getCommonHeaders(),
       body: JSON.stringify({
         puzzle_result: {
           puzzle_id: result.puzzleId,
