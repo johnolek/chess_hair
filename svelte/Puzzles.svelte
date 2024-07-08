@@ -333,9 +333,7 @@
       return $puzzleDataStore[puzzleId];
     }
 
-    const response = await Util.fetch(
-      `https://lichess.org/api/puzzle/${puzzleId}`,
-    );
+    const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`);
 
     if (response.status === 404) {
       // Remove invalid
@@ -503,7 +501,13 @@
     results.set(initialResults);
 
     const responseJson = await userPuzzles.json();
-    const puzzleIds = responseJson.map((puzzleData) => puzzleData.puzzle_id);
+    const promises = responseJson.map(async (puzzleData) => {
+      const lichessPuzzlesData = await getPuzzleData(puzzleData.puzzle_id);
+      return lichessPuzzlesData.puzzle.rating <= 1800 ? puzzleData : null;
+    });
+    const promiseResults = await Promise.all(promises);
+    const puzzles = promiseResults.filter((result) => result !== null);
+    const puzzleIds = puzzles.map((puzzleData) => puzzleData.puzzle_id);
     puzzleIdsToWorkOn.set(puzzleIds);
     $puzzleIdsToWorkOn.forEach((puzzleId) => {
       allPuzzles.push(new Puzzle(puzzleId));
