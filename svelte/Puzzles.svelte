@@ -339,6 +339,8 @@
       },
     });
 
+    await sleep(400);
+
     if (response.status === 404) {
       // Remove invalid
       removePuzzleId(puzzleId);
@@ -350,6 +352,10 @@
     data[puzzleId] = puzzleData;
     puzzleDataStore.set(data);
     return puzzleData;
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   function getNextPuzzleType() {
