@@ -58,5 +58,8 @@ group :development do
   # gem "spring"
 end
 
+group :production do
+  gem 'rack', '~> 2.2'
+end
 
 gem "devise", "~> 4.9"
