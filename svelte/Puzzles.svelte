@@ -509,13 +509,7 @@
     results.set(initialResults);
 
     const responseJson = await userPuzzles.json();
-    const promises = responseJson.map(async (puzzleData, index) => {
-      const lichessPuzzlesData = await getPuzzleData(puzzleData.puzzle_id);
-      return lichessPuzzlesData.puzzle.rating <= 1800 ? puzzleData : null;
-    });
-    const promiseResults = await Promise.all(promises);
-    const puzzles = promiseResults.filter((result) => result !== null);
-    const puzzleIds = puzzles.map((puzzleData) => puzzleData.puzzle_id);
+    const puzzleIds = responseJson.map((puzzleData) => puzzleData.puzzle_id);
     puzzleIdsToWorkOn.set(puzzleIds);
     $puzzleIdsToWorkOn.forEach((puzzleId) => {
       allPuzzles.push(new Puzzle(puzzleId));
