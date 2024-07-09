@@ -59,7 +59,7 @@ group :development do
 end
 
 group :production do
-  gem 'rack', '~> 2.2'
+  gem 'rack', '~> 2.2' # Passenger does not support rack 3
 end
 
 gem "devise", "~> 4.9"
