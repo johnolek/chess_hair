@@ -334,7 +334,9 @@
     }
 
     const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`, {
-      mode: "no-cors",
+      headers: {
+        "Content-Type": "application/json",
+      },
     });
 
     if (response.status === 404) {
