@@ -339,8 +339,6 @@
       },
     });
 
-    await sleep(400);
-
     if (response.status === 404) {
       // Remove invalid
       removePuzzleId(puzzleId);
@@ -511,7 +509,8 @@
     results.set(initialResults);
 
     const responseJson = await userPuzzles.json();
-    const promises = responseJson.map(async (puzzleData) => {
+    const promises = responseJson.map(async (puzzleData, index) => {
+      await sleep(index * 300);
       const lichessPuzzlesData = await getPuzzleData(puzzleData.puzzle_id);
       return lichessPuzzlesData.puzzle.rating <= 1800 ? puzzleData : null;
     });
