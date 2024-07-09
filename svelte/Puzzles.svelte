@@ -333,7 +333,9 @@
       return $puzzleDataStore[puzzleId];
     }
 
-    const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`);
+    const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`, {
+      mode: "no-cors",
+    });
 
     if (response.status === 404) {
       // Remove invalid
