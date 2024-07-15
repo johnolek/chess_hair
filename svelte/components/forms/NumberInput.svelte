@@ -6,6 +6,7 @@
   export let step = null;
   export let value = min; // Default value is min
   export let additionalClasses = "";
+  export let onChange = () => {};
 
   // Reactive statement to enforce min and max
   $: if (value < min) value = min;
@@ -13,6 +14,7 @@
 
   function handleChange(event) {
     value = +event.target.value; // + to convert text input to number
+    onChange(value);
   }
 </script>
 

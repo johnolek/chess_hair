@@ -136,7 +136,7 @@
         return false;
       }
 
-      return this.averageSolveTime() <= $timeGoal;
+      return this.averageSolveTime() <= timeGoal;
     }
   }
 
@@ -173,7 +173,7 @@
   let activePuzzles = [];
 
   $: {
-    if (activePuzzles.length < $batchSize && allPuzzles.length > 0) {
+    if (activePuzzles.length < batchSize && allPuzzles.length > 0) {
       fillActivePuzzles();
     }
   }
@@ -194,20 +194,19 @@
   // DOM elements
   let nextButton;
 
+  const results = writable({});
+
   // Persisted data
   const puzzleDataStore = persisted("puzzles.data", {});
   const puzzleIdsToWorkOn = writable([]);
-  const results = writable({});
 
   // Persisted config
-  const batchSize = persisted("puzzles.batchSize", 10);
-  const timeGoal = persisted("puzzles.timeGoal", 15);
 
   function fillActivePuzzles() {
     const completed = Util.sortRandomly(getCompletedPuzzles());
     const incompleteInactive = Util.sortRandomly(getInactiveCompletedPuzzles());
     let puzzleType;
-    while (allPuzzles.length > 0 && activePuzzles.length < $batchSize) {
+    while (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
       puzzleType = Math.random() < 0.2 ? "completed" : "inactive";
       if (incompleteInactive.length < 1 && completed.length < 1) {
         break;
@@ -546,12 +545,41 @@
     });
   }
 
-  let csrfToken;
+  const settings = writable({});
+  let batchSize;
+  let timeGoal;
+
+  async function initSettings() {
+    const settingsResponse = await Util.fetch("/api/v1/users/settings");
+    const settingsData = await settingsResponse.json();
+    settings.set(settingsData);
+    batchSize = getSetting("puzzles.batchSize", 15);
+    timeGoal = getSetting("puzzles.timeGoal", 15);
+  }
+
+  async function updateSetting(key, value) {
+    const response = await Util.fetch("/api/v1/users/update_setting", {
+      method: "POST",
+      body: JSON.stringify({ key, value }),
+    });
+    if (response.ok) {
+      settings.update((currentSettings) => {
+        currentSettings[key] = value;
+        return currentSettings;
+      });
+    }
+  }
+
+  function getSetting(key, defaultValue = null) {
+    if ($settings[key]) {
+      return $settings[key];
+    }
+    return defaultValue;
+  }
+
   onMount(async () => {
+    await initSettings();
     await initializePuzzles();
-    csrfToken = document
-      .querySelector('meta[name="csrf-token"]')
-      .getAttribute("content");
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
         event.preventDefault();
@@ -653,9 +681,9 @@
                   ></td
                 >
                 <td
-                  class:has-text-warning={puzzle.averageSolveTime() > $timeGoal}
+                  class:has-text-warning={puzzle.averageSolveTime() > timeGoal}
                   class:has-text-success={puzzle.averageSolveTime() <=
-                    $timeGoal && puzzle.averageSolveTime() > 0}
+                    timeGoal && puzzle.averageSolveTime() > 0}
                 >
                   {puzzle.averageSolveTime()
                     ? `${puzzle.averageSolveTime().toFixed(2)}s`
@@ -686,7 +714,7 @@
         <p><strong>{$puzzleIdsToWorkOn.length}</strong> total puzzles</p>
         <p>Done with <strong>{completedPuzzles.length}</strong> puzzles</p>
         <p>
-          Target solve time: <strong>{$timeGoal}</strong> seconds
+          Target solve time: <strong>{timeGoal}</strong> seconds
         </p>
         <p>
           Must solve <strong>{minimumSolves}</strong> time{minimumSolves > 1
@@ -711,19 +739,23 @@
     <CollapsibleBox title="Config" defaultOpen={true}>
       <NumberInput
         label="Batch Size"
-        showSlider={true}
         min={5}
         max={50}
         step={1}
-        bind:value={$batchSize}
+        bind:value={batchSize}
+        onChange={async (value) => {
+          await updateSetting("puzzles.batchSize", value);
+        }}
       />
       <NumberInput
         label="Time Goal"
-        showSlider={true}
         min={10}
         max={60}
         step={1}
-        bind:value={$timeGoal}
+        bind:value={timeGoal}
+        onChange={async (value) => {
+          await updateSetting("puzzles.timeGoal", value);
+        }}
       />
     </CollapsibleBox>
     <CollapsibleBox title="Puzzle History Helper">
