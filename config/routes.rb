@@ -16,6 +16,9 @@ Rails.application.routes.draw do
     namespace :v1 do
       resources :user_puzzles, only: [:create, :show, :index]
       resources :puzzle_results, only: [:create, :show, :index]
+      resources :users, only: [] do
+        get 'settings', on: :collection
+      end
     end
   end
 
