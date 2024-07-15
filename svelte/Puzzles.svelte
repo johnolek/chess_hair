@@ -455,13 +455,15 @@
       madeMistake,
       Util.currentMicrotime(),
     );
+    let message = madeMistake ? "Completed with mistake" : "Correct!";
+    showSuccess(message);
     await addResult(currentPuzzle.puzzleId, result);
+
     if (madeMistake) {
       removeCompletedPuzzle(currentPuzzle);
     }
     // Trigger reactivity
     activePuzzles = activePuzzles;
-    showSuccess("Correct!");
   }
 
   let successMessage = null;
