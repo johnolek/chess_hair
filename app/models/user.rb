@@ -5,4 +5,9 @@ class User < ApplicationRecord
          :recoverable, :rememberable, :validatable
   has_many :user_puzzles
   has_many :puzzle_results
+  has_one :config
+
+  def config
+    super || build_config
+  end
 end

@@ -10,9 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_07_195502) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_15_210953) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "configs", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.json "settings", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_configs_on_user_id"
+  end
 
   create_table "lichess_puzzle_opening_tags", force: :cascade do |t|
     t.bigint "lichess_puzzle_id", null: false
@@ -82,6 +90,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_07_195502) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "configs", "users"
   add_foreign_key "lichess_puzzle_opening_tags", "lichess_puzzles"
   add_foreign_key "lichess_puzzle_opening_tags", "opening_tags"
   add_foreign_key "lichess_puzzle_tags", "lichess_puzzles"
