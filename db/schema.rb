@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_15_210953) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_16_210750) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -70,6 +70,22 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_15_210953) do
     t.index ["name"], name: "index_tags_on_name", unique: true
   end
 
+  create_table "user_puzzle_histories", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "puzzle_id", null: false
+    t.bigint "played_at", null: false
+    t.boolean "win", null: false
+    t.integer "rating", null: false
+    t.integer "plays", null: false
+    t.text "solution", null: false
+    t.text "fen", null: false
+    t.string "last_move", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "puzzle_id", "played_at"], name: "idx_on_user_id_puzzle_id_played_at_b3473fc27c", unique: true
+    t.index ["user_id"], name: "index_user_puzzle_histories_on_user_id"
+  end
+
   create_table "user_puzzles", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "puzzle_id", null: false
@@ -96,5 +112,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_15_210953) do
   add_foreign_key "lichess_puzzle_tags", "lichess_puzzles"
   add_foreign_key "lichess_puzzle_tags", "tags"
   add_foreign_key "puzzle_results", "users"
+  add_foreign_key "user_puzzle_histories", "users"
   add_foreign_key "user_puzzles", "users"
 end

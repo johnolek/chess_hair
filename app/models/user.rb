@@ -6,6 +6,7 @@ class User < ApplicationRecord
   has_many :user_puzzles
   has_many :puzzle_results
   has_one :config
+  has_many :user_puzzle_histories
 
   def config
     super || build_config
