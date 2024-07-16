@@ -23,20 +23,20 @@ class ApplicationController < ActionController::Base
       Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
       puzzle = parsed['puzzle']
       history = current_user.user_puzzle_histories.find_or_initialize_by({
-                                                                 puzzle_id: puzzle['id'],
-                                                                 played_at: parsed['date']
-                                                               })
+                                                                           puzzle_id: puzzle['id'],
+                                                                           played_at: parsed['date']
+                                                                         })
       Rails.logger.info "Puzzle history already exists" unless history.new_record?
       next unless history.new_record?
       history.assign_attributes({
-                               win: parsed['win'],
-                               rating: puzzle['rating'],
-                               solution: puzzle['solution'].join(' '),
-                               fen: puzzle['fen'],
-                               plays: puzzle['plays'],
-                               themes: puzzle['themes'].join(' '),
-                               last_move: puzzle['lastMove'],
-                             })
+                                  win: parsed['win'],
+                                  rating: puzzle['rating'],
+                                  solution: puzzle['solution'].join(' '),
+                                  fen: puzzle['fen'],
+                                  plays: puzzle['plays'],
+                                  themes: puzzle['themes'].join(' '),
+                                  last_move: puzzle['lastMove'],
+                                })
       history.save!
     end
     render plain: 'Done'
