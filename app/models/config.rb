@@ -11,7 +11,18 @@ class Config < ApplicationRecord
   end
 
   def get_setting(key, default=nil)
-    settings&.fetch(key, default) || default
+    settings.fetch(key, default)
+  end
+
+  def self.default_settings
+    {
+      "puzzles.batchSize" => 15,
+      "puzzles.timeGoal" => 15,
+    }
+  end
+
+  def settings
+    Config.default_settings.merge(super)
   end
 
   private

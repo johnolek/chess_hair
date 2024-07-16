@@ -553,8 +553,8 @@
     const settingsResponse = await Util.fetch("/api/v1/users/settings");
     const settingsData = await settingsResponse.json();
     settings.set(settingsData);
-    batchSize = getSetting("puzzles.batchSize", 15);
-    timeGoal = getSetting("puzzles.timeGoal", 15);
+    batchSize = getSetting("puzzles.batchSize");
+    timeGoal = getSetting("puzzles.timeGoal");
   }
 
   async function updateSetting(key, value) {
