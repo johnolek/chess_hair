@@ -14,7 +14,7 @@ module NdJsonStreamer
         response.read_body do |chunk|
           buffer += chunk
           loop do
-            line = buffer.slice!(/.+\n/)
+            line = buffer.slice!(/.+\n/)&.chomp
             break unless line
             yield line
           end
