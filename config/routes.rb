@@ -11,6 +11,7 @@ Rails.application.routes.draw do
   get 'notation-trainer', to: 'application#notation_trainer'
   get 'puzzles', to: 'application#puzzles'
   get 'config', to: 'application#global_config'
+  get 'testing', to: 'application#testing'
 
   namespace :api do
     namespace :v1 do
