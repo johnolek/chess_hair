@@ -12,6 +12,7 @@ Rails.application.routes.draw do
   get 'puzzles', to: 'application#puzzles'
   get 'config', to: 'application#global_config'
   get 'testing', to: 'application#testing'
+  get 'fetch_puzzle_history', to: 'application#fetch_puzzle_history'
 
   namespace :api do
     namespace :v1 do

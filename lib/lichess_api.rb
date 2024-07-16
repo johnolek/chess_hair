@@ -2,8 +2,10 @@ require 'net/http'
 require 'uri'
 
 module LichessApi
-  def self.fetch_puzzle_activity(token, max = 200, before = nil)
-    uri = URI("https://lichess.org/api/puzzle/activity?max=#{max}#{before ? "&before=#{before}" : ''}")
+  def self.fetch_puzzle_activity(token, max = nil, before = nil)
+    uri = URI("https://lichess.org/api/puzzle/activity")
+    params = { max: max, before: before }.reject { |_k, v| v.nil? }
+    uri.query = URI.encode_www_form(params)
     request = Net::HTTP::Get.new(uri)
     request['Accept'] = 'application/x-ndjson'
     request['User-Agent'] = 'chess.hair'

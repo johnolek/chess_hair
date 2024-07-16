@@ -4,6 +4,44 @@ class ApplicationController < ActionController::Base
   def knight_moves
   end
 
+  def testing
+    return head :not_found unless current_user
+    if params[:lichess_api_token]
+      current_user.lichess_api_token = params[:lichess_api_token]
+      current_user.save!
+    end
+    render plain: 'ok'
+  end
+
+  def fetch_puzzle_history
+    return head :not_found unless current_user
+    unless current_user.lichess_api_token
+      return render plain: 'No lichess API token'
+    end
+    LichessApi.fetch_puzzle_activity(current_user.lichess_api_token) do |puzzle_json|
+      parsed = JSON.parse(puzzle_json)
+      Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
+      puzzle = parsed['puzzle']
+      history = current_user.user_puzzle_histories.find_or_initialize_by({
+                                                                 puzzle_id: puzzle['id'],
+                                                                 played_at: parsed['date']
+                                                               })
+      Rails.logger.info "Puzzle history already exists" unless history.new_record?
+      next unless history.new_record?
+      history.assign_attributes({
+                               win: parsed['win'],
+                               rating: puzzle['rating'],
+                               solution: puzzle['solution'].join(' '),
+                               fen: puzzle['fen'],
+                               plays: puzzle['plays'],
+                               themes: puzzle['themes'].join(' '),
+                               last_move: puzzle['lastMove'],
+                             })
+      history.save!
+    end
+    render plain: 'Done'
+  end
+
   def env
     render plain: Rails.env
   end
