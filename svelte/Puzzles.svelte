@@ -11,6 +11,11 @@
   import Spoiler from "./components/Spoiler.svelte";
   import NumberInput from "./components/forms/NumberInput.svelte";
   import { writable } from "svelte/store";
+  import {
+    initSettings,
+    updateSetting,
+    getSetting,
+  } from "./settingsManager.js";
 
   class Result {
     constructor(puzzleId, seenAt, skipped, madeMistake = false, doneAt = null) {
@@ -545,40 +550,13 @@
     });
   }
 
-  const settings = writable({});
   let batchSize;
   let timeGoal;
 
-  async function initSettings() {
-    const settingsResponse = await Util.fetch("/api/v1/users/settings");
-    const settingsData = await settingsResponse.json();
-    settings.set(settingsData);
-    batchSize = getSetting("puzzles.batchSize");
-    timeGoal = getSetting("puzzles.timeGoal");
-  }
-
-  async function updateSetting(key, value) {
-    const response = await Util.fetch("/api/v1/users/update_setting", {
-      method: "POST",
-      body: JSON.stringify({ key, value }),
-    });
-    if (response.ok) {
-      settings.update((currentSettings) => {
-        currentSettings[key] = value;
-        return currentSettings;
-      });
-    }
-  }
-
-  function getSetting(key, defaultValue = null) {
-    if ($settings[key]) {
-      return $settings[key];
-    }
-    return defaultValue;
-  }
-
   onMount(async () => {
     await initSettings();
+    batchSize = getSetting("puzzles.batchSize");
+    timeGoal = getSetting("puzzles.timeGoal");
     await initializePuzzles();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
