@@ -20,6 +20,7 @@ Rails.application.routes.draw do
       resources :puzzle_results, only: [:create, :show, :index]
       resources :users, only: [] do
         get 'settings', on: :collection
+        get 'active-puzzles', to: 'users#active_puzzles', on: :collection
         post 'update_setting', to: 'users#update_setting', on: :collection
         get 'get_setting/:key', to: 'users#get_setting', on: :collection
       end
