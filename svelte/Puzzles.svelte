@@ -103,6 +103,7 @@
   async function loadNextPuzzle() {
     puzzleComplete = false;
     madeMistake = false;
+
     if (currentPuzzle.complete) {
       await updateActivePuzzles();
     }
@@ -129,6 +130,7 @@
       moves.shift(); // remove the user move first
       const computerMove = moves.shift();
       if (computerMove) {
+        moves = moves; // reactivity
         setTimeout(() => {
           chessboard.move(computerMove);
         }, 300);
