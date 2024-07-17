@@ -13,6 +13,8 @@ Rails.application.routes.draw do
   get 'config', to: 'application#global_config'
   get 'testing', to: 'application#testing'
   get 'fetch_puzzle_history', to: 'application#fetch_puzzle_history'
+  get 'save-lichess-code', to: 'application#save_lichess_code'
+  get 'authenticate-with-lichess', to: 'application#authenticate_with_lichess'
 
   namespace :api do
     namespace :v1 do
