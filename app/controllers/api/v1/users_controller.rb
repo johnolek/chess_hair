@@ -26,9 +26,7 @@ module Api
       end
 
       def active_puzzles
-        if @user.active_puzzle_ids&.count < 1
-          @user.recalculate_active_puzzles
-        end
+        @user.recalculate_active_puzzles
 
         if @user.active_puzzle_ids.count < 1
           return render json: []

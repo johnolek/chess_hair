@@ -103,6 +103,9 @@
   async function loadNextPuzzle() {
     puzzleComplete = false;
     madeMistake = false;
+    if (currentPuzzle.complete) {
+      await updateActivePuzzles();
+    }
 
     currentPuzzle = getNextPuzzle();
     const chessInstance = new Chess();
@@ -178,11 +181,15 @@
     }, duration);
   }
 
-  async function initializePuzzles() {
+  async function updateActivePuzzles() {
     const activePuzzlesRequest = await Util.fetch(
       "/api/v1/users/active-puzzles",
     );
     activePuzzles = await activePuzzlesRequest.json();
+  }
+
+  async function initializePuzzles() {
+    await updateActivePuzzles();
     currentPuzzle = Util.getRandomElement(activePuzzles);
   }
 
@@ -360,6 +367,7 @@
         bind:value={batchSize}
         onChange={async (value) => {
           await updateSetting("puzzles.batchSize", value);
+          await updateActivePuzzles();
         }}
       />
       <NumberInput
@@ -370,6 +378,7 @@
         bind:value={timeGoal}
         onChange={async (value) => {
           await updateSetting("puzzles.timeGoal", value);
+          await updateActivePuzzles();
         }}
       />
     </CollapsibleBox>
