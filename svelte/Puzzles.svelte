@@ -104,7 +104,8 @@
     puzzleComplete = false;
     madeMistake = false;
 
-    if (currentPuzzle.complete) {
+    if (puzzleWasCompleted) {
+      puzzleWasCompleted = false;
       await updateActivePuzzles();
     }
 
@@ -199,6 +200,7 @@
     currentPuzzle = Util.getRandomElement(activePuzzles);
   }
 
+  let puzzleWasCompleted = false;
   async function savePuzzleResult(result) {
     const response = await Util.fetch("api/v1/puzzle_results", {
       method: "POST",
@@ -214,6 +216,7 @@
     });
     const data = await response.json();
     const updatedPuzzle = data.puzzle;
+    puzzleWasCompleted = updatedPuzzle.complete;
     activePuzzles = activePuzzles.map((puzzle) =>
       puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
     );
