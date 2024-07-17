@@ -4,7 +4,8 @@ module Api
       def create
         puzzle_result = @user.puzzle_results.new(puzzle_result_params)
         if puzzle_result.save
-          render json: puzzle_result, status: :created
+          history = @user.user_puzzle_histories.find_by(puzzle_id: puzzle_result_params[:puzzle_id])
+          render json: { result: puzzle_result, puzzle: history.api_response }, status: :created
         else
           render json: { errors: puzzle_result.errors.full_messages }, status: :unprocessable_entity
         end

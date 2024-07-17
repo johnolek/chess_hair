@@ -35,16 +35,7 @@ module Api
         end
 
         histories = @user.user_puzzle_histories.where(puzzle_id: @user.active_puzzle_ids)
-        mapped = histories.all.map do |history|
-          {
-            puzzle_id: history.puzzle_id,
-            fen: history.fen,
-            last_move: history.last_move,
-            solution: history.solution.split(' '),
-            rating: history.rating,
-            themes: history.themes.split(' ')
-          }
-        end
+        mapped = histories.all.map(&:api_response)
         render json: mapped
       end
 

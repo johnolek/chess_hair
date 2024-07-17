@@ -4,13 +4,12 @@
   import { fade } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { Util } from "src/util";
-  import { persisted } from "svelte-persisted-store";
   import { Chess } from "chess.js";
   import PuzzleHistoryProcessor from "./components/PuzzleHistoryProcessor.svelte";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
   import NumberInput from "./components/forms/NumberInput.svelte";
-  import { writable } from "svelte/store";
+
   import {
     initSettings,
     updateSetting,
@@ -24,124 +23,6 @@
       this.madeMistake = madeMistake;
       this.seenAt = seenAt;
       this.doneAt = doneAt;
-    }
-
-    getDuration() {
-      if (this.doneAt) {
-        return this.doneAt - this.seenAt;
-      }
-    }
-
-    wasSuccessful() {
-      return !this.skipped && !this.madeMistake && this.doneAt;
-    }
-
-    wasFailure() {
-      return this.madeMistake;
-    }
-  }
-
-  class Puzzle {
-    constructor(puzzleId) {
-      this.puzzleId = puzzleId;
-    }
-
-    lichessUrl() {
-      return `https://lichess.org/training/${this.puzzleId}`;
-    }
-
-    hasResults() {
-      return this.getResults().length >= 1;
-    }
-
-    hasBeenSolved() {
-      if (!this.hasResults()) {
-        return false;
-      }
-      return this.getResults().some((result) => {
-        return result.wasSuccessful();
-      });
-    }
-
-    getResults() {
-      return ($results[this.puzzleId] || []).map(
-        (resultData) =>
-          new Result(
-            resultData.puzzleId,
-            resultData.seenAt,
-            resultData.skipped,
-            resultData.madeMistake,
-            resultData.doneAt,
-          ),
-      );
-    }
-
-    getTotalSolves() {
-      return this.getResults().filter((result) => result.wasSuccessful())
-        .length;
-    }
-
-    getFailureCount() {
-      return this.getResults().filter((result) => result.wasFailure()).length;
-    }
-
-    getSolveStreak() {
-      let streak = 0;
-
-      if (!this.hasBeenSolved()) {
-        return streak;
-      }
-
-      const results = this.getResults();
-
-      for (let i = results.length - 1; i >= 0; i--) {
-        if (results[i].wasSuccessful()) {
-          streak++;
-        } else {
-          break;
-        }
-      }
-
-      return streak;
-    }
-
-    averageSolveTime() {
-      if (!this.hasBeenSolved()) {
-        return null;
-      }
-      const successfulResults = this.getResults().filter((result) =>
-        result.wasSuccessful(),
-      );
-      const lastFew = successfulResults.slice(minimumSolves * -1);
-      const durations = lastFew.map((result) => result.getDuration());
-      const sum = durations.reduce((a, b) => a + b, 0);
-      const average = sum / (lastFew.length || 1) / 1000;
-      return average;
-    }
-
-    lastSeenAt() {
-      if (!this.hasResults()) {
-        return null;
-      }
-
-      return this.getResults().slice(-1).seenAt;
-    }
-
-    isComplete() {
-      if (!this.hasBeenSolved()) {
-        return false;
-      }
-      const lastSolves = this.getResults().slice(-1 * minimumSolves);
-
-      if (lastSolves.length < minimumSolves) {
-        return false;
-      }
-
-      if (!lastSolves.every((result) => result.wasSuccessful())) {
-        return false;
-      }
-
-      return this.averageSolveTime() <= timeGoal;
     }
   }
 
@@ -174,22 +55,12 @@
   };
 
   // Puzzle Data
-  let allPuzzles = [];
   let activePuzzles = [];
-
-  $: {
-    if (activePuzzles.length < batchSize && allPuzzles.length > 0) {
-      fillActivePuzzles();
-    }
-  }
-
-  let completedPuzzles = [];
   let currentPuzzle;
   let puzzleShownAt;
 
   // Behavioral Config
   let minimumSolves = 2;
-  let alreadyCompleteOdds = 0.3;
 
   // Current puzzle state
   let moves;
@@ -199,87 +70,9 @@
   // DOM elements
   let nextButton;
 
-  const results = writable({});
-
-  // Persisted data
-  const puzzleDataStore = persisted("puzzles.data", {});
-  const puzzleIdsToWorkOn = writable([]);
-
-  // Persisted config
-
-  function fillActivePuzzles() {
-    const completed = Util.sortRandomly(getCompletedPuzzles());
-    const incompleteInactive = Util.sortRandomly(getInactiveCompletedPuzzles());
-    let puzzleType;
-    while (allPuzzles.length > 0 && activePuzzles.length < batchSize) {
-      puzzleType = Math.random() < 0.2 ? "completed" : "inactive";
-      if (incompleteInactive.length < 1 && completed.length < 1) {
-        break;
-      }
-      if (puzzleType === "completed" && completed.length > 0) {
-        addActivePuzzle(completed.pop());
-      } else if (incompleteInactive.length > 0) {
-        addActivePuzzle(incompleteInactive.pop());
-      }
-    }
-  }
-
-  // This is tied to the add new puzzle form
-  let newPuzzleIds;
-
-  function addPuzzleIdToWorkOn() {
-    if (newPuzzleIds.length < 3) {
-      newPuzzleIds = "";
-      return;
-    }
-    const idsToAdd = newPuzzleIds.split(",").map((id) => id.trim());
-    const currentPuzzleIds = new Set($puzzleIdsToWorkOn);
-    idsToAdd.forEach(async (id) => {
-      currentPuzzleIds.add(id);
-      await saveUserPuzzle(id);
-    });
-    puzzleIdsToWorkOn.set([...currentPuzzleIds]);
-    newPuzzleIds = "";
-  }
-
-  function removePuzzleId(puzzleId) {
-    const currentPuzzleIds = new Set($puzzleIdsToWorkOn);
-    currentPuzzleIds.delete(puzzleId.trim());
-    puzzleIdsToWorkOn.set([...currentPuzzleIds]);
-  }
-
-  function addActivePuzzle(puzzle) {
-    activePuzzles = [
-      ...new Set([
-        ...activePuzzles.map((puzzle) => puzzle.puzzleId),
-        puzzle.puzzleId,
-      ]),
-    ].map((puzzleId) => new Puzzle(puzzleId));
-  }
-
-  function removeActivePuzzle(puzzle) {
-    activePuzzles = activePuzzles.filter(
-      (activePuzzle) => activePuzzle.puzzleId !== puzzle.puzzleId,
-    );
-  }
-
-  function getCompletedPuzzles() {
-    return allPuzzles.filter((puzzle) => puzzle.isComplete());
-  }
-
-  function getIncompletePuzzles() {
-    return allPuzzles.filter((puzzle) => !puzzle.isComplete());
-  }
-
-  function getInactiveCompletedPuzzles() {
-    return getIncompletePuzzles().filter(
-      (puzzle) => !activePuzzles.includes(puzzle),
-    );
-  }
-
   function sortPuzzlesBySolveTime(a, b) {
-    const aTime = a.averageSolveTime();
-    const bTime = b.averageSolveTime();
+    const aTime = a.average_solve_time;
+    const bTime = b.average_solve_time;
 
     if (aTime === null && bTime === null) {
       return 0;
@@ -293,134 +86,32 @@
     return aTime - bTime;
   }
 
-  async function getNextPuzzle() {
-    const previous = currentPuzzle ? currentPuzzle.puzzleId : null;
-
-    const type = getNextPuzzleType();
-
-    const alreadyComplete = activePuzzles.filter((puzzle) =>
-      puzzle.isComplete(),
+  function getNextPuzzle() {
+    const previous = currentPuzzle ? currentPuzzle.puzzle_id : null;
+    const others = activePuzzles.filter(
+      (puzzle) => puzzle.puzzle_id !== previous,
     );
-
-    const incomplete = activePuzzles.filter((puzzle) => !puzzle.isComplete());
-
-    let candidatePuzzle;
-    if (
-      (type === "alreadyComplete" && alreadyComplete.length > 0) ||
-      incomplete.length < 1
-    ) {
-      candidatePuzzle = Util.getRandomElement(activePuzzles);
-    } else {
-      candidatePuzzle = Util.getRandomElement(incomplete);
-    }
-
-    if (activePuzzles.length > 1 && candidatePuzzle.puzzleId === previous) {
-      return getNextPuzzle();
-    }
-
-    currentPuzzle = allPuzzles.find(
-      (puzzle) => puzzle.puzzleId === candidatePuzzle.puzzleId,
-    );
-
-    const data = await getPuzzleData(currentPuzzle.puzzleId);
-
-    if (data === null) {
-      return getNextPuzzle();
-    }
-
-    return data;
-  }
-
-  async function getPuzzleData(puzzleId) {
-    // Check cache first
-    if ($puzzleDataStore[puzzleId]) {
-      return $puzzleDataStore[puzzleId];
-    }
-
-    const response = await fetch(`https://lichess.org/api/puzzle/${puzzleId}`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (response.status === 404) {
-      // Remove invalid
-      removePuzzleId(puzzleId);
-      return null;
-    }
-
-    const puzzleData = await response.json();
-    const data = $puzzleDataStore;
-    data[puzzleId] = puzzleData;
-    puzzleDataStore.set(data);
-    return puzzleData;
-  }
-
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  function getNextPuzzleType() {
-    const randomValue = Math.random();
-    if (randomValue < alreadyCompleteOdds) {
-      return "alreadyComplete";
-    }
-    return "incomplete";
+    return Util.getRandomElement(others);
   }
 
   async function skip() {
-    const result = new Result(currentPuzzle.puzzleId, puzzleShownAt, true);
-    await addResult(currentPuzzle.puzzleId, result);
-    await loadNextPuzzle();
-  }
-
-  async function addResult(puzzleId, result) {
-    const allResults = $results;
-    const existingResults = $results[puzzleId] || [];
-    existingResults.push(result);
-    allResults[puzzleId] = existingResults;
-    results.set(allResults);
+    const result = new Result(currentPuzzle.puzzle_id, puzzleShownAt, true);
     await savePuzzleResult(result);
-  }
-
-  function addCompletedPuzzle(puzzleToAdd) {
-    completedPuzzles = [
-      ...new Set([
-        ...getCompletedPuzzles().map((puzzle) => puzzle.puzzleId),
-        puzzleToAdd.puzzleId,
-      ]),
-    ].map((puzzleId) => new Puzzle(puzzleId));
-  }
-
-  function removeCompletedPuzzle(puzzleToRemove) {
-    completedPuzzles = completedPuzzles.filter(
-      (puzzle) => puzzle.puzzleId !== puzzleToRemove.puzzleId,
-    );
+    await loadNextPuzzle();
   }
 
   async function loadNextPuzzle() {
     puzzleComplete = false;
     madeMistake = false;
 
-    if (allPuzzles.length < 1) {
-      return;
-    }
-
-    if (currentPuzzle && currentPuzzle.isComplete()) {
-      removeActivePuzzle(currentPuzzle);
-      addCompletedPuzzle(currentPuzzle);
-    }
-
-    const next = await getNextPuzzle();
-    orientation = Util.whoseMoveIsIt(next.puzzle.initialPly + 1);
-    // Clone so we don't cache a value that gets shifted later
-    moves = [...next.puzzle.solution];
-
+    currentPuzzle = getNextPuzzle();
     const chessInstance = new Chess();
-    chessInstance.loadPgn(next.game.pgn);
-    const history = chessInstance.history({ verbose: true });
-    lastMove = history[history.length - 1];
-    fen = chessInstance.fen();
+    chessInstance.load(currentPuzzle.fen);
+    orientation = chessInstance.turn() === "w" ? "white" : "black";
+    fen = currentPuzzle.fen;
+
+    // Clone so we don't cache a value that gets shifted later
+    moves = [...currentPuzzle.solution];
 
     setTimeout(() => {
       puzzleShownAt = Util.currentMicrotime();
@@ -453,7 +144,7 @@
   async function handlePuzzleComplete() {
     puzzleComplete = true;
     const result = new Result(
-      currentPuzzle.puzzleId,
+      currentPuzzle.puzzle_id,
       puzzleShownAt,
       false,
       madeMistake,
@@ -461,11 +152,8 @@
     );
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
-    await addResult(currentPuzzle.puzzleId, result);
+    await savePuzzleResult(result);
 
-    if (madeMistake) {
-      removeCompletedPuzzle(currentPuzzle);
-    }
     // Trigger reactivity
     activePuzzles = activePuzzles;
   }
@@ -491,52 +179,15 @@
   }
 
   async function initializePuzzles() {
-    allPuzzles = [];
-    const userPuzzles = await Util.fetch("/api/v1/user_puzzles", {
-      method: "GET",
-    });
-    const resultsResponse = await Util.fetch("/api/v1/puzzle_results", {
-      method: "GET",
-    });
-    const resultsJson = await resultsResponse.json();
-    const initialResults = {};
-    resultsJson.forEach((result) => {
-      if (!initialResults[result.puzzle_id]) {
-        initialResults[result.puzzle_id] = [];
-      }
-      initialResults[result.puzzle_id].push({
-        puzzleId: result.puzzle_id,
-        seenAt: result.seen_at,
-        doneAt: result.done_at,
-        skipped: result.skipped,
-        madeMistake: result.made_mistake,
-      });
-    });
-    results.set(initialResults);
-
-    const responseJson = await userPuzzles.json();
-    const puzzleIds = responseJson.map((puzzleData) => puzzleData.puzzle_id);
-    puzzleIdsToWorkOn.set(puzzleIds);
-    $puzzleIdsToWorkOn.forEach((puzzleId) => {
-      allPuzzles.push(new Puzzle(puzzleId));
-    });
-    completedPuzzles = getCompletedPuzzles();
-    fillActivePuzzles();
-  }
-
-  async function saveUserPuzzle(puzzleId) {
-    await Util.fetch("api/v1/user_puzzles", {
-      method: "POST",
-      body: JSON.stringify({
-        user_puzzle: {
-          puzzle_id: puzzleId,
-        },
-      }),
-    });
+    const activePuzzlesRequest = await Util.fetch(
+      "/api/v1/users/active-puzzles",
+    );
+    activePuzzles = await activePuzzlesRequest.json();
+    currentPuzzle = Util.getRandomElement(activePuzzles);
   }
 
   async function savePuzzleResult(result) {
-    await Util.fetch("api/v1/puzzle_results", {
+    const response = await Util.fetch("api/v1/puzzle_results", {
       method: "POST",
       body: JSON.stringify({
         puzzle_result: {
@@ -548,6 +199,11 @@
         },
       }),
     });
+    const data = await response.json();
+    const updatedPuzzle = data.puzzle;
+    activePuzzles = activePuzzles.map((puzzle) =>
+      puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
+    );
   }
 
   let batchSize;
@@ -624,14 +280,12 @@
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
         <h3>Current Puzzles</h3>
-        <p>Current Puzzle: <strong>{currentPuzzle.puzzleId}</strong></p>
-        {#await getPuzzleData(currentPuzzle.puzzleId) then data}
-          <p>
-            Rating: <Spoiler isShown={puzzleComplete}
-              >{data.puzzle.rating}</Spoiler
-            >
-          </p>
-        {/await}
+        <p>Current Puzzle: <strong>{currentPuzzle.puzzle_id}</strong></p>
+        <p>
+          Rating: <Spoiler isShown={puzzleComplete}
+            >{currentPuzzle.rating}</Spoiler
+          >
+        </p>
         {#if !puzzleComplete && moves && moves.length >= 1}
           <p>Next move: <Spoiler>{moves[0]}</Spoiler></p>
         {/if}
@@ -649,37 +303,35 @@
             {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
               <tr
                 animate:flip={{ duration: 400 }}
-                class:is-selected={currentPuzzle.puzzleId === puzzle.puzzleId}
+                class:is-selected={currentPuzzle.puzzle_id === puzzle.puzzle_id}
               >
                 <td class="puzzle-id"
                   ><a
-                    href={puzzle.lichessUrl()}
+                    href={`https://lichess.org/training/${puzzle.puzzle_id}`}
                     target="_blank"
-                    title="View on lichess.org">{puzzle.puzzleId}</a
+                    title="View on lichess.org">{puzzle.puzzle_id}</a
                   ></td
                 >
                 <td
-                  class:has-text-warning={puzzle.averageSolveTime() > timeGoal}
-                  class:has-text-success={puzzle.averageSolveTime() <=
-                    timeGoal && puzzle.averageSolveTime() > 0}
+                  class:has-text-warning={puzzle.average_solve_time > timeGoal}
+                  class:has-text-success={puzzle.average_solve_time <=
+                    timeGoal && puzzle.average_solve_time > 0}
                 >
-                  {puzzle.averageSolveTime()
-                    ? `${puzzle.averageSolveTime().toFixed(2)}s`
+                  {puzzle.average_solve_time
+                    ? `${puzzle.average_solve_time.toFixed(2)}s`
                     : "?"}
                 </td>
                 <td
-                  class:has-text-warning={puzzle.getSolveStreak() <
-                    minimumSolves}
-                  class:has-text-success={puzzle.getSolveStreak() >=
-                    minimumSolves}
+                  class:has-text-warning={puzzle.streak < minimumSolves}
+                  class:has-text-success={puzzle.streak >= minimumSolves}
                 >
-                  {puzzle.getSolveStreak()} / {minimumSolves}
+                  {puzzle.streak} / {minimumSolves}
                 </td>
                 <td>
-                  {puzzle.getTotalSolves()}
+                  {puzzle.total_solves}
                 </td>
                 <td>
-                  {puzzle.getFailureCount()}
+                  {puzzle.total_fails}
                 </td>
               </tr>
             {/each}
@@ -689,8 +341,6 @@
     {/if}
     <div class="box">
       <div class="block">
-        <p><strong>{$puzzleIdsToWorkOn.length}</strong> total puzzles</p>
-        <p>Done with <strong>{completedPuzzles.length}</strong> puzzles</p>
         <p>
           Target solve time: <strong>{timeGoal}</strong> seconds
         </p>
@@ -699,19 +349,6 @@
             ? "s"
             : ""} in a row
         </p>
-      </div>
-      <div class="block">
-        <form on:submit|preventDefault={addPuzzleIdToWorkOn}>
-          <label for="newPuzzleId">New Puzzle ID(s):</label>
-          <input
-            type="text"
-            id="newPuzzleId"
-            bind:value={newPuzzleIds}
-            placeholder=""
-          />
-          <br />
-          <button class="button is-primary" type="submit">Add</button>
-        </form>
       </div>
     </div>
     <CollapsibleBox title="Config" defaultOpen={true}>
