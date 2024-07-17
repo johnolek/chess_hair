@@ -14,10 +14,31 @@ class Config < ApplicationRecord
     settings.fetch(key, default)
   end
 
+  def puzzle_batch_size
+    self.get_setting('puzzles.batchSize')
+  end
+
+  def puzzle_time_goal
+    self.get_setting('puzzles.timeGoal')
+  end
+
+  def puzzle_consecutive_solves
+    self.get_setting('puzzles.consecutiveSolves')
+  end
+
+  def puzzle_max_rating
+    self.get_setting('puzzles.maxRating')
+  end
+
+  def puzzle_min_rating
+    self.get_setting('puzzles.minRating')
+  end
+
   def self.default_settings
     {
       "puzzles.batchSize" => 15,
       "puzzles.timeGoal" => 15,
+      "puzzles.consecutiveSolves" => 2,
     }
   end
 

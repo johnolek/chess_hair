@@ -14,6 +14,25 @@ class User < ApplicationRecord
     super || build_config
   end
 
+  def recalculate_active_puzzles
+    count = config.puzzle_batch_size
+
+    histories_query = user_puzzle_histories.solved_incorrectly
+
+    if config.puzzle_min_rating
+      histories_query = histories_query.minimum_rating(config.puzzle_min_rating)
+    end
+
+    if config.puzzle_max_rating
+      histories_query = histories_query.maximum_rating(config.puzzle_max_rating)
+    end
+
+    unsolved = histories_query.all.filter { |history| !history.complete? }
+    puzzle_ids = unsolved.sample(count).map(&:puzzle_id)
+    self.active_puzzle_ids = puzzle_ids
+    save!
+  end
+
   def add_puzzle_id(puzzle_id)
     self.active_puzzle_ids << puzzle_id unless self.active_puzzle_ids.include?(puzzle_id)
     save
