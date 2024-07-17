@@ -12,11 +12,7 @@ class UserPuzzleHistory < ApplicationRecord
   scope :without_theme, ->(theme) { where.not('themes LIKE ?', "%#{theme}%") }
 
   def related_puzzle_results
-    (all_results[puzzle_id] || []).reverse
-  end
-
-  def all_results
-    @all_results ||= user.puzzle_results.group_by(&:puzzle_id)
+    @related_puzzle_results ||= (user.grouped_puzzle_results[puzzle_id] || []).reverse
   end
 
   def average_solve_duration

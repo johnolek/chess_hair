@@ -14,6 +14,10 @@ class User < ApplicationRecord
     super || build_config
   end
 
+  def grouped_puzzle_results
+    @grouped_puzzle_results ||= puzzle_results.group_by(&:puzzle_id)
+  end
+
   def recalculate_active_puzzles
     remove_complete_from_active
 
