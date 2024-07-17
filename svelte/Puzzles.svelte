@@ -110,6 +110,10 @@
 
     currentPuzzle = getNextPuzzle();
     const chessInstance = new Chess();
+    lastMove = [
+      currentPuzzle.last_move.substring(0, 2),
+      currentPuzzle.last_move.substring(2, 4),
+    ];
     chessInstance.load(currentPuzzle.fen);
     orientation = chessInstance.turn() === "w" ? "white" : "black";
     fen = currentPuzzle.fen;

@@ -30,16 +30,11 @@
 
   $: {
     if (fen && chessground) {
-      if (lastMove) {
-        chessInstance.load(lastMove.before);
-        setTimeout(() => {
-          move(lastMove.san);
-          chessground.set({ lastMove: [lastMove.from, lastMove.to] });
-        }, 500);
-      } else {
-        chessInstance.load(fen);
-      }
+      chessInstance.load(fen);
       updateChessground();
+      if (lastMove) {
+        chessground.set({ lastMove: lastMove });
+      }
     }
   }
 
