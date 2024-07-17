@@ -32,7 +32,7 @@ class User < ApplicationRecord
     return if active_puzzle_ids.count == count
 
     # Need to add more
-    histories_query = user_puzzle_histories.solved_incorrectly
+    histories_query = user_puzzle_histories.solved_incorrectly.random_order
 
     if config.puzzle_min_rating
       histories_query = histories_query.minimum_rating(config.puzzle_min_rating)
