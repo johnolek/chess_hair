@@ -54,7 +54,7 @@ class UserPuzzleHistory < ApplicationRecord
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     return false if related_puzzle_results.count < required_consecutive_solves
     time_goal = user.config.puzzle_time_goal
-    return false if average_solve_duration > time_goal
+    return false if average_solve_duration && average_solve_duration > time_goal
     solve_streak >= required_consecutive_solves
   end
 
@@ -70,6 +70,7 @@ class UserPuzzleHistory < ApplicationRecord
       streak: solve_streak,
       total_fails: total_fails,
       total_solves: total_solves,
+      complete: complete?,
     }
   end
 end
