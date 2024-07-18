@@ -374,7 +374,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle)}
+            {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle.puzzle_id)}
               <tr
                 animate:flip={{ duration: 400 }}
                 class:is-selected={currentPuzzle.puzzle_id === puzzle.puzzle_id}
@@ -395,11 +395,14 @@
                     ? `${puzzle.average_solve_time.toFixed(2)}s`
                     : "?"}
                 </td>
-                <td
-                  class:has-text-warning={puzzle.streak < minimumSolves}
-                  class:has-text-success={puzzle.streak >= minimumSolves}
-                >
-                  {puzzle.streak} / {minimumSolves}
+                <td>
+                  <ProgressBar
+                    max={minimumSolves}
+                    bind:current={puzzle.streak}
+                    className={puzzle.streak >= minimumSolves
+                      ? "is-success"
+                      : "is-warning"}
+                  ></ProgressBar>
                 </td>
                 <td>
                   {puzzle.total_solves}

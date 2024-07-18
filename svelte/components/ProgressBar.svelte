@@ -4,6 +4,7 @@
 
   export let max;
   export let current;
+  export let className = "is-success";
 
   const tweenedProgress = tweened(0, {
     duration: 1000,
@@ -14,6 +15,6 @@
 </script>
 
 <div class="div">
-  <progress class="progress is-success" value={$tweenedProgress} {max}
+  <progress class="progress {className}" value={$tweenedProgress} {max}
   ></progress>
 </div>
