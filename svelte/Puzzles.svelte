@@ -17,9 +17,8 @@
   } from "./settingsManager.js";
 
   class Result {
-    constructor(puzzleId, seenAt, skipped, madeMistake = false, doneAt = null) {
+    constructor(puzzleId, seenAt, madeMistake = false, doneAt = null) {
       this.puzzleId = puzzleId;
-      this.skipped = skipped;
       this.madeMistake = madeMistake;
       this.seenAt = seenAt;
       this.doneAt = doneAt;
@@ -67,6 +66,7 @@
 
   // Current puzzle state
   let moves;
+  let nextMove;
   let madeMistake = false;
   let puzzleComplete = false;
 
@@ -76,6 +76,16 @@
   $: {
     if (!currentPuzzle && activePuzzles && activePuzzles.length > 0) {
       loadNextPuzzle();
+    }
+  }
+
+  $: {
+    if (fen && moves[0]) {
+      const chessInstance = new Chess(fen);
+      const move = chessInstance.move(moves[0]);
+      if (move && move.san) {
+        nextMove = move.san;
+      }
     }
   }
 
@@ -101,12 +111,6 @@
       (puzzle) => puzzle.puzzle_id !== previous,
     );
     return Util.getRandomElement(others);
-  }
-
-  async function skip() {
-    const result = new Result(currentPuzzle.puzzle_id, puzzleShownAt, true);
-    await savePuzzleResult(result);
-    await loadNextPuzzle();
   }
 
   async function loadNextPuzzle() {
@@ -165,7 +169,6 @@
     const result = new Result(
       currentPuzzle.puzzle_id,
       puzzleShownAt,
-      false,
       madeMistake,
       Util.currentMicrotime(),
     );
@@ -214,6 +217,7 @@
   }
 
   let puzzleWasCompleted = false;
+
   async function savePuzzleResult(result) {
     const response = await Util.fetch("api/v1/puzzle_results", {
       method: "POST",
@@ -221,7 +225,6 @@
         puzzle_result: {
           puzzle_id: result.puzzleId,
           seen_at: result.seenAt,
-          skipped: result.skipped,
           made_mistake: result.madeMistake,
           done_at: result.doneAt,
         },
@@ -295,11 +298,42 @@
               </div>
             {/if}
             {#if !puzzleComplete}
-              <div class="block is-flex is-justify-content-center">
-                <span class="tag is-{orientation} is-size-4"
-                  >{orientation} to play</span
-                >
-                <button class="button is-primary" on:click={skip}>Skip</button>
+              <div class="columns is-vcentered">
+                <div class="column">
+                  <span class="tag is-{orientation} is-size-4">
+                    {orientation} to play
+                  </span>
+                </div>
+                <div class="column">
+                  <div>Rating</div>
+                  <div>
+                    <Spoiler isShown={puzzleComplete}>
+                      <div>
+                        {currentPuzzle.rating}
+                      </div>
+                    </Spoiler>
+                  </div>
+                </div>
+                <div class="column">
+                  {#if !puzzleComplete && nextMove}
+                    <div>Next Move</div>
+                    <div>
+                      <Spoiler>
+                        <div>
+                          {nextMove}
+                        </div>
+                      </Spoiler>
+                    </div>
+                  {/if}
+                </div>
+                <div class="column">
+                  <a
+                    href="https://lichess.org/training/{currentPuzzle.puzzle_id}"
+                    target="_blank"
+                  >
+                    {currentPuzzle.puzzle_id}
+                  </a>
+                </div>
               </div>
             {/if}
           </div>
@@ -312,16 +346,8 @@
   <div class="column is-4-desktop">
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
-        <h3>Current Puzzles</h3>
         <p>Current Puzzle: <strong>{currentPuzzle.puzzle_id}</strong></p>
-        <p>
-          Rating: <Spoiler isShown={puzzleComplete}
-            >{currentPuzzle.rating}</Spoiler
-          >
-        </p>
-        {#if !puzzleComplete && moves && moves.length >= 1}
-          <p>Next move: <Spoiler>{moves[0]}</Spoiler></p>
-        {/if}
+
         <table class="table is-fullwidth is-narrow is-striped">
           <thead>
             <tr>
