@@ -69,6 +69,7 @@
   };
   let boardSize;
   let chessground;
+  let chessboard;
   let fen;
 
   // Game stuff
@@ -101,8 +102,8 @@
     ) {
       return newPosition();
     }
-
     fen = history[random - 1].after;
+    chessboard.load(fen);
     nextMove = candidateMove;
     colorToMove = whoseMoveIsIt(random);
     positionShownAt = new Date().getTime();
@@ -163,6 +164,7 @@
     <div class="block">
       <Chessboard
         {chessgroundConfig}
+        bind:this={chessboard}
         bind:fen
         bind:chessground
         orientation={$orientation}

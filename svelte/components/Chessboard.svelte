@@ -28,16 +28,6 @@
     }
   }
 
-  $: {
-    if (fen && chessground) {
-      chessInstance.load(fen);
-      updateChessground();
-      if (lastMove) {
-        chessground.set({ lastMove: lastMove });
-      }
-    }
-  }
-
   function getLegalMoves() {
     const moves = chessInstance.moves({ verbose: true });
     const dests = new Map();
@@ -65,6 +55,7 @@
         dests: legalMoves,
       },
     });
+
     fen = chessInstance.fen();
   }
 
@@ -116,6 +107,11 @@
     updateChessground();
   }
 
+  export function load(fen) {
+    chessInstance.load(fen);
+    updateChessground();
+  }
+
   onMount(() => {
     chessground = Chessground(boardContainer, {
       ...chessgroundConfig,
@@ -126,6 +122,13 @@
         },
       },
     });
+    if (fen) {
+      chessInstance.load(fen);
+      updateChessground();
+      if (lastMove) {
+        chessground.set({ lastMove: lastMove });
+      }
+    }
   });
 </script>
 

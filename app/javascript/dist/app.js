@@ -5984,7 +5984,7 @@ boardStyle.subscribe((value) => {
 const file$e = "svelte/components/Chessboard.svelte";
 
 function add_css$6(target) {
-	append_styles(target, "svelte-1hrnnj7", ".board-wrapper.svelte-1hrnnj7{position:relative;width:100%}.centered-content.svelte-1hrnnj7{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IENoZXNzIH0gZnJvbSBcImNoZXNzLmpzXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuICBpbXBvcnQgeyBjcmVhdGVFdmVudERpc3BhdGNoZXIgfSBmcm9tIFwic3ZlbHRlXCI7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb24gPSBcIndoaXRlXCI7XG5cbiAgZXhwb3J0IGxldCBmZW47XG4gIGV4cG9ydCBsZXQgbGFzdE1vdmUgPSBudWxsO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgbGV0IGNoZXNzSW5zdGFuY2UgPSBuZXcgQ2hlc3MoKTtcbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGNvbnN0IGRpc3BhdGNoID0gY3JlYXRlRXZlbnREaXNwYXRjaGVyKCk7XG5cbiAgbGV0IG1heFdpZHRoID0gXCI3MHZoXCI7XG5cbiAgJDoge1xuICAgIGlmIChvcmllbnRhdGlvbiAmJiBjaGVzc2dyb3VuZCkge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHsgb3JpZW50YXRpb246IG9yaWVudGF0aW9uIH0pO1xuICAgIH1cbiAgfVxuXG4gICQ6IHtcbiAgICBpZiAoZmVuICYmIGNoZXNzZ3JvdW5kKSB7XG4gICAgICBjaGVzc0luc3RhbmNlLmxvYWQoZmVuKTtcbiAgICAgIHVwZGF0ZUNoZXNzZ3JvdW5kKCk7XG4gICAgICBpZiAobGFzdE1vdmUpIHtcbiAgICAgICAgY2hlc3Nncm91bmQuc2V0KHsgbGFzdE1vdmU6IGxhc3RNb3ZlIH0pO1xuICAgICAgfVxuICAgIH1cbiAgfVxuXG4gIGZ1bmN0aW9uIGdldExlZ2FsTW92ZXMoKSB7XG4gICAgY29uc3QgbW92ZXMgPSBjaGVzc0luc3RhbmNlLm1vdmVzKHsgdmVyYm9zZTogdHJ1ZSB9KTtcbiAgICBjb25zdCBkZXN0cyA9IG5ldyBNYXAoKTtcbiAgICBtb3Zlcy5mb3JFYWNoKChtb3ZlKSA9PiB7XG4gICAgICBpZiAoIWRlc3RzLmhhcyhtb3ZlLmZyb20pKSBkZXN0cy5zZXQobW92ZS5mcm9tLCBbXSk7XG4gICAgICBkZXN0cy5nZXQobW92ZS5mcm9tKS5wdXNoKG1vdmUudG8pO1xuICAgIH0pO1xuICAgIHJldHVybiBkZXN0cztcbiAgfVxuXG4gIGZ1bmN0aW9uIHVwZGF0ZUNoZXNzZ3JvdW5kKCkge1xuICAgIGNvbnN0IGxlZ2FsTW92ZXMgPSBnZXRMZWdhbE1vdmVzKCk7XG4gICAgY29uc3QgaGlzdG9yeSA9IGNoZXNzSW5zdGFuY2UuaGlzdG9yeSh7IHZlcmJvc2U6IHRydWUgfSk7XG4gICAgbGV0IGxhc3RNb3ZlID0gbnVsbDtcbiAgICBpZiAoaGlzdG9yeSAmJiBoaXN0b3J5W2hpc3RvcnkubGVuZ3RoIC0gMV0pIHtcbiAgICAgIGxhc3RNb3ZlID0gaGlzdG9yeVtoaXN0b3J5Lmxlbmd0aCAtIDFdO1xuICAgIH1cbiAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgY2hlY2s6IGNoZXNzSW5zdGFuY2UuaW5DaGVjaygpLFxuICAgICAgZmVuOiBjaGVzc0luc3RhbmNlLmZlbigpLFxuICAgICAgbGFzdE1vdmU6IGxhc3RNb3ZlID8gW2xhc3RNb3ZlLmZyb20sIGxhc3RNb3ZlLnRvXSA6IG51bGwsXG4gICAgICB0dXJuQ29sb3I6IGNoZXNzSW5zdGFuY2UudHVybigpID09PSBcIndcIiA/IFwid2hpdGVcIiA6IFwiYmxhY2tcIixcbiAgICAgIG1vdmFibGU6IHtcbiAgICAgICAgZnJlZTogZmFsc2UsXG4gICAgICAgIGRlc3RzOiBsZWdhbE1vdmVzLFxuICAgICAgfSxcbiAgICB9KTtcbiAgICBmZW4gPSBjaGVzc0luc3RhbmNlLmZlbigpO1xuICB9XG5cbiAgZnVuY3Rpb24gaGFuZGxlTW92ZShmcm9tLCB0bykge1xuICAgIGNvbnN0IGlzUHJvbW90aW9uID0gKGZyb20sIHRvKSA9PiB7XG4gICAgICBjb25zdCBmcm9tUmFuayA9IGZyb21bMV07XG4gICAgICBjb25zdCB0b1JhbmsgPSB0b1sxXTtcbiAgICAgIGNvbnN0IHBpZWNlID0gY2hlc3NJbnN0YW5jZS5nZXQoZnJvbSkudHlwZTtcbiAgICAgIHJldHVybiAoXG4gICAgICAgIHBpZWNlID09PSBcInBcIiAmJlxuICAgICAgICAoKGZyb21SYW5rID09PSBcIjdcIiAmJiB0b1JhbmsgPT09IFwiOFwiKSB8fFxuICAgICAgICAgIChmcm9tUmFuayA9PT0gXCIyXCIgJiYgdG9SYW5rID09PSBcIjFcIikpXG4gICAgICApO1xuICAgIH07XG5cbiAgICBsZXQgcHJvbW90aW9uID0gXCJxXCI7IC8vIERlZmF1bHQgdG8gcXVlZW5cblxuICAgIGlmIChpc1Byb21vdGlvbihmcm9tLCB0bykpIHtcbiAgICAgIGNvbnN0IGNob2ljZSA9IHByb21wdChcIlByb21vdGUgcGF3biB0byAocSwgciwgYiwgbik6XCIsIFwicVwiKTtcbiAgICAgIGlmIChbXCJxXCIsIFwiclwiLCBcImJcIiwgXCJuXCJdLmluY2x1ZGVzKGNob2ljZSkpIHtcbiAgICAgICAgcHJvbW90aW9uID0gY2hvaWNlO1xuICAgICAgfVxuICAgIH1cblxuICAgIGNvbnN0IG1vdmUgPSBjaGVzc0luc3RhbmNlLm1vdmUoeyBmcm9tLCB0bywgcHJvbW90aW9uIH0pO1xuICAgIGlmIChtb3ZlKSB7XG4gICAgICB1cGRhdGVDaGVzc2dyb3VuZCgpO1xuICAgICAgZGlzcGF0Y2goXCJtb3ZlXCIsIHsgbW92ZSwgaXNDaGVja21hdGU6IGNoZXNzSW5zdGFuY2UuaXNDaGVja21hdGUoKSB9KTtcbiAgICB9XG4gIH1cblxuICBleHBvcnQgZnVuY3Rpb24gdW5kbygpIHtcbiAgICBjaGVzc0luc3RhbmNlLnVuZG8oKTtcbiAgICB1cGRhdGVDaGVzc2dyb3VuZCgpO1xuICB9XG5cbiAgZXhwb3J0IGZ1bmN0aW9uIHJlc2V0KCkge1xuICAgIGNoZXNzSW5zdGFuY2UucmVzZXQoKTtcbiAgICB1cGRhdGVDaGVzc2dyb3VuZCgpO1xuICB9XG5cbiAgZXhwb3J0IGZ1bmN0aW9uIGNsZWFyKCkge1xuICAgIGNoZXNzSW5zdGFuY2UuY2xlYXIoKTtcbiAgICB1cGRhdGVDaGVzc2dyb3VuZCgpO1xuICB9XG5cbiAgZXhwb3J0IGZ1bmN0aW9uIG1vdmUobW92ZSkge1xuICAgIGNoZXNzSW5zdGFuY2UubW92ZShtb3ZlKTtcbiAgICB1cGRhdGVDaGVzc2dyb3VuZCgpO1xuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgY2hlc3Nncm91bmQgPSBDaGVzc2dyb3VuZChib2FyZENvbnRhaW5lciwge1xuICAgICAgLi4uY2hlc3Nncm91bmRDb25maWcsXG4gICAgICBmZW46IGNoZXNzSW5zdGFuY2UuZmVuKCksXG4gICAgICBtb3ZhYmxlOiB7XG4gICAgICAgIGV2ZW50czoge1xuICAgICAgICAgIGFmdGVyOiBoYW5kbGVNb3ZlLFxuICAgICAgICB9LFxuICAgICAgfSxcbiAgICB9KTtcbiAgfSk7XG48L3NjcmlwdD5cblxueyNpZiBwaWVjZVNldE92ZXJyaWRlfVxuICA8bGlua1xuICAgIGlkPVwicGllY2Utc3ByaXRlXCJcbiAgICBocmVmPVwiL3BpZWNlLWNzcy97cGllY2VTZXRPdmVycmlkZX0uY3NzXCJcbiAgICByZWw9XCJzdHlsZXNoZWV0XCJcbiAgLz5cbns6ZWxzZX1cbiAgPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy97JHBpZWNlU2V0fS5jc3NcIiByZWw9XCJzdHlsZXNoZWV0XCIgLz5cbnsvaWZ9XG5cbjxkaXZcbiAgY2xhc3M9XCJib2FyZC13cmFwcGVyXCJcbiAgc3R5bGU9XCJtYXgtd2lkdGg6IHttYXhXaWR0aH1cIlxuICBiaW5kOmNsaWVudFdpZHRoPXtzaXplfVxuPlxuICA8ZGl2IGNsYXNzPVwiY2VudGVyZWQtY29udGVudFwiPlxuICAgIDxzbG90IG5hbWU9XCJjZW50ZXJlZC1jb250ZW50XCI+PC9zbG90PlxuICA8L2Rpdj5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZCB7Ym9hcmRTdHlsZU92ZXJyaWRlID8gYm9hcmRTdHlsZU92ZXJyaWRlIDogJyd9XCJcbiAgICBiaW5kOnRoaXM9e2JvYXJkQ29udGFpbmVyfVxuICAgIHN0eWxlPVwicG9zaXRpb246IHJlbGF0aXZlO3dpZHRoOiB7c2l6ZX1weDsgaGVpZ2h0OiB7c2l6ZX1weFwiXG4gID48L2Rpdj5cbiAgPGRpdiBjbGFzcz1cImJsb2NrIG10LTJcIj5cbiAgICA8c2xvdCBuYW1lPVwiYmVsb3ctYm9hcmRcIj48L3Nsb3Q+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLmJvYXJkLXdyYXBwZXIge1xuICAgIHBvc2l0aW9uOiByZWxhdGl2ZTtcbiAgICB3aWR0aDogMTAwJTtcbiAgfVxuXG4gIC5jZW50ZXJlZC1jb250ZW50IHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gICAgdG9wOiA1MCU7XG4gICAgbGVmdDogNTAlO1xuICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlKC01MCUsIC01MCUpO1xuICAgIHotaW5kZXg6IDM7IC8qIHJlcXVpcmVkIHRvIGFwcGVhciBpbiBmcm9udCBvZiBwaWVjZXMgKi9cbiAgICBvcGFjaXR5OiAwLjg7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBZ0tFLDZCQUFlLENBQ2IsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QsQ0FFQSxnQ0FBa0IsQ0FDaEIsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsR0FBRyxDQUFFLEdBQUcsQ0FDUixJQUFJLENBQUUsR0FBRyxDQUNULFNBQVMsQ0FBRSxVQUFVLElBQUksQ0FBQyxDQUFDLElBQUksQ0FBQyxDQUNoQyxPQUFPLENBQUUsQ0FBQyxDQUNWLE9BQU8sQ0FBRSxHQUNYIn0= */");
+	append_styles(target, "svelte-1hrnnj7", ".board-wrapper.svelte-1hrnnj7{position:relative;width:100%}.centered-content.svelte-1hrnnj7{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);z-index:3;opacity:0.8}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiQ2hlc3Nib2FyZC5zdmVsdGUiLCJzb3VyY2VzIjpbIkNoZXNzYm9hcmQuc3ZlbHRlIl0sInNvdXJjZXNDb250ZW50IjpbIjxzY3JpcHQ+XG4gIGltcG9ydCB7IG9uTW91bnQgfSBmcm9tIFwic3ZlbHRlXCI7XG4gIGltcG9ydCB7IENoZXNzZ3JvdW5kIH0gZnJvbSBcImNoZXNzZ3JvdW5kXCI7XG4gIGltcG9ydCB7IENoZXNzIH0gZnJvbSBcImNoZXNzLmpzXCI7XG4gIGltcG9ydCB7IHBpZWNlU2V0IH0gZnJvbSBcIi4uL3N0b3Jlc1wiO1xuICBpbXBvcnQgeyBjcmVhdGVFdmVudERpc3BhdGNoZXIgfSBmcm9tIFwic3ZlbHRlXCI7XG5cbiAgbGV0IGJvYXJkQ29udGFpbmVyO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kQ29uZmlnID0ge307XG4gIGV4cG9ydCBsZXQgb3JpZW50YXRpb24gPSBcIndoaXRlXCI7XG5cbiAgZXhwb3J0IGxldCBmZW47XG4gIGV4cG9ydCBsZXQgbGFzdE1vdmUgPSBudWxsO1xuICBleHBvcnQgbGV0IGNoZXNzZ3JvdW5kO1xuICBleHBvcnQgbGV0IHNpemU7XG5cbiAgbGV0IGNoZXNzSW5zdGFuY2UgPSBuZXcgQ2hlc3MoKTtcbiAgZXhwb3J0IGxldCBwaWVjZVNldE92ZXJyaWRlID0gbnVsbDtcbiAgZXhwb3J0IGxldCBib2FyZFN0eWxlT3ZlcnJpZGUgPSBudWxsO1xuXG4gIGNvbnN0IGRpc3BhdGNoID0gY3JlYXRlRXZlbnREaXNwYXRjaGVyKCk7XG5cbiAgbGV0IG1heFdpZHRoID0gXCI3MHZoXCI7XG5cbiAgJDoge1xuICAgIGlmIChvcmllbnRhdGlvbiAmJiBjaGVzc2dyb3VuZCkge1xuICAgICAgY2hlc3Nncm91bmQuc2V0KHsgb3JpZW50YXRpb246IG9yaWVudGF0aW9uIH0pO1xuICAgIH1cbiAgfVxuXG4gIGZ1bmN0aW9uIGdldExlZ2FsTW92ZXMoKSB7XG4gICAgY29uc3QgbW92ZXMgPSBjaGVzc0luc3RhbmNlLm1vdmVzKHsgdmVyYm9zZTogdHJ1ZSB9KTtcbiAgICBjb25zdCBkZXN0cyA9IG5ldyBNYXAoKTtcbiAgICBtb3Zlcy5mb3JFYWNoKChtb3ZlKSA9PiB7XG4gICAgICBpZiAoIWRlc3RzLmhhcyhtb3ZlLmZyb20pKSBkZXN0cy5zZXQobW92ZS5mcm9tLCBbXSk7XG4gICAgICBkZXN0cy5nZXQobW92ZS5mcm9tKS5wdXNoKG1vdmUudG8pO1xuICAgIH0pO1xuICAgIHJldHVybiBkZXN0cztcbiAgfVxuXG4gIGZ1bmN0aW9uIHVwZGF0ZUNoZXNzZ3JvdW5kKCkge1xuICAgIGNvbnN0IGxlZ2FsTW92ZXMgPSBnZXRMZWdhbE1vdmVzKCk7XG4gICAgY29uc3QgaGlzdG9yeSA9IGNoZXNzSW5zdGFuY2UuaGlzdG9yeSh7IHZlcmJvc2U6IHRydWUgfSk7XG4gICAgbGV0IGxhc3RNb3ZlID0gbnVsbDtcbiAgICBpZiAoaGlzdG9yeSAmJiBoaXN0b3J5W2hpc3RvcnkubGVuZ3RoIC0gMV0pIHtcbiAgICAgIGxhc3RNb3ZlID0gaGlzdG9yeVtoaXN0b3J5Lmxlbmd0aCAtIDFdO1xuICAgIH1cbiAgICBjaGVzc2dyb3VuZC5zZXQoe1xuICAgICAgY2hlY2s6IGNoZXNzSW5zdGFuY2UuaW5DaGVjaygpLFxuICAgICAgZmVuOiBjaGVzc0luc3RhbmNlLmZlbigpLFxuICAgICAgbGFzdE1vdmU6IGxhc3RNb3ZlID8gW2xhc3RNb3ZlLmZyb20sIGxhc3RNb3ZlLnRvXSA6IG51bGwsXG4gICAgICB0dXJuQ29sb3I6IGNoZXNzSW5zdGFuY2UudHVybigpID09PSBcIndcIiA/IFwid2hpdGVcIiA6IFwiYmxhY2tcIixcbiAgICAgIG1vdmFibGU6IHtcbiAgICAgICAgZnJlZTogZmFsc2UsXG4gICAgICAgIGRlc3RzOiBsZWdhbE1vdmVzLFxuICAgICAgfSxcbiAgICB9KTtcblxuICAgIGZlbiA9IGNoZXNzSW5zdGFuY2UuZmVuKCk7XG4gIH1cblxuICBmdW5jdGlvbiBoYW5kbGVNb3ZlKGZyb20sIHRvKSB7XG4gICAgY29uc3QgaXNQcm9tb3Rpb24gPSAoZnJvbSwgdG8pID0+IHtcbiAgICAgIGNvbnN0IGZyb21SYW5rID0gZnJvbVsxXTtcbiAgICAgIGNvbnN0IHRvUmFuayA9IHRvWzFdO1xuICAgICAgY29uc3QgcGllY2UgPSBjaGVzc0luc3RhbmNlLmdldChmcm9tKS50eXBlO1xuICAgICAgcmV0dXJuIChcbiAgICAgICAgcGllY2UgPT09IFwicFwiICYmXG4gICAgICAgICgoZnJvbVJhbmsgPT09IFwiN1wiICYmIHRvUmFuayA9PT0gXCI4XCIpIHx8XG4gICAgICAgICAgKGZyb21SYW5rID09PSBcIjJcIiAmJiB0b1JhbmsgPT09IFwiMVwiKSlcbiAgICAgICk7XG4gICAgfTtcblxuICAgIGxldCBwcm9tb3Rpb24gPSBcInFcIjsgLy8gRGVmYXVsdCB0byBxdWVlblxuXG4gICAgaWYgKGlzUHJvbW90aW9uKGZyb20sIHRvKSkge1xuICAgICAgY29uc3QgY2hvaWNlID0gcHJvbXB0KFwiUHJvbW90ZSBwYXduIHRvIChxLCByLCBiLCBuKTpcIiwgXCJxXCIpO1xuICAgICAgaWYgKFtcInFcIiwgXCJyXCIsIFwiYlwiLCBcIm5cIl0uaW5jbHVkZXMoY2hvaWNlKSkge1xuICAgICAgICBwcm9tb3Rpb24gPSBjaG9pY2U7XG4gICAgICB9XG4gICAgfVxuXG4gICAgY29uc3QgbW92ZSA9IGNoZXNzSW5zdGFuY2UubW92ZSh7IGZyb20sIHRvLCBwcm9tb3Rpb24gfSk7XG4gICAgaWYgKG1vdmUpIHtcbiAgICAgIHVwZGF0ZUNoZXNzZ3JvdW5kKCk7XG4gICAgICBkaXNwYXRjaChcIm1vdmVcIiwgeyBtb3ZlLCBpc0NoZWNrbWF0ZTogY2hlc3NJbnN0YW5jZS5pc0NoZWNrbWF0ZSgpIH0pO1xuICAgIH1cbiAgfVxuXG4gIGV4cG9ydCBmdW5jdGlvbiB1bmRvKCkge1xuICAgIGNoZXNzSW5zdGFuY2UudW5kbygpO1xuICAgIHVwZGF0ZUNoZXNzZ3JvdW5kKCk7XG4gIH1cblxuICBleHBvcnQgZnVuY3Rpb24gcmVzZXQoKSB7XG4gICAgY2hlc3NJbnN0YW5jZS5yZXNldCgpO1xuICAgIHVwZGF0ZUNoZXNzZ3JvdW5kKCk7XG4gIH1cblxuICBleHBvcnQgZnVuY3Rpb24gY2xlYXIoKSB7XG4gICAgY2hlc3NJbnN0YW5jZS5jbGVhcigpO1xuICAgIHVwZGF0ZUNoZXNzZ3JvdW5kKCk7XG4gIH1cblxuICBleHBvcnQgZnVuY3Rpb24gbW92ZShtb3ZlKSB7XG4gICAgY2hlc3NJbnN0YW5jZS5tb3ZlKG1vdmUpO1xuICAgIHVwZGF0ZUNoZXNzZ3JvdW5kKCk7XG4gIH1cblxuICBleHBvcnQgZnVuY3Rpb24gbG9hZChmZW4pIHtcbiAgICBjaGVzc0luc3RhbmNlLmxvYWQoZmVuKTtcbiAgICB1cGRhdGVDaGVzc2dyb3VuZCgpO1xuICB9XG5cbiAgb25Nb3VudCgoKSA9PiB7XG4gICAgY2hlc3Nncm91bmQgPSBDaGVzc2dyb3VuZChib2FyZENvbnRhaW5lciwge1xuICAgICAgLi4uY2hlc3Nncm91bmRDb25maWcsXG4gICAgICBmZW46IGNoZXNzSW5zdGFuY2UuZmVuKCksXG4gICAgICBtb3ZhYmxlOiB7XG4gICAgICAgIGV2ZW50czoge1xuICAgICAgICAgIGFmdGVyOiBoYW5kbGVNb3ZlLFxuICAgICAgICB9LFxuICAgICAgfSxcbiAgICB9KTtcbiAgICBpZiAoZmVuKSB7XG4gICAgICBjaGVzc0luc3RhbmNlLmxvYWQoZmVuKTtcbiAgICAgIHVwZGF0ZUNoZXNzZ3JvdW5kKCk7XG4gICAgICBpZiAobGFzdE1vdmUpIHtcbiAgICAgICAgY2hlc3Nncm91bmQuc2V0KHsgbGFzdE1vdmU6IGxhc3RNb3ZlIH0pO1xuICAgICAgfVxuICAgIH1cbiAgfSk7XG48L3NjcmlwdD5cblxueyNpZiBwaWVjZVNldE92ZXJyaWRlfVxuICA8bGlua1xuICAgIGlkPVwicGllY2Utc3ByaXRlXCJcbiAgICBocmVmPVwiL3BpZWNlLWNzcy97cGllY2VTZXRPdmVycmlkZX0uY3NzXCJcbiAgICByZWw9XCJzdHlsZXNoZWV0XCJcbiAgLz5cbns6ZWxzZX1cbiAgPGxpbmsgaWQ9XCJwaWVjZS1zcHJpdGVcIiBocmVmPVwiL3BpZWNlLWNzcy97JHBpZWNlU2V0fS5jc3NcIiByZWw9XCJzdHlsZXNoZWV0XCIgLz5cbnsvaWZ9XG5cbjxkaXZcbiAgY2xhc3M9XCJib2FyZC13cmFwcGVyXCJcbiAgc3R5bGU9XCJtYXgtd2lkdGg6IHttYXhXaWR0aH1cIlxuICBiaW5kOmNsaWVudFdpZHRoPXtzaXplfVxuPlxuICA8ZGl2IGNsYXNzPVwiY2VudGVyZWQtY29udGVudFwiPlxuICAgIDxzbG90IG5hbWU9XCJjZW50ZXJlZC1jb250ZW50XCI+PC9zbG90PlxuICA8L2Rpdj5cbiAgPGRpdlxuICAgIGNsYXNzPVwiaXMyZCB7Ym9hcmRTdHlsZU92ZXJyaWRlID8gYm9hcmRTdHlsZU92ZXJyaWRlIDogJyd9XCJcbiAgICBiaW5kOnRoaXM9e2JvYXJkQ29udGFpbmVyfVxuICAgIHN0eWxlPVwicG9zaXRpb246IHJlbGF0aXZlO3dpZHRoOiB7c2l6ZX1weDsgaGVpZ2h0OiB7c2l6ZX1weFwiXG4gID48L2Rpdj5cbiAgPGRpdiBjbGFzcz1cImJsb2NrIG10LTJcIj5cbiAgICA8c2xvdCBuYW1lPVwiYmVsb3ctYm9hcmRcIj48L3Nsb3Q+XG4gIDwvZGl2PlxuPC9kaXY+XG5cbjxzdHlsZT5cbiAgLmJvYXJkLXdyYXBwZXIge1xuICAgIHBvc2l0aW9uOiByZWxhdGl2ZTtcbiAgICB3aWR0aDogMTAwJTtcbiAgfVxuXG4gIC5jZW50ZXJlZC1jb250ZW50IHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gICAgdG9wOiA1MCU7XG4gICAgbGVmdDogNTAlO1xuICAgIHRyYW5zZm9ybTogdHJhbnNsYXRlKC01MCUsIC01MCUpO1xuICAgIHotaW5kZXg6IDM7IC8qIHJlcXVpcmVkIHRvIGFwcGVhciBpbiBmcm9udCBvZiBwaWVjZXMgKi9cbiAgICBvcGFjaXR5OiAwLjg7XG4gIH1cbjwvc3R5bGU+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBbUtFLDZCQUFlLENBQ2IsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsS0FBSyxDQUFFLElBQ1QsQ0FFQSxnQ0FBa0IsQ0FDaEIsUUFBUSxDQUFFLFFBQVEsQ0FDbEIsR0FBRyxDQUFFLEdBQUcsQ0FDUixJQUFJLENBQUUsR0FBRyxDQUNULFNBQVMsQ0FBRSxVQUFVLElBQUksQ0FBQyxDQUFDLElBQUksQ0FBQyxDQUNoQyxPQUFPLENBQUUsQ0FBQyxDQUNWLE9BQU8sQ0FBRSxHQUNYIn0= */");
 }
 
 const get_below_board_slot_changes = dirty => ({});
@@ -5992,7 +5992,7 @@ const get_below_board_slot_context = ctx => ({});
 const get_centered_content_slot_changes = dirty => ({});
 const get_centered_content_slot_context = ctx => ({});
 
-// (138:0) {:else}
+// (141:0) {:else}
 function create_else_block$3(ctx) {
 	let link;
 	let link_href_value;
@@ -6003,7 +6003,7 @@ function create_else_block$3(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*$pieceSet*/ ctx[4] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$e, 138, 2, 3250);
+			add_location(link, file$e, 141, 2, 3313);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -6024,14 +6024,14 @@ function create_else_block$3(ctx) {
 		block,
 		id: create_else_block$3.name,
 		type: "else",
-		source: "(138:0) {:else}",
+		source: "(141:0) {:else}",
 		ctx
 	});
 
 	return block;
 }
 
-// (132:0) {#if pieceSetOverride}
+// (135:0) {#if pieceSetOverride}
 function create_if_block$7(ctx) {
 	let link;
 	let link_href_value;
@@ -6042,7 +6042,7 @@ function create_if_block$7(ctx) {
 			attr_dev(link, "id", "piece-sprite");
 			attr_dev(link, "href", link_href_value = "/piece-css/" + /*pieceSetOverride*/ ctx[1] + ".css");
 			attr_dev(link, "rel", "stylesheet");
-			add_location(link, file$e, 132, 2, 3141);
+			add_location(link, file$e, 135, 2, 3204);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, link, anchor);
@@ -6063,7 +6063,7 @@ function create_if_block$7(ctx) {
 		block,
 		id: create_if_block$7.name,
 		type: "if",
-		source: "(132:0) {#if pieceSetOverride}",
+		source: "(135:0) {#if pieceSetOverride}",
 		ctx
 	});
 
@@ -6089,10 +6089,10 @@ function create_fragment$f(ctx) {
 
 	let current_block_type = select_block_type(ctx);
 	let if_block = current_block_type(ctx);
-	const centered_content_slot_template = /*#slots*/ ctx[16]["centered-content"];
-	const centered_content_slot = create_slot(centered_content_slot_template, ctx, /*$$scope*/ ctx[15], get_centered_content_slot_context);
-	const below_board_slot_template = /*#slots*/ ctx[16]["below-board"];
-	const below_board_slot = create_slot(below_board_slot_template, ctx, /*$$scope*/ ctx[15], get_below_board_slot_context);
+	const centered_content_slot_template = /*#slots*/ ctx[17]["centered-content"];
+	const centered_content_slot = create_slot(centered_content_slot_template, ctx, /*$$scope*/ ctx[16], get_centered_content_slot_context);
+	const below_board_slot_template = /*#slots*/ ctx[17]["below-board"];
+	const below_board_slot = create_slot(below_board_slot_template, ctx, /*$$scope*/ ctx[16], get_below_board_slot_context);
 
 	const block = {
 		c: function create() {
@@ -6107,7 +6107,7 @@ function create_fragment$f(ctx) {
 			div2 = element("div");
 			if (below_board_slot) below_board_slot.c();
 			attr_dev(div0, "class", "centered-content svelte-1hrnnj7");
-			add_location(div0, file$e, 146, 2, 3426);
+			add_location(div0, file$e, 149, 2, 3489);
 
 			attr_dev(div1, "class", div1_class_value = "is2d " + (/*boardStyleOverride*/ ctx[2]
 			? /*boardStyleOverride*/ ctx[2]
@@ -6116,13 +6116,13 @@ function create_fragment$f(ctx) {
 			set_style(div1, "position", "relative");
 			set_style(div1, "width", /*size*/ ctx[0] + "px");
 			set_style(div1, "height", /*size*/ ctx[0] + "px");
-			add_location(div1, file$e, 149, 2, 3510);
+			add_location(div1, file$e, 152, 2, 3573);
 			attr_dev(div2, "class", "block mt-2");
-			add_location(div2, file$e, 154, 2, 3687);
+			add_location(div2, file$e, 157, 2, 3750);
 			attr_dev(div3, "class", "board-wrapper svelte-1hrnnj7");
 			set_style(div3, "max-width", /*maxWidth*/ ctx[5]);
-			add_render_callback(() => /*div3_elementresize_handler*/ ctx[18].call(div3));
-			add_location(div3, file$e, 141, 0, 3335);
+			add_render_callback(() => /*div3_elementresize_handler*/ ctx[19].call(div3));
+			add_location(div3, file$e, 144, 0, 3398);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -6139,7 +6139,7 @@ function create_fragment$f(ctx) {
 
 			append_dev(div3, t1);
 			append_dev(div3, div1);
-			/*div1_binding*/ ctx[17](div1);
+			/*div1_binding*/ ctx[18](div1);
 			append_dev(div3, t2);
 			append_dev(div3, div2);
 
@@ -6147,7 +6147,7 @@ function create_fragment$f(ctx) {
 				below_board_slot.m(div2, null);
 			}
 
-			div3_resize_listener = add_iframe_resize_listener(div3, /*div3_elementresize_handler*/ ctx[18].bind(div3));
+			div3_resize_listener = add_iframe_resize_listener(div3, /*div3_elementresize_handler*/ ctx[19].bind(div3));
 			current = true;
 		},
 		p: function update(ctx, [dirty]) {
@@ -6164,15 +6164,15 @@ function create_fragment$f(ctx) {
 			}
 
 			if (centered_content_slot) {
-				if (centered_content_slot.p && (!current || dirty & /*$$scope*/ 32768)) {
+				if (centered_content_slot.p && (!current || dirty & /*$$scope*/ 65536)) {
 					update_slot_base(
 						centered_content_slot,
 						centered_content_slot_template,
 						ctx,
-						/*$$scope*/ ctx[15],
+						/*$$scope*/ ctx[16],
 						!current
-						? get_all_dirty_from_scope(/*$$scope*/ ctx[15])
-						: get_slot_changes(centered_content_slot_template, /*$$scope*/ ctx[15], dirty, get_centered_content_slot_changes),
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[16])
+						: get_slot_changes(centered_content_slot_template, /*$$scope*/ ctx[16], dirty, get_centered_content_slot_changes),
 						get_centered_content_slot_context
 					);
 				}
@@ -6193,15 +6193,15 @@ function create_fragment$f(ctx) {
 			}
 
 			if (below_board_slot) {
-				if (below_board_slot.p && (!current || dirty & /*$$scope*/ 32768)) {
+				if (below_board_slot.p && (!current || dirty & /*$$scope*/ 65536)) {
 					update_slot_base(
 						below_board_slot,
 						below_board_slot_template,
 						ctx,
-						/*$$scope*/ ctx[15],
+						/*$$scope*/ ctx[16],
 						!current
-						? get_all_dirty_from_scope(/*$$scope*/ ctx[15])
-						: get_slot_changes(below_board_slot_template, /*$$scope*/ ctx[15], dirty, get_below_board_slot_changes),
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[16])
+						: get_slot_changes(below_board_slot_template, /*$$scope*/ ctx[16], dirty, get_below_board_slot_changes),
 						get_below_board_slot_context
 					);
 				}
@@ -6226,7 +6226,7 @@ function create_fragment$f(ctx) {
 
 			if_block.d(detaching);
 			if (centered_content_slot) centered_content_slot.d(detaching);
-			/*div1_binding*/ ctx[17](null);
+			/*div1_binding*/ ctx[18](null);
 			if (below_board_slot) below_board_slot.d(detaching);
 			div3_resize_listener();
 		}
@@ -6291,7 +6291,7 @@ function instance$f($$self, $$props, $$invalidate) {
 			movable: { free: false, dests: legalMoves }
 		});
 
-		$$invalidate(6, fen = chessInstance.fen());
+		$$invalidate(7, fen = chessInstance.fen());
 	}
 
 	function handleMove(from, to) {
@@ -6344,12 +6344,26 @@ function instance$f($$self, $$props, $$invalidate) {
 		updateChessground();
 	}
 
+	function load(fen) {
+		chessInstance.load(fen);
+		updateChessground();
+	}
+
 	onMount(() => {
-		$$invalidate(7, chessground = Chessground(boardContainer, {
+		$$invalidate(6, chessground = Chessground(boardContainer, {
 			...chessgroundConfig,
 			fen: chessInstance.fen(),
 			movable: { events: { after: handleMove } }
 		}));
+
+		if (fen) {
+			chessInstance.load(fen);
+			updateChessground();
+
+			if (lastMove) {
+				chessground.set({ lastMove });
+			}
+		}
 	});
 
 	$$self.$$.on_mount.push(function () {
@@ -6396,13 +6410,13 @@ function instance$f($$self, $$props, $$invalidate) {
 	$$self.$$set = $$props => {
 		if ('chessgroundConfig' in $$props) $$invalidate(8, chessgroundConfig = $$props.chessgroundConfig);
 		if ('orientation' in $$props) $$invalidate(9, orientation = $$props.orientation);
-		if ('fen' in $$props) $$invalidate(6, fen = $$props.fen);
+		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
 		if ('lastMove' in $$props) $$invalidate(10, lastMove = $$props.lastMove);
-		if ('chessground' in $$props) $$invalidate(7, chessground = $$props.chessground);
+		if ('chessground' in $$props) $$invalidate(6, chessground = $$props.chessground);
 		if ('size' in $$props) $$invalidate(0, size = $$props.size);
 		if ('pieceSetOverride' in $$props) $$invalidate(1, pieceSetOverride = $$props.pieceSetOverride);
 		if ('boardStyleOverride' in $$props) $$invalidate(2, boardStyleOverride = $$props.boardStyleOverride);
-		if ('$$scope' in $$props) $$invalidate(15, $$scope = $$props.$$scope);
+		if ('$$scope' in $$props) $$invalidate(16, $$scope = $$props.$$scope);
 	};
 
 	$$self.$capture_state = () => ({
@@ -6430,6 +6444,7 @@ function instance$f($$self, $$props, $$invalidate) {
 		reset,
 		clear,
 		move,
+		load,
 		$pieceSet
 	});
 
@@ -6437,11 +6452,11 @@ function instance$f($$self, $$props, $$invalidate) {
 		if ('boardContainer' in $$props) $$invalidate(3, boardContainer = $$props.boardContainer);
 		if ('chessgroundConfig' in $$props) $$invalidate(8, chessgroundConfig = $$props.chessgroundConfig);
 		if ('orientation' in $$props) $$invalidate(9, orientation = $$props.orientation);
-		if ('fen' in $$props) $$invalidate(6, fen = $$props.fen);
+		if ('fen' in $$props) $$invalidate(7, fen = $$props.fen);
 		if ('lastMove' in $$props) $$invalidate(10, lastMove = $$props.lastMove);
-		if ('chessground' in $$props) $$invalidate(7, chessground = $$props.chessground);
+		if ('chessground' in $$props) $$invalidate(6, chessground = $$props.chessground);
 		if ('size' in $$props) $$invalidate(0, size = $$props.size);
-		if ('chessInstance' in $$props) $$invalidate(19, chessInstance = $$props.chessInstance);
+		if ('chessInstance' in $$props) chessInstance = $$props.chessInstance;
 		if ('pieceSetOverride' in $$props) $$invalidate(1, pieceSetOverride = $$props.pieceSetOverride);
 		if ('boardStyleOverride' in $$props) $$invalidate(2, boardStyleOverride = $$props.boardStyleOverride);
 		if ('maxWidth' in $$props) $$invalidate(5, maxWidth = $$props.maxWidth);
@@ -6452,23 +6467,10 @@ function instance$f($$self, $$props, $$invalidate) {
 	}
 
 	$$self.$$.update = () => {
-		if ($$self.$$.dirty & /*orientation, chessground*/ 640) {
+		if ($$self.$$.dirty & /*orientation, chessground*/ 576) {
 			{
 				if (orientation && chessground) {
 					chessground.set({ orientation });
-				}
-			}
-		}
-
-		if ($$self.$$.dirty & /*fen, chessground, lastMove*/ 1216) {
-			{
-				if (fen && chessground) {
-					chessInstance.load(fen);
-					updateChessground();
-
-					if (lastMove) {
-						chessground.set({ lastMove });
-					}
 				}
 			}
 		}
@@ -6481,8 +6483,8 @@ function instance$f($$self, $$props, $$invalidate) {
 		boardContainer,
 		$pieceSet,
 		maxWidth,
-		fen,
 		chessground,
+		fen,
 		chessgroundConfig,
 		orientation,
 		lastMove,
@@ -6490,6 +6492,7 @@ function instance$f($$self, $$props, $$invalidate) {
 		reset,
 		clear,
 		move,
+		load,
 		$$scope,
 		slots,
 		div1_binding,
@@ -6510,16 +6513,17 @@ class Chessboard extends SvelteComponentDev {
 			{
 				chessgroundConfig: 8,
 				orientation: 9,
-				fen: 6,
+				fen: 7,
 				lastMove: 10,
-				chessground: 7,
+				chessground: 6,
 				size: 0,
 				pieceSetOverride: 1,
 				boardStyleOverride: 2,
 				undo: 11,
 				reset: 12,
 				clear: 13,
-				move: 14
+				move: 14,
+				load: 15
 			},
 			add_css$6
 		);
@@ -6625,6 +6629,14 @@ class Chessboard extends SvelteComponentDev {
 	}
 
 	set move(value) {
+		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+	}
+
+	get load() {
+		return this.$$.ctx[15];
+	}
+
+	set load(value) {
 		throw new Error("<Chessboard>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
 	}
 }
@@ -13471,7 +13483,7 @@ class DisappearingContent extends SvelteComponentDev {
 /* svelte/NotationTrainer.svelte generated by Svelte v4.2.18 */
 const file$2 = "svelte/NotationTrainer.svelte";
 
-// (172:8) <DisappearingContent key={nextMove} slot="centered-content">
+// (174:8) <DisappearingContent key={nextMove} slot="centered-content">
 function create_default_slot(ctx) {
 	let span;
 	let t;
@@ -13482,7 +13494,7 @@ function create_default_slot(ctx) {
 			span = element("span");
 			t = text(/*nextMove*/ ctx[3]);
 			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4]);
-			add_location(span, file$2, 172, 10, 4314);
+			add_location(span, file$2, 174, 10, 4388);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, span, anchor);
@@ -13506,14 +13518,14 @@ function create_default_slot(ctx) {
 		block,
 		id: create_default_slot.name,
 		type: "slot",
-		source: "(172:8) <DisappearingContent key={nextMove} slot=\\\"centered-content\\\">",
+		source: "(174:8) <DisappearingContent key={nextMove} slot=\\\"centered-content\\\">",
 		ctx
 	});
 
 	return block;
 }
 
-// (172:8) 
+// (174:8) 
 function create_centered_content_slot(ctx) {
 	let disappearingcontent;
 	let current;
@@ -13540,7 +13552,7 @@ function create_centered_content_slot(ctx) {
 			const disappearingcontent_changes = {};
 			if (dirty[0] & /*nextMove*/ 8) disappearingcontent_changes.key = /*nextMove*/ ctx[3];
 
-			if (dirty[0] & /*colorToMove, nextMove*/ 24 | dirty[1] & /*$$scope*/ 1) {
+			if (dirty[0] & /*colorToMove, nextMove*/ 24 | dirty[1] & /*$$scope*/ 4) {
 				disappearingcontent_changes.$$scope = { dirty, ctx };
 			}
 
@@ -13564,14 +13576,14 @@ function create_centered_content_slot(ctx) {
 		block,
 		id: create_centered_content_slot.name,
 		type: "slot",
-		source: "(172:8) ",
+		source: "(174:8) ",
 		ctx
 	});
 
 	return block;
 }
 
-// (186:6) {#if !gameRunning}
+// (188:6) {#if !gameRunning}
 function create_if_block_2(ctx) {
 	let button;
 	let mounted;
@@ -13582,13 +13594,13 @@ function create_if_block_2(ctx) {
 			button = element("button");
 			button.textContent = "Start Game";
 			attr_dev(button, "class", "button is-primary");
-			add_location(button, file$2, 186, 8, 4690);
+			add_location(button, file$2, 188, 8, 4764);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*startGame*/ ctx[19], false, false, false, false);
+				dispose = listen_dev(button, "click", /*startGame*/ ctx[20], false, false, false, false);
 				mounted = true;
 			}
 		},
@@ -13607,14 +13619,14 @@ function create_if_block_2(ctx) {
 		block,
 		id: create_if_block_2.name,
 		type: "if",
-		source: "(186:6) {#if !gameRunning}",
+		source: "(188:6) {#if !gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (191:6) {#if !gameRunning}
+// (193:6) {#if !gameRunning}
 function create_if_block_1(ctx) {
 	let button;
 	let t0;
@@ -13629,7 +13641,7 @@ function create_if_block_1(ctx) {
 			t0 = text("Play ");
 			t1 = text(/*otherColor*/ ctx[5]);
 			attr_dev(button, "class", button_class_value = "button is-" + /*otherColor*/ ctx[5] + " change-orientation-button ml-3");
-			add_location(button, file$2, 191, 8, 4830);
+			add_location(button, file$2, 193, 8, 4904);
 		},
 		m: function mount(target, anchor) {
 			insert_dev(target, button, anchor);
@@ -13637,7 +13649,7 @@ function create_if_block_1(ctx) {
 			append_dev(button, t1);
 
 			if (!mounted) {
-				dispose = listen_dev(button, "click", /*click_handler*/ ctx[24], false, false, false, false);
+				dispose = listen_dev(button, "click", /*click_handler*/ ctx[26], false, false, false, false);
 				mounted = true;
 			}
 		},
@@ -13662,27 +13674,27 @@ function create_if_block_1(ctx) {
 		block,
 		id: create_if_block_1.name,
 		type: "if",
-		source: "(191:6) {#if !gameRunning}",
+		source: "(193:6) {#if !gameRunning}",
 		ctx
 	});
 
 	return block;
 }
 
-// (202:4) {#if gameRunning}
+// (204:4) {#if gameRunning}
 function create_if_block$1(ctx) {
 	let progresstimer;
 	let current;
 
 	progresstimer = new ProgressTimer({
 			props: {
-				max: /*maxTime*/ ctx[10],
+				max: /*maxTime*/ ctx[11],
 				width: /*boardSize*/ ctx[6]
 			},
 			$$inline: true
 		});
 
-	progresstimer.$on("complete", /*endGame*/ ctx[20]);
+	progresstimer.$on("complete", /*endGame*/ ctx[21]);
 
 	const block = {
 		c: function create() {
@@ -13694,7 +13706,7 @@ function create_if_block$1(ctx) {
 		},
 		p: function update(ctx, dirty) {
 			const progresstimer_changes = {};
-			if (dirty[0] & /*maxTime*/ 1024) progresstimer_changes.max = /*maxTime*/ ctx[10];
+			if (dirty[0] & /*maxTime*/ 2048) progresstimer_changes.max = /*maxTime*/ ctx[11];
 			if (dirty[0] & /*boardSize*/ 64) progresstimer_changes.width = /*boardSize*/ ctx[6];
 			progresstimer.$set(progresstimer_changes);
 		},
@@ -13716,7 +13728,7 @@ function create_if_block$1(ctx) {
 		block,
 		id: create_if_block$1.name,
 		type: "if",
-		source: "(202:4) {#if gameRunning}",
+		source: "(204:4) {#if gameRunning}",
 		ctx
 	});
 
@@ -13727,7 +13739,7 @@ function create_fragment$3(ctx) {
 	let div5;
 	let div2;
 	let div0;
-	let chessboard;
+	let chessboard_1;
 	let updating_fen;
 	let updating_chessground;
 	let updating_size;
@@ -13751,20 +13763,20 @@ function create_fragment$3(ctx) {
 	let counter3;
 	let current;
 
-	function chessboard_fen_binding(value) {
-		/*chessboard_fen_binding*/ ctx[21](value);
+	function chessboard_1_fen_binding(value) {
+		/*chessboard_1_fen_binding*/ ctx[23](value);
 	}
 
-	function chessboard_chessground_binding(value) {
-		/*chessboard_chessground_binding*/ ctx[22](value);
+	function chessboard_1_chessground_binding(value) {
+		/*chessboard_1_chessground_binding*/ ctx[24](value);
 	}
 
-	function chessboard_size_binding(value) {
-		/*chessboard_size_binding*/ ctx[23](value);
+	function chessboard_1_size_binding(value) {
+		/*chessboard_1_size_binding*/ ctx[25](value);
 	}
 
-	let chessboard_props = {
-		chessgroundConfig: /*chessgroundConfig*/ ctx[16],
+	let chessboard_1_props = {
+		chessgroundConfig: /*chessgroundConfig*/ ctx[17],
 		orientation: /*$orientation*/ ctx[0],
 		$$slots: {
 			"centered-content": [create_centered_content_slot]
@@ -13772,26 +13784,31 @@ function create_fragment$3(ctx) {
 		$$scope: { ctx }
 	};
 
-	if (/*fen*/ ctx[8] !== void 0) {
-		chessboard_props.fen = /*fen*/ ctx[8];
+	if (/*fen*/ ctx[9] !== void 0) {
+		chessboard_1_props.fen = /*fen*/ ctx[9];
 	}
 
 	if (/*chessground*/ ctx[7] !== void 0) {
-		chessboard_props.chessground = /*chessground*/ ctx[7];
+		chessboard_1_props.chessground = /*chessground*/ ctx[7];
 	}
 
 	if (/*boardSize*/ ctx[6] !== void 0) {
-		chessboard_props.size = /*boardSize*/ ctx[6];
+		chessboard_1_props.size = /*boardSize*/ ctx[6];
 	}
 
-	chessboard = new Chessboard({ props: chessboard_props, $$inline: true });
-	binding_callbacks.push(() => bind(chessboard, 'fen', chessboard_fen_binding));
-	binding_callbacks.push(() => bind(chessboard, 'chessground', chessboard_chessground_binding));
-	binding_callbacks.push(() => bind(chessboard, 'size', chessboard_size_binding));
-	chessboard.$on("move", /*handleUserMove*/ ctx[17]);
-	let if_block0 = !/*gameRunning*/ ctx[9] && create_if_block_2(ctx);
-	let if_block1 = !/*gameRunning*/ ctx[9] && create_if_block_1(ctx);
-	let if_block2 = /*gameRunning*/ ctx[9] && create_if_block$1(ctx);
+	chessboard_1 = new Chessboard({
+			props: chessboard_1_props,
+			$$inline: true
+		});
+
+	/*chessboard_1_binding*/ ctx[22](chessboard_1);
+	binding_callbacks.push(() => bind(chessboard_1, 'fen', chessboard_1_fen_binding));
+	binding_callbacks.push(() => bind(chessboard_1, 'chessground', chessboard_1_chessground_binding));
+	binding_callbacks.push(() => bind(chessboard_1, 'size', chessboard_1_size_binding));
+	chessboard_1.$on("move", /*handleUserMove*/ ctx[18]);
+	let if_block0 = !/*gameRunning*/ ctx[10] && create_if_block_2(ctx);
+	let if_block1 = !/*gameRunning*/ ctx[10] && create_if_block_1(ctx);
+	let if_block2 = /*gameRunning*/ ctx[10] && create_if_block$1(ctx);
 
 	counter0 = new Counter({
 			props: {
@@ -13811,7 +13828,7 @@ function create_fragment$3(ctx) {
 
 	counter2 = new Counter({
 			props: {
-				number: /*$highScoreWhite*/ ctx[12],
+				number: /*$highScoreWhite*/ ctx[13],
 				title: "High Score (white)"
 			},
 			$$inline: true
@@ -13819,7 +13836,7 @@ function create_fragment$3(ctx) {
 
 	counter3 = new Counter({
 			props: {
-				number: /*$highScoreBlack*/ ctx[11],
+				number: /*$highScoreBlack*/ ctx[12],
 				title: "High Score (black)"
 			},
 			$$inline: true
@@ -13830,7 +13847,7 @@ function create_fragment$3(ctx) {
 			div5 = element("div");
 			div2 = element("div");
 			div0 = element("div");
-			create_component(chessboard.$$.fragment);
+			create_component(chessboard_1.$$.fragment);
 			t0 = space();
 			div1 = element("div");
 			span = element("span");
@@ -13852,20 +13869,20 @@ function create_fragment$3(ctx) {
 			t8 = space();
 			create_component(counter3.$$.fragment);
 			attr_dev(div0, "class", "block");
-			add_location(div0, file$2, 162, 4, 4021);
+			add_location(div0, file$2, 163, 4, 4064);
 			attr_dev(span, "class", span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4] + " mr-3");
-			add_location(span, file$2, 182, 6, 4573);
+			add_location(span, file$2, 184, 6, 4647);
 			attr_dev(div1, "class", "block is-flex is-justify-content-center");
 			set_style(div1, "width", /*boardSize*/ ctx[6] + "px");
-			add_location(div1, file$2, 178, 4, 4467);
+			add_location(div1, file$2, 180, 4, 4541);
 			attr_dev(div2, "class", "column is-6-desktop");
-			add_location(div2, file$2, 161, 2, 3983);
+			add_location(div2, file$2, 162, 2, 4026);
 			attr_dev(div3, "class", "block");
-			add_location(div3, file$2, 207, 4, 5269);
+			add_location(div3, file$2, 209, 4, 5343);
 			attr_dev(div4, "class", "column is-2-desktop");
-			add_location(div4, file$2, 206, 2, 5231);
+			add_location(div4, file$2, 208, 2, 5305);
 			attr_dev(div5, "class", "columns is-centered");
-			add_location(div5, file$2, 160, 0, 3947);
+			add_location(div5, file$2, 161, 0, 3990);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -13874,7 +13891,7 @@ function create_fragment$3(ctx) {
 			insert_dev(target, div5, anchor);
 			append_dev(div5, div2);
 			append_dev(div2, div0);
-			mount_component(chessboard, div0, null);
+			mount_component(chessboard_1, div0, null);
 			append_dev(div2, t0);
 			append_dev(div2, div1);
 			append_dev(div1, span);
@@ -13898,39 +13915,39 @@ function create_fragment$3(ctx) {
 			current = true;
 		},
 		p: function update(ctx, dirty) {
-			const chessboard_changes = {};
-			if (dirty[0] & /*$orientation*/ 1) chessboard_changes.orientation = /*$orientation*/ ctx[0];
+			const chessboard_1_changes = {};
+			if (dirty[0] & /*$orientation*/ 1) chessboard_1_changes.orientation = /*$orientation*/ ctx[0];
 
-			if (dirty[0] & /*nextMove, colorToMove*/ 24 | dirty[1] & /*$$scope*/ 1) {
-				chessboard_changes.$$scope = { dirty, ctx };
+			if (dirty[0] & /*nextMove, colorToMove*/ 24 | dirty[1] & /*$$scope*/ 4) {
+				chessboard_1_changes.$$scope = { dirty, ctx };
 			}
 
-			if (!updating_fen && dirty[0] & /*fen*/ 256) {
+			if (!updating_fen && dirty[0] & /*fen*/ 512) {
 				updating_fen = true;
-				chessboard_changes.fen = /*fen*/ ctx[8];
+				chessboard_1_changes.fen = /*fen*/ ctx[9];
 				add_flush_callback(() => updating_fen = false);
 			}
 
 			if (!updating_chessground && dirty[0] & /*chessground*/ 128) {
 				updating_chessground = true;
-				chessboard_changes.chessground = /*chessground*/ ctx[7];
+				chessboard_1_changes.chessground = /*chessground*/ ctx[7];
 				add_flush_callback(() => updating_chessground = false);
 			}
 
 			if (!updating_size && dirty[0] & /*boardSize*/ 64) {
 				updating_size = true;
-				chessboard_changes.size = /*boardSize*/ ctx[6];
+				chessboard_1_changes.size = /*boardSize*/ ctx[6];
 				add_flush_callback(() => updating_size = false);
 			}
 
-			chessboard.$set(chessboard_changes);
+			chessboard_1.$set(chessboard_1_changes);
 			if (!current || dirty[0] & /*nextMove*/ 8) set_data_dev(t1, /*nextMove*/ ctx[3]);
 
 			if (!current || dirty[0] & /*colorToMove*/ 16 && span_class_value !== (span_class_value = "tag is-size-3 is-" + /*colorToMove*/ ctx[4] + " mr-3")) {
 				attr_dev(span, "class", span_class_value);
 			}
 
-			if (!/*gameRunning*/ ctx[9]) {
+			if (!/*gameRunning*/ ctx[10]) {
 				if (if_block0) {
 					if_block0.p(ctx, dirty);
 				} else {
@@ -13943,7 +13960,7 @@ function create_fragment$3(ctx) {
 				if_block0 = null;
 			}
 
-			if (!/*gameRunning*/ ctx[9]) {
+			if (!/*gameRunning*/ ctx[10]) {
 				if (if_block1) {
 					if_block1.p(ctx, dirty);
 				} else {
@@ -13960,11 +13977,11 @@ function create_fragment$3(ctx) {
 				set_style(div1, "width", /*boardSize*/ ctx[6] + "px");
 			}
 
-			if (/*gameRunning*/ ctx[9]) {
+			if (/*gameRunning*/ ctx[10]) {
 				if (if_block2) {
 					if_block2.p(ctx, dirty);
 
-					if (dirty[0] & /*gameRunning*/ 512) {
+					if (dirty[0] & /*gameRunning*/ 1024) {
 						transition_in(if_block2, 1);
 					}
 				} else {
@@ -13990,15 +14007,15 @@ function create_fragment$3(ctx) {
 			if (dirty[0] & /*incorrectCount*/ 4) counter1_changes.number = /*incorrectCount*/ ctx[2];
 			counter1.$set(counter1_changes);
 			const counter2_changes = {};
-			if (dirty[0] & /*$highScoreWhite*/ 4096) counter2_changes.number = /*$highScoreWhite*/ ctx[12];
+			if (dirty[0] & /*$highScoreWhite*/ 8192) counter2_changes.number = /*$highScoreWhite*/ ctx[13];
 			counter2.$set(counter2_changes);
 			const counter3_changes = {};
-			if (dirty[0] & /*$highScoreBlack*/ 2048) counter3_changes.number = /*$highScoreBlack*/ ctx[11];
+			if (dirty[0] & /*$highScoreBlack*/ 4096) counter3_changes.number = /*$highScoreBlack*/ ctx[12];
 			counter3.$set(counter3_changes);
 		},
 		i: function intro(local) {
 			if (current) return;
-			transition_in(chessboard.$$.fragment, local);
+			transition_in(chessboard_1.$$.fragment, local);
 			transition_in(if_block2);
 			transition_in(counter0.$$.fragment, local);
 			transition_in(counter1.$$.fragment, local);
@@ -14007,7 +14024,7 @@ function create_fragment$3(ctx) {
 			current = true;
 		},
 		o: function outro(local) {
-			transition_out(chessboard.$$.fragment, local);
+			transition_out(chessboard_1.$$.fragment, local);
 			transition_out(if_block2);
 			transition_out(counter0.$$.fragment, local);
 			transition_out(counter1.$$.fragment, local);
@@ -14020,7 +14037,8 @@ function create_fragment$3(ctx) {
 				detach_dev(div5);
 			}
 
-			destroy_component(chessboard);
+			/*chessboard_1_binding*/ ctx[22](null);
+			destroy_component(chessboard_1);
 			if (if_block0) if_block0.d();
 			if (if_block1) if_block1.d();
 			if (if_block2) if_block2.d();
@@ -14057,10 +14075,10 @@ function instance$3($$self, $$props, $$invalidate) {
 	component_subscribe($$self, orientation, value => $$invalidate(0, $orientation = value));
 	const highScoreBlack = persisted("notation.highScoreBlack", 0);
 	validate_store(highScoreBlack, 'highScoreBlack');
-	component_subscribe($$self, highScoreBlack, value => $$invalidate(11, $highScoreBlack = value));
+	component_subscribe($$self, highScoreBlack, value => $$invalidate(12, $highScoreBlack = value));
 	const highScoreWhite = persisted("notation.highScoreWhite", 0);
 	validate_store(highScoreWhite, 'highScoreWhite');
-	component_subscribe($$self, highScoreWhite, value => $$invalidate(12, $highScoreWhite = value));
+	component_subscribe($$self, highScoreWhite, value => $$invalidate(13, $highScoreWhite = value));
 	let correctCount = 0;
 	let incorrectCount = 0;
 	let nextMove;
@@ -14102,6 +14120,7 @@ function instance$3($$self, $$props, $$invalidate) {
 
 	let boardSize;
 	let chessground;
+	let chessboard;
 	let fen;
 
 	// Game stuff
@@ -14133,7 +14152,8 @@ function instance$3($$self, $$props, $$invalidate) {
 			return newPosition(); // no castles
 		}
 
-		$$invalidate(8, fen = history[random - 1].after);
+		$$invalidate(9, fen = history[random - 1].after);
+		chessboard.load(fen);
 		$$invalidate(3, nextMove = candidateMove);
 		$$invalidate(4, colorToMove = whoseMoveIsIt(random));
 		positionShownAt = new Date().getTime();
@@ -14146,10 +14166,10 @@ function instance$3($$self, $$props, $$invalidate) {
 		answers = [...answers, new Answer(userSan, answerSan, timeToAnswer, $orientation)];
 
 		if (isCorrect) {
-			$$invalidate(10, maxTime += correctBonus);
+			$$invalidate(11, maxTime += correctBonus);
 			$$invalidate(1, correctCount++, correctCount);
 		} else {
-			$$invalidate(10, maxTime -= incorrectPenalty);
+			$$invalidate(11, maxTime -= incorrectPenalty);
 			$$invalidate(2, incorrectCount++, incorrectCount);
 		}
 
@@ -14158,8 +14178,8 @@ function instance$3($$self, $$props, $$invalidate) {
 
 	function startGame() {
 		answers = [];
-		$$invalidate(9, gameRunning = true);
-		$$invalidate(10, maxTime = 30);
+		$$invalidate(10, gameRunning = true);
+		$$invalidate(11, maxTime = 30);
 		$$invalidate(1, correctCount = 0);
 		$$invalidate(2, incorrectCount = 0);
 		correctBonus = 2.75;
@@ -14167,7 +14187,7 @@ function instance$3($$self, $$props, $$invalidate) {
 	}
 
 	function endGame() {
-		$$invalidate(9, gameRunning = false);
+		$$invalidate(10, gameRunning = false);
 
 		if ($orientation === "white") {
 			if (correctCount > $highScoreWhite) {
@@ -14190,17 +14210,24 @@ function instance$3($$self, $$props, $$invalidate) {
 		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<NotationTrainer> was created with unknown prop '${key}'`);
 	});
 
-	function chessboard_fen_binding(value) {
-		fen = value;
-		$$invalidate(8, fen);
+	function chessboard_1_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			chessboard = $$value;
+			$$invalidate(8, chessboard);
+		});
 	}
 
-	function chessboard_chessground_binding(value) {
+	function chessboard_1_fen_binding(value) {
+		fen = value;
+		$$invalidate(9, fen);
+	}
+
+	function chessboard_1_chessground_binding(value) {
 		chessground = value;
 		$$invalidate(7, chessground);
 	}
 
-	function chessboard_size_binding(value) {
+	function chessboard_1_size_binding(value) {
 		boardSize = value;
 		$$invalidate(6, boardSize);
 	}
@@ -14234,6 +14261,7 @@ function instance$3($$self, $$props, $$invalidate) {
 		chessgroundConfig,
 		boardSize,
 		chessground,
+		chessboard,
 		fen,
 		gameRunning,
 		maxTime,
@@ -14258,12 +14286,13 @@ function instance$3($$self, $$props, $$invalidate) {
 		if ('otherColor' in $$props) $$invalidate(5, otherColor = $$props.otherColor);
 		if ('positionShownAt' in $$props) positionShownAt = $$props.positionShownAt;
 		if ('answers' in $$props) answers = $$props.answers;
-		if ('chessgroundConfig' in $$props) $$invalidate(16, chessgroundConfig = $$props.chessgroundConfig);
+		if ('chessgroundConfig' in $$props) $$invalidate(17, chessgroundConfig = $$props.chessgroundConfig);
 		if ('boardSize' in $$props) $$invalidate(6, boardSize = $$props.boardSize);
 		if ('chessground' in $$props) $$invalidate(7, chessground = $$props.chessground);
-		if ('fen' in $$props) $$invalidate(8, fen = $$props.fen);
-		if ('gameRunning' in $$props) $$invalidate(9, gameRunning = $$props.gameRunning);
-		if ('maxTime' in $$props) $$invalidate(10, maxTime = $$props.maxTime);
+		if ('chessboard' in $$props) $$invalidate(8, chessboard = $$props.chessboard);
+		if ('fen' in $$props) $$invalidate(9, fen = $$props.fen);
+		if ('gameRunning' in $$props) $$invalidate(10, gameRunning = $$props.gameRunning);
+		if ('maxTime' in $$props) $$invalidate(11, maxTime = $$props.maxTime);
 		if ('correctBonus' in $$props) correctBonus = $$props.correctBonus;
 		if ('incorrectPenalty' in $$props) incorrectPenalty = $$props.incorrectPenalty;
 	};
@@ -14289,6 +14318,7 @@ function instance$3($$self, $$props, $$invalidate) {
 		otherColor,
 		boardSize,
 		chessground,
+		chessboard,
 		fen,
 		gameRunning,
 		maxTime,
@@ -14302,9 +14332,10 @@ function instance$3($$self, $$props, $$invalidate) {
 		newPosition,
 		startGame,
 		endGame,
-		chessboard_fen_binding,
-		chessboard_chessground_binding,
-		chessboard_size_binding,
+		chessboard_1_binding,
+		chessboard_1_fen_binding,
+		chessboard_1_chessground_binding,
+		chessboard_1_size_binding,
 		click_handler
 	];
 }
