@@ -73,7 +73,7 @@ class ApplicationController < ActionController::Base
       current_user.lichess_code = nil
       current_user.save!
     end
-    redirect_to root_url
+    redirect_to url_for(controller: 'application', action: 'puzzles')
   end
 
   def fetch_puzzle_history
@@ -84,6 +84,7 @@ class ApplicationController < ActionController::Base
     before = nil
     per_request = 40
     keep_going = true
+    imported = 0
     while keep_going
       LichessApi.fetch_puzzle_activity(current_user.lichess_api_token, per_request, before) do |puzzle_json|
         parsed = JSON.parse(puzzle_json)
@@ -109,9 +110,10 @@ class ApplicationController < ActionController::Base
                                     last_move: puzzle['lastMove'],
                                   })
         history.save!
+        imported += 1
       end
     end
-    render plain: 'Done'
+    render plain: "Imported #{imported} puzzle histories"
   end
 
   def env

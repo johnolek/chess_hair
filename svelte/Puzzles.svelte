@@ -217,6 +217,12 @@
     completedFilteredPuzzlesCount = response.completed_filtered_puzzles_count;
   }
 
+  let userInfo;
+  async function initUserInfo() {
+    const userInfoRequest = await Util.fetch("/api/v1/users/info");
+    userInfo = await userInfoRequest.json();
+  }
+
   async function initializePuzzles() {
     await updateActivePuzzles();
     currentPuzzle = Util.getRandomElement(activePuzzles);
@@ -251,6 +257,7 @@
 
   onMount(async () => {
     await initSettings();
+    await initUserInfo();
     batchSize = getSetting("puzzles.batchSize");
     timeGoal = getSetting("puzzles.timeGoal");
     minimumRating = getSetting("puzzles.minRating");
@@ -408,6 +415,15 @@
     {/if}
     <div class="box">
       <div class="block">
+        {#if userInfo && !userInfo.has_lichess_token}
+          <a href="/authenticate-with-lichess" class="button is-primary">
+            Authenticate with Lichess to load puzzles
+          </a>
+        {:else}
+          <a href="/fetch-puzzle-history" class="button is-primary"
+            >Fetch latest puzzles from lichess</a
+          >
+        {/if}
         <p><strong>{totalIncorrectPuzzlesCount}</strong> total puzzles</p>
         {#if totalIncorrectPuzzlesCount !== totalFilteredPuzzlesCount}
           <p>

@@ -25,6 +25,12 @@ module Api
         end
       end
 
+      def info
+        render json: {
+          has_lichess_token: @user.lichess_api_token.present?,
+        }
+      end
+
       def active_puzzles
         @user.recalculate_active_puzzles
 

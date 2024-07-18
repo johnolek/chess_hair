@@ -12,7 +12,7 @@ Rails.application.routes.draw do
   get 'puzzles', to: 'application#puzzles'
   get 'config', to: 'application#global_config'
   get 'testing', to: 'application#testing'
-  get 'fetch_puzzle_history', to: 'application#fetch_puzzle_history'
+  get 'fetch-puzzle-history', to: 'application#fetch_puzzle_history'
   get 'save-lichess-code', to: 'application#save_lichess_code'
   get 'authenticate-with-lichess', to: 'application#authenticate_with_lichess'
 
@@ -23,6 +23,7 @@ Rails.application.routes.draw do
       resources :users, only: [] do
         get 'settings', on: :collection
         get 'active-puzzles', to: 'users#active_puzzles', on: :collection
+        get 'info', to: 'users#info', on: :collection
         post 'update_setting', to: 'users#update_setting', on: :collection
         get 'get_setting/:key', to: 'users#get_setting', on: :collection
       end
