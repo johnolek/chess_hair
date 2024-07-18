@@ -63,7 +63,6 @@
   let completedFilteredPuzzlesCount;
 
   // Behavioral Config
-  let minimumSolves = 2;
 
   // Current puzzle state
   let moves;
@@ -251,6 +250,7 @@
   }
 
   let batchSize;
+  let requiredConsecutiveSolves;
   let timeGoal;
   let minimumRating;
   let maximumRating;
@@ -258,10 +258,11 @@
   onMount(async () => {
     await initSettings();
     await initUserInfo();
-    batchSize = getSetting("puzzles.batchSize");
-    timeGoal = getSetting("puzzles.timeGoal");
+    batchSize = getSetting("puzzles.batchSize", 15);
+    timeGoal = getSetting("puzzles.timeGoal", 20);
     minimumRating = getSetting("puzzles.minRating");
     maximumRating = getSetting("puzzles.maxRating");
+    requiredConsecutiveSolves = getSetting("puzzles.consecutiveSolves", 2);
     await initializePuzzles();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
@@ -395,9 +396,9 @@
                 </td>
                 <td>
                   <ProgressBar
-                    max={minimumSolves}
+                    max={requiredConsecutiveSolves}
                     bind:current={puzzle.streak}
-                    className={puzzle.streak >= minimumSolves
+                    className={puzzle.streak >= requiredConsecutiveSolves
                       ? "is-success"
                       : "is-warning"}
                   ></ProgressBar>
@@ -445,9 +446,8 @@
           Target solve time: <strong>{timeGoal}</strong> seconds
         </p>
         <p>
-          Must solve <strong>{minimumSolves}</strong> time{minimumSolves > 1
-            ? "s"
-            : ""} in a row
+          Must solve <strong>{requiredConsecutiveSolves}</strong>
+          time{requiredConsecutiveSolves > 1 ? "s" : ""} in a row
         </p>
       </div>
     </div>
@@ -471,6 +471,17 @@
         bind:value={timeGoal}
         onChange={async (value) => {
           await updateSetting("puzzles.timeGoal", value);
+          await updateActivePuzzles();
+        }}
+      />
+      <NumberInput
+        label="Required Consecutive Solves"
+        min={1}
+        max={10}
+        step={1}
+        bind:value={requiredConsecutiveSolves}
+        onChange={async (value) => {
+          await updateSetting("puzzles.consecutiveSolves", value);
           await updateActivePuzzles();
         }}
       />
