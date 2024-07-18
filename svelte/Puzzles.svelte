@@ -323,16 +323,6 @@
                   </span>
                 </div>
                 <div class="column">
-                  <div>Rating</div>
-                  <div>
-                    <Spoiler isShown={puzzleComplete}>
-                      <div>
-                        {currentPuzzle.rating}
-                      </div>
-                    </Spoiler>
-                  </div>
-                </div>
-                <div class="column">
                   {#if !puzzleComplete && nextMove}
                     <div>Next Move</div>
                     <div>
@@ -345,6 +335,16 @@
                   {/if}
                 </div>
               {/if}
+              <div class="column">
+                <div>Rating</div>
+                <div>
+                  <Spoiler isShown={puzzleComplete}>
+                    <div>
+                      {currentPuzzle.rating}
+                    </div>
+                  </Spoiler>
+                </div>
+              </div>
               {#if currentPuzzle}
                 <div class="column">
                   <a
