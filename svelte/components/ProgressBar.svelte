@@ -1,6 +1,6 @@
 <script>
   import { tweened } from "svelte/motion";
-  import { linear } from "svelte/easing";
+  import { quadInOut } from "svelte/easing";
 
   export let max;
   export let current;
@@ -8,7 +8,7 @@
 
   const tweenedProgress = tweened(current, {
     duration: 1000,
-    easing: linear,
+    easing: quadInOut,
   });
 
   $: tweenedProgress.set(current);

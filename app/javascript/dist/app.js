@@ -6654,6 +6654,18 @@ function cubicOut(t) {
 }
 
 /**
+ * https://svelte.dev/docs/svelte-easing
+ * @param {number} t
+ * @returns {number}
+ */
+function quadInOut(t) {
+	t /= 0.5;
+	if (t < 1) return 0.5 * t * t;
+	t--;
+	return -0.5 * (t * (t - 2) - 1);
+}
+
+/**
  * Animates a `blur` filter alongside an element's opacity.
  *
  * https://svelte.dev/docs/svelte-transition#blur
@@ -7810,9 +7822,9 @@ function create_fragment$b(ctx) {
 			attr_dev(progress, "class", progress_class_value = "progress " + /*className*/ ctx[1]);
 			progress.value = /*$tweenedProgress*/ ctx[2];
 			attr_dev(progress, "max", /*max*/ ctx[0]);
-			add_location(progress, file$a, 17, 2, 333);
+			add_location(progress, file$a, 17, 2, 339);
 			attr_dev(div, "class", "div");
-			add_location(div, file$a, 16, 0, 313);
+			add_location(div, file$a, 16, 0, 319);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7861,7 +7873,7 @@ function instance$b($$self, $$props, $$invalidate) {
 	let { max } = $$props;
 	let { current } = $$props;
 	let { className = "is-success" } = $$props;
-	const tweenedProgress = tweened(current, { duration: 1000, easing: identity });
+	const tweenedProgress = tweened(current, { duration: 1000, easing: quadInOut });
 	validate_store(tweenedProgress, 'tweenedProgress');
 	component_subscribe($$self, tweenedProgress, value => $$invalidate(2, $tweenedProgress = value));
 
@@ -7889,7 +7901,7 @@ function instance$b($$self, $$props, $$invalidate) {
 
 	$$self.$capture_state = () => ({
 		tweened,
-		linear: identity,
+		quadInOut,
 		max,
 		current,
 		className,
