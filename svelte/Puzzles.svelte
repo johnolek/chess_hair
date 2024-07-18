@@ -100,6 +100,9 @@
     const others = activePuzzles.filter(
       (puzzle) => puzzle.puzzle_id !== previous,
     );
+    if (others.length === 0) {
+      return currentPuzzle;
+    }
     return Util.getRandomElement(others);
   }
 
@@ -133,7 +136,6 @@
   }
 
   function updateNextMove() {
-    console.log(fen, moves[0]);
     const chessInstance = new Chess(fen);
     const correctMove = chessInstance.move(moves[0]);
     nextMove = correctMove.san;
@@ -297,8 +299,8 @@
                 </button>
               </div>
             {/if}
-            {#if !puzzleComplete}
-              <div class="columns is-vcentered">
+            <div class="columns is-vcentered">
+              {#if !puzzleComplete}
                 <div class="column">
                   <span class="tag is-{orientation} is-size-4">
                     {orientation} to play
@@ -326,6 +328,8 @@
                     </div>
                   {/if}
                 </div>
+              {/if}
+              {#if currentPuzzle}
                 <div class="column">
                   <a
                     href="https://lichess.org/training/{currentPuzzle.puzzle_id}"
@@ -334,8 +338,8 @@
                     {currentPuzzle.puzzle_id}
                   </a>
                 </div>
-              </div>
-            {/if}
+              {/if}
+            </div>
           </div>
         </Chessboard>
       {:else}
