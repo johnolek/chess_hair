@@ -7810,9 +7810,9 @@ function create_fragment$b(ctx) {
 			attr_dev(progress, "class", progress_class_value = "progress " + /*className*/ ctx[1]);
 			progress.value = /*$tweenedProgress*/ ctx[2];
 			attr_dev(progress, "max", /*max*/ ctx[0]);
-			add_location(progress, file$a, 17, 2, 327);
+			add_location(progress, file$a, 17, 2, 333);
 			attr_dev(div, "class", "div");
-			add_location(div, file$a, 16, 0, 307);
+			add_location(div, file$a, 16, 0, 313);
 		},
 		l: function claim(nodes) {
 			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -7861,7 +7861,7 @@ function instance$b($$self, $$props, $$invalidate) {
 	let { max } = $$props;
 	let { current } = $$props;
 	let { className = "is-success" } = $$props;
-	const tweenedProgress = tweened(0, { duration: 1000, easing: identity });
+	const tweenedProgress = tweened(current, { duration: 1000, easing: identity });
 	validate_store(tweenedProgress, 'tweenedProgress');
 	component_subscribe($$self, tweenedProgress, value => $$invalidate(2, $tweenedProgress = value));
 

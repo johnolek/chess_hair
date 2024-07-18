@@ -6,7 +6,7 @@
   export let current;
   export let className = "is-success";
 
-  const tweenedProgress = tweened(0, {
+  const tweenedProgress = tweened(current, {
     duration: 1000,
     easing: linear,
   });
