@@ -81,26 +81,35 @@ class ApplicationController < ActionController::Base
     unless current_user.lichess_api_token
       return render plain: 'No lichess API token'
     end
-    LichessApi.fetch_puzzle_activity(current_user.lichess_api_token) do |puzzle_json|
-      parsed = JSON.parse(puzzle_json)
-      Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
-      puzzle = parsed['puzzle']
-      history = current_user.user_puzzle_histories.find_or_initialize_by({
-                                                                           puzzle_id: puzzle['id'],
-                                                                           played_at: parsed['date']
-                                                                         })
-      Rails.logger.info "Puzzle history already exists" unless history.new_record?
-      next unless history.new_record?
-      history.assign_attributes({
-                                  win: parsed['win'],
-                                  rating: puzzle['rating'],
-                                  solution: puzzle['solution'].join(' '),
-                                  fen: puzzle['fen'],
-                                  plays: puzzle['plays'],
-                                  themes: puzzle['themes'].join(' '),
-                                  last_move: puzzle['lastMove'],
-                                })
-      history.save!
+    before = nil
+    per_request = 40
+    keep_going = true
+    while keep_going
+      LichessApi.fetch_puzzle_activity(current_user.lichess_api_token, per_request, before) do |puzzle_json|
+        parsed = JSON.parse(puzzle_json)
+        before = parsed['date']
+        Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
+        puzzle = parsed['puzzle']
+        history = current_user.user_puzzle_histories.find_or_initialize_by({
+                                                                             puzzle_id: puzzle['id'],
+                                                                             played_at: parsed['date']
+                                                                           })
+        Rails.logger.info "Puzzle history already exists" unless history.new_record?
+        unless history.new_record?
+          keep_going = false
+          break
+        end
+        history.assign_attributes({
+                                    win: parsed['win'],
+                                    rating: puzzle['rating'],
+                                    solution: puzzle['solution'].join(' '),
+                                    fen: puzzle['fen'],
+                                    plays: puzzle['plays'],
+                                    themes: puzzle['themes'].join(' '),
+                                    last_move: puzzle['lastMove'],
+                                  })
+        history.save!
+      end
     end
     render plain: 'Done'
   end
