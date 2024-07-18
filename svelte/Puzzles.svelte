@@ -298,19 +298,19 @@
             {/if}
           </div>
           <div slot="below-board">
-            {#if puzzleComplete}
-              <div class="block is-flex is-justify-content-center">
-                <button
-                  class="button is-primary"
-                  bind:this={nextButton}
-                  on:click={async () => {
-                    await loadNextPuzzle();
-                  }}
-                  >Next
-                </button>
-              </div>
-            {/if}
             <div class="columns is-vcentered">
+              {#if puzzleComplete}
+                <div class="column">
+                  <button
+                    class="button is-primary"
+                    bind:this={nextButton}
+                    on:click={async () => {
+                      await loadNextPuzzle();
+                    }}
+                    >Next
+                  </button>
+                </div>
+              {/if}
               {#if !puzzleComplete}
                 <div class="column">
                   <span class="tag is-{orientation} is-size-4">
