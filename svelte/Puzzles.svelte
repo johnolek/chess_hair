@@ -15,6 +15,7 @@
     updateSetting,
     getSetting,
   } from "./settingsManager.js";
+  import ProgressBar from "./components/ProgressBar.svelte";
 
   class Result {
     constructor(puzzleId, seenAt, madeMistake = false, doneAt = null) {
@@ -116,6 +117,9 @@
     }
 
     currentPuzzle = getNextPuzzle();
+    if (!currentPuzzle) {
+      return;
+    }
     const chessInstance = new Chess();
     lastMove = [
       currentPuzzle.last_move.substring(0, 2),
@@ -410,9 +414,16 @@
             <strong>{totalFilteredPuzzlesCount}</strong> puzzles after filtering
           </p>
         {/if}
-        <p>
-          <strong>{completedFilteredPuzzlesCount}</strong> puzzles completed
-        </p>
+        {#if totalFilteredPuzzlesCount && completedFilteredPuzzlesCount}
+          <p>
+            <strong>{completedFilteredPuzzlesCount}</strong> of
+            <strong>{totalFilteredPuzzlesCount}</strong> completed
+          </p>
+          <ProgressBar
+            max={totalFilteredPuzzlesCount}
+            bind:current={completedFilteredPuzzlesCount}
+          />
+        {/if}
         <p>
           Target solve time: <strong>{timeGoal}</strong> seconds
         </p>

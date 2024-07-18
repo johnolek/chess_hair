@@ -1,0 +1,19 @@
+<script>
+  import { tweened } from "svelte/motion";
+  import { linear } from "svelte/easing";
+
+  export let max;
+  export let current;
+
+  const tweenedProgress = tweened(0, {
+    duration: 1000,
+    easing: linear,
+  });
+
+  $: tweenedProgress.set(current);
+</script>
+
+<div class="div">
+  <progress class="progress is-success" value={$tweenedProgress} {max}
+  ></progress>
+</div>
