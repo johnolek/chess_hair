@@ -361,8 +361,6 @@
   <div class="column is-4-desktop">
     {#if activePuzzles.length >= 1 && currentPuzzle}
       <div class="box">
-        <p>Current Puzzle: <strong>{currentPuzzle.puzzle_id}</strong></p>
-
         <table class="table is-fullwidth is-narrow is-striped">
           <thead>
             <tr>
