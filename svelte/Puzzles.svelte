@@ -106,6 +106,9 @@
   }
 
   async function loadNextPuzzle() {
+    if (!chessboard) {
+      return;
+    }
     puzzleComplete = false;
     madeMistake = false;
 
@@ -126,6 +129,8 @@
     chessInstance.load(currentPuzzle.fen);
     orientation = chessInstance.turn() === "w" ? "white" : "black";
     fen = currentPuzzle.fen;
+    chessboard.load(fen);
+    chessboard.setLastMove(lastMove);
 
     // Clone so we don't cache a value that gets shifted later
     moves = [...currentPuzzle.solution];

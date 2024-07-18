@@ -112,6 +112,10 @@
     updateChessground();
   }
 
+  export function setLastMove(lastMove) {
+    chessground.set({ lastMove });
+  }
+
   onMount(() => {
     chessground = Chessground(boardContainer, {
       ...chessgroundConfig,
@@ -123,11 +127,7 @@
       },
     });
     if (fen) {
-      chessInstance.load(fen);
-      updateChessground();
-      if (lastMove) {
-        chessground.set({ lastMove: lastMove });
-      }
+      this.load(fen);
     }
   });
 </script>
