@@ -58,6 +58,9 @@
   let activePuzzles = [];
   let currentPuzzle;
   let puzzleShownAt;
+  let totalIncorrectPuzzlesCount;
+  let totalFilteredPuzzlesCount;
+  let completedFilteredPuzzlesCount;
 
   // Behavioral Config
   let minimumSolves = 2;
@@ -69,6 +72,12 @@
 
   // DOM elements
   let nextButton;
+
+  $: {
+    if (!currentPuzzle && activePuzzles && activePuzzles.length > 0) {
+      loadNextPuzzle();
+    }
+  }
 
   function sortPuzzlesBySolveTime(a, b) {
     const aTime = a.average_solve_time;
@@ -192,7 +201,11 @@
     const activePuzzlesRequest = await Util.fetch(
       "/api/v1/users/active-puzzles",
     );
-    activePuzzles = await activePuzzlesRequest.json();
+    const response = await activePuzzlesRequest.json();
+    activePuzzles = response.puzzles;
+    totalIncorrectPuzzlesCount = response.total_incorrect_puzzles_count;
+    totalFilteredPuzzlesCount = response.total_filtered_puzzles_count;
+    completedFilteredPuzzlesCount = response.completed_filtered_puzzles_count;
   }
 
   async function initializePuzzles() {
@@ -224,11 +237,15 @@
 
   let batchSize;
   let timeGoal;
+  let minimumRating;
+  let maximumRating;
 
   onMount(async () => {
     await initSettings();
     batchSize = getSetting("puzzles.batchSize");
     timeGoal = getSetting("puzzles.timeGoal");
+    minimumRating = getSetting("puzzles.minRating");
+    maximumRating = getSetting("puzzles.maxRating");
     await initializePuzzles();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
@@ -357,6 +374,15 @@
     {/if}
     <div class="box">
       <div class="block">
+        <p><strong>{totalIncorrectPuzzlesCount}</strong> total puzzles</p>
+        {#if totalIncorrectPuzzlesCount !== totalFilteredPuzzlesCount}
+          <p>
+            <strong>{totalFilteredPuzzlesCount}</strong> puzzles after filtering
+          </p>
+        {/if}
+        <p>
+          <strong>{completedFilteredPuzzlesCount}</strong> puzzles completed
+        </p>
         <p>
           Target solve time: <strong>{timeGoal}</strong> seconds
         </p>
@@ -387,6 +413,28 @@
         bind:value={timeGoal}
         onChange={async (value) => {
           await updateSetting("puzzles.timeGoal", value);
+          await updateActivePuzzles();
+        }}
+      />
+      <NumberInput
+        label="Minimum Rating"
+        min={1}
+        max={3500}
+        step={1}
+        bind:value={minimumRating}
+        onChange={async (value) => {
+          await updateSetting("puzzles.minRating", value);
+          await updateActivePuzzles();
+        }}
+      />
+      <NumberInput
+        label="Maximum Rating"
+        min={1}
+        max={3500}
+        step={1}
+        bind:value={maximumRating}
+        onChange={async (value) => {
+          await updateSetting("puzzles.maxRating", value);
           await updateActivePuzzles();
         }}
       />

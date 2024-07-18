@@ -39,6 +39,8 @@ class Config < ApplicationRecord
       "puzzles.batchSize" => 15,
       "puzzles.timeGoal" => 15,
       "puzzles.consecutiveSolves" => 2,
+      "puzzles.minRating" => 1,
+      "puzzles.maxRating" => 3500,
     }
   end
 

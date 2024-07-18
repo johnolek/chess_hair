@@ -28,13 +28,9 @@ module Api
       def active_puzzles
         @user.recalculate_active_puzzles
 
-        if @user.active_puzzle_ids.count < 1
-          return render json: []
-        end
-
         histories = @user.user_puzzle_histories.where(puzzle_id: @user.active_puzzle_ids)
         mapped = histories.all.map(&:api_response)
-        render json: mapped
+        render json: {puzzles: mapped, total_incorrect_puzzles_count: @user.total_incorrect_puzzles_count, total_filtered_puzzles_count: @user.total_filtered_puzzles_count, completed_filtered_puzzles_count: @user.completed_filtered_puzzles_count}
       end
 
       private
