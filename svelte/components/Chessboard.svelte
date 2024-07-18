@@ -65,6 +65,7 @@
         dests: legalMoves,
       },
     });
+    fen = chessInstance.fen();
   }
 
   function handleMove(from, to) {

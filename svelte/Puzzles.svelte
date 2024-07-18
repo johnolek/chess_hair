@@ -79,16 +79,6 @@
     }
   }
 
-  $: {
-    if (fen && moves[0]) {
-      const chessInstance = new Chess(fen);
-      const move = chessInstance.move(moves[0]);
-      if (move && move.san) {
-        nextMove = move.san;
-      }
-    }
-  }
-
   function sortPuzzlesBySolveTime(a, b) {
     const aTime = a.average_solve_time;
     const bTime = b.average_solve_time;
@@ -135,9 +125,18 @@
     // Clone so we don't cache a value that gets shifted later
     moves = [...currentPuzzle.solution];
 
+    updateNextMove();
+
     setTimeout(() => {
       puzzleShownAt = Util.currentMicrotime();
     }, 300);
+  }
+
+  function updateNextMove() {
+    console.log(fen, moves[0]);
+    const chessInstance = new Chess(fen);
+    const correctMove = chessInstance.move(moves[0]);
+    nextMove = correctMove.san;
   }
 
   async function handleUserMove(moveEvent) {
@@ -151,6 +150,7 @@
         moves = moves; // reactivity
         setTimeout(() => {
           chessboard.move(computerMove);
+          updateNextMove();
         }, 300);
       } else {
         return await handlePuzzleComplete();
@@ -265,7 +265,7 @@
     <div class="block">
       {#if activePuzzles.length > 0 && currentPuzzle}
         <Chessboard
-          {fen}
+          bind:fen
           {lastMove}
           {chessgroundConfig}
           {orientation}
