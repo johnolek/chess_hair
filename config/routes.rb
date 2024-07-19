@@ -24,6 +24,7 @@ Rails.application.routes.draw do
         get 'settings', on: :collection
         get 'active-puzzles', to: 'users#active_puzzles', on: :collection
         get 'info', to: 'users#info', on: :collection
+        get 'random-completed-puzzle', to: 'users#random_completed_puzzle', on: :collection
         post 'update_setting', to: 'users#update_setting', on: :collection
         get 'get_setting/:key', to: 'users#get_setting', on: :collection
       end

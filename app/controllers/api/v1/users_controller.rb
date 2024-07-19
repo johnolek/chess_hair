@@ -36,7 +36,21 @@ module Api
 
         histories = @user.user_puzzle_histories.where(puzzle_id: @user.active_puzzle_ids)
         mapped = histories.all.map(&:api_response)
-        render json: {puzzles: mapped, total_incorrect_puzzles_count: @user.total_incorrect_puzzles_count, total_filtered_puzzles_count: @user.total_filtered_puzzles_count, completed_filtered_puzzles_count: @user.completed_filtered_puzzles_count}
+        render json: {
+          puzzles: mapped,
+          total_incorrect_puzzles_count: @user.total_incorrect_puzzles_count,
+          total_filtered_puzzles_count: @user.total_filtered_puzzles_count,
+          completed_filtered_puzzles_count: @user.completed_filtered_puzzles_count
+        }
+      end
+
+      def random_completed_puzzle
+        history = @user.filtered_incorrectly_solved_query.random_order
+        completed = history.all.filter { |history| history.complete? }
+        if completed.count < 1
+          return render json: nil, status: :not_found
+        end
+        render json: completed.first.api_response
       end
 
       private
