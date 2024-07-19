@@ -326,7 +326,7 @@
                   {#if !puzzleComplete && nextMove}
                     <div>Next Move</div>
                     <div>
-                      <Spoiler>
+                      <Spoiler minWidth="70">
                         <div>
                           {nextMove}
                         </div>
@@ -338,7 +338,7 @@
               <div class="column">
                 <div>Rating</div>
                 <div>
-                  <Spoiler isShown={puzzleComplete}>
+                  <Spoiler minWidth="70" isShown={puzzleComplete}>
                     <div>
                       {currentPuzzle.rating}
                     </div>

@@ -1,5 +1,6 @@
 <script>
   export let isShown = false;
+  export let minWidth;
 
   function toggleShown() {
     isShown = !isShown;
@@ -18,6 +19,7 @@
   class="spoiler"
   role="button"
   tabindex="0"
+  style={minWidth ? `min-width: ${minWidth}px` : ""}
   on:click={toggleShown}
   on:keydown={handleKeydown}
 >
