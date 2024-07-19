@@ -10,7 +10,6 @@
   export let orientation = "white";
 
   export let fen;
-  export let lastMove = null;
   export let chessground;
   export let size;
 
@@ -142,11 +141,7 @@
   <link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet" />
 {/if}
 
-<div
-  class="board-wrapper"
-  style="max-width: {maxWidth}"
-  bind:clientWidth={size}
->
+<div class="board-wrapper" bind:clientWidth={size}>
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>
@@ -155,9 +150,6 @@
     bind:this={boardContainer}
     style="position: relative;width: {size}px; height: {size}px"
   ></div>
-  <div class="block mt-2">
-    <slot name="below-board"></slot>
-  </div>
 </div>
 
 <style>

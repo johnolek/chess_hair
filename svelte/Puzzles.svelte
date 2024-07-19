@@ -302,62 +302,62 @@
               </span>
             {/if}
           </div>
-          <div slot="below-board">
-            <div class="columns is-vcentered is-mobile">
-              {#if puzzleComplete}
-                <div class="column">
-                  <button
-                    class="button is-primary"
-                    bind:this={nextButton}
-                    on:click={async () => {
-                      await loadNextPuzzle();
-                    }}
-                    >Next
-                  </button>
-                </div>
-              {/if}
-              {#if !puzzleComplete}
-                <div class="column">
-                  <span class="tag is-{orientation} is-size-4">
-                    {orientation} to play
-                  </span>
-                </div>
-                <div class="column">
-                  {#if !puzzleComplete && nextMove}
-                    <div>Next Move</div>
-                    <div>
-                      <Spoiler minWidth="70">
-                        <div>
-                          {nextMove}
-                        </div>
-                      </Spoiler>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-              <div class="column">
-                <div>Rating</div>
-                <div>
-                  <Spoiler minWidth="70" isShown={puzzleComplete}>
-                    <div>
-                      {currentPuzzle.rating}
-                    </div>
-                  </Spoiler>
-                </div>
-              </div>
-              {#if currentPuzzle}
-                <div class="column">
-                  <a
-                    href="https://lichess.org/training/{currentPuzzle.puzzle_id}"
-                    target="_blank"
-                  >
-                    {currentPuzzle.puzzle_id}
-                  </a>
-                </div>
-              {/if}
-            </div>
-          </div>
         </Chessboard>
+        <div>
+          <div class="columns is-vcentered is-mobile">
+            {#if puzzleComplete}
+              <div class="column">
+                <button
+                  class="button is-primary"
+                  bind:this={nextButton}
+                  on:click={async () => {
+                    await loadNextPuzzle();
+                  }}
+                  >Next
+                </button>
+              </div>
+            {/if}
+            {#if !puzzleComplete}
+              <div class="column">
+                <span class="tag is-{orientation} is-size-4">
+                  {orientation} to play
+                </span>
+              </div>
+              <div class="column">
+                {#if !puzzleComplete && nextMove}
+                  <div>Next Move</div>
+                  <div>
+                    <Spoiler minWidth="70">
+                      <div>
+                        {nextMove}
+                      </div>
+                    </Spoiler>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+            <div class="column">
+              <div>Rating</div>
+              <div>
+                <Spoiler minWidth="70" isShown={puzzleComplete}>
+                  <div>
+                    {currentPuzzle.rating}
+                  </div>
+                </Spoiler>
+              </div>
+            </div>
+            {#if currentPuzzle}
+              <div class="column">
+                <a
+                  href="https://lichess.org/training/{currentPuzzle.puzzle_id}"
+                  target="_blank"
+                >
+                  {currentPuzzle.puzzle_id}
+                </a>
+              </div>
+            {/if}
+          </div>
+        </div>
       {:else}
         <p>All puzzles complete, add some more!</p>
       {/if}
