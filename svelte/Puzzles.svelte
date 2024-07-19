@@ -248,6 +248,7 @@
     const data = await response.json();
     const updatedPuzzle = data.puzzle;
     puzzleWasCompleted = updatedPuzzle.complete;
+    currentPuzzle = updatedPuzzle;
     activePuzzles = activePuzzles.map((puzzle) =>
       puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
     );
@@ -303,6 +304,42 @@
             {/if}
           </div>
         </Chessboard>
+        {#if currentPuzzle}
+          <div class="block mt-2">
+            <div class="columns is-mobile">
+              <div class="column">
+                <a
+                  href={`https://lichess.org/training/${currentPuzzle.puzzle_id}`}
+                  class="puzzle-id"
+                  target="_blank"
+                  title="View on lichess.org">{currentPuzzle.puzzle_id}</a
+                >
+              </div>
+              <div class="column">
+                {#if currentPuzzle.average_solve_time}
+                  <span
+                    class:has-text-warning={currentPuzzle.average_solve_time >
+                      timeGoal}
+                    class:has-text-success={currentPuzzle.average_solve_time <=
+                      timeGoal && currentPuzzle.average_solve_time > 0}
+                    >{currentPuzzle.average_solve_time.toFixed(2)}s</span
+                  >
+                {/if}
+              </div>
+              <div class="column is-two-thirds">
+                {#key currentPuzzle.puzzle_id}
+                  <ProgressBar
+                    max={requiredConsecutiveSolves}
+                    bind:current={currentPuzzle.streak}
+                    className={currentPuzzle.streak >= requiredConsecutiveSolves
+                      ? "is-success"
+                      : "is-warning"}
+                  ></ProgressBar>
+                {/key}
+              </div>
+            </div>
+          </div>
+        {/if}
         <div>
           <div class="columns is-vcentered is-mobile">
             {#if puzzleComplete}
@@ -324,7 +361,7 @@
                 </span>
               </div>
               <div class="column">
-                {#if !puzzleComplete && nextMove}
+                {#if nextMove}
                   <div>Next Move</div>
                   <div>
                     <Spoiler minWidth="70">
@@ -346,16 +383,6 @@
                 </Spoiler>
               </div>
             </div>
-            {#if currentPuzzle}
-              <div class="column">
-                <a
-                  href="https://lichess.org/training/{currentPuzzle.puzzle_id}"
-                  target="_blank"
-                >
-                  {currentPuzzle.puzzle_id}
-                </a>
-              </div>
-            {/if}
           </div>
         </div>
       {:else}
@@ -389,15 +416,18 @@
                     title="View on lichess.org">{puzzle.puzzle_id}</a
                   ></td
                 >
-                <td
-                  class:has-text-warning={puzzle.average_solve_time > timeGoal}
-                  class:has-text-success={puzzle.average_solve_time <=
-                    timeGoal && puzzle.average_solve_time > 0}
-                >
-                  {puzzle.average_solve_time
-                    ? `${puzzle.average_solve_time.toFixed(2)}s`
-                    : "?"}
-                </td>
+                {#if puzzle.average_solve_time}
+                  <td
+                    class:has-text-warning={puzzle.average_solve_time >
+                      timeGoal}
+                    class:has-text-success={puzzle.average_solve_time <=
+                      timeGoal && puzzle.average_solve_time > 0}
+                  >
+                    {puzzle.average_solve_time.toFixed(2)}s
+                  </td>
+                {:else}
+                  <td>?</td>
+                {/if}
                 <td>
                   <ProgressBar
                     max={requiredConsecutiveSolves}
