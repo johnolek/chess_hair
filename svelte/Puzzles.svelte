@@ -60,6 +60,7 @@
   let totalIncorrectPuzzlesCount;
   let totalFilteredPuzzlesCount;
   let completedFilteredPuzzlesCount;
+  let randomCompletedPuzzle;
 
   // Behavioral Config
 
@@ -95,6 +96,13 @@
   }
 
   function getNextPuzzle() {
+    if (
+      randomCompletedPuzzle &&
+      (Math.random() < oddsOfRandomCompleted || activePuzzles.length < 1)
+    ) {
+      fetchRandomCompletePuzzle();
+      return randomCompletedPuzzle;
+    }
     const previous = currentPuzzle ? currentPuzzle.puzzle_id : null;
     const others = activePuzzles.filter(
       (puzzle) => puzzle.puzzle_id !== previous,
@@ -220,6 +228,13 @@
     completedFilteredPuzzlesCount = response.completed_filtered_puzzles_count;
   }
 
+  async function fetchRandomCompletePuzzle() {
+    const request = await Util.fetch("/api/v1/users/random-completed-puzzle");
+    if (request.ok) {
+      randomCompletedPuzzle = await request.json();
+    }
+  }
+
   let userInfo;
   async function initUserInfo() {
     const userInfoRequest = await Util.fetch("/api/v1/users/info");
@@ -228,7 +243,9 @@
 
   async function initializePuzzles() {
     await updateActivePuzzles();
-    currentPuzzle = Util.getRandomElement(activePuzzles);
+    await fetchRandomCompletePuzzle();
+    currentPuzzle =
+      Util.getRandomElement(activePuzzles) || randomCompletedPuzzle;
   }
 
   let puzzleWasCompleted = false;
@@ -259,6 +276,7 @@
   let timeGoal;
   let minimumRating;
   let maximumRating;
+  let oddsOfRandomCompleted;
 
   onMount(async () => {
     await initSettings();
@@ -268,6 +286,7 @@
     minimumRating = getSetting("puzzles.minRating");
     maximumRating = getSetting("puzzles.maxRating");
     requiredConsecutiveSolves = getSetting("puzzles.consecutiveSolves", 2);
+    oddsOfRandomCompleted = getSetting("puzzles.oddsOfRandomCompleted", 0.1);
     await initializePuzzles();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
@@ -282,10 +301,9 @@
 <div class="columns is-centered">
   <div class="column is-6-desktop">
     <div class="block">
-      {#if activePuzzles.length > 0 && currentPuzzle}
+      {#if currentPuzzle}
         <Chessboard
           bind:fen
-          {lastMove}
           {chessgroundConfig}
           {orientation}
           bind:this={chessboard}
@@ -540,6 +558,17 @@
         bind:value={maximumRating}
         onChange={async (value) => {
           await updateSetting("puzzles.maxRating", value);
+          await updateActivePuzzles();
+        }}
+      />
+      <NumberInput
+        label="Odds of Random Completed Puzzle"
+        min={0}
+        max={1}
+        step={0.01}
+        bind:value={oddsOfRandomCompleted}
+        onChange={async (value) => {
+          await updateSetting("puzzles.oddsOfRandomCompleted", value);
           await updateActivePuzzles();
         }}
       />
