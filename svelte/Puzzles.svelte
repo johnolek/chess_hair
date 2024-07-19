@@ -303,7 +303,7 @@
             {/if}
           </div>
           <div slot="below-board">
-            <div class="columns is-vcentered">
+            <div class="columns is-vcentered is-mobile">
               {#if puzzleComplete}
                 <div class="column">
                   <button
