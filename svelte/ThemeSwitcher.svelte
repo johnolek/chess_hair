@@ -31,10 +31,6 @@
       document.documentElement.style.transition = originalTransition;
     }, 500);
   }
-
-  onMount(() => {
-    document.body.dataset.board = $boardStyle;
-  });
 </script>
 
 <div>

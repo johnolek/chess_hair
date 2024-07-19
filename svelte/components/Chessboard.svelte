@@ -2,7 +2,12 @@
   import { onMount } from "svelte";
   import { Chessground } from "chessground";
   import { Chess } from "chess.js";
-  import { pieceSet } from "../stores";
+  import {
+    pieceSet,
+    boardStyle,
+    whiteBoardStyle,
+    blackBoardStyle,
+  } from "../stores";
   import { createEventDispatcher } from "svelte";
 
   let boardContainer;
@@ -17,9 +22,23 @@
   export let pieceSetOverride = null;
   export let boardStyleOverride = null;
 
-  const dispatch = createEventDispatcher();
+  let currentBoardStyle = $boardStyle;
 
-  let maxWidth = "70vh";
+  $: {
+    if (boardStyleOverride) {
+      currentBoardStyle = boardStyleOverride;
+    } else {
+      if (orientation === "white" && $whiteBoardStyle) {
+        currentBoardStyle = $whiteBoardStyle;
+      } else if (orientation === "black" && $blackBoardStyle) {
+        currentBoardStyle = $blackBoardStyle;
+      } else {
+        currentBoardStyle = $boardStyle;
+      }
+    }
+  }
+
+  const dispatch = createEventDispatcher();
 
   $: {
     if (orientation && chessground) {
@@ -141,12 +160,16 @@
   <link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet" />
 {/if}
 
-<div class="board-wrapper" bind:clientWidth={size}>
+<div
+  class="board-wrapper"
+  bind:clientWidth={size}
+  data-board={currentBoardStyle}
+>
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>
   <div
-    class="is2d {boardStyleOverride ? boardStyleOverride : ''}"
+    class="is2d"
     bind:this={boardContainer}
     style="position: relative;width: {size}px; height: {size}px"
   ></div>

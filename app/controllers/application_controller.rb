@@ -142,7 +142,6 @@ class ApplicationController < ActionController::Base
 
   def set_default_body_attributes
     @body_attributes = {
-      board: 'brown'
     }
   end
 

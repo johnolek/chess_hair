@@ -4,291 +4,291 @@
     height: 100%
 }
 
-body[data-board=blue] .is2d cg-board::before {
+[data-board=blue] .is2d cg-board::before {
     background-image: url("../images/board/svg/blue.svg")
 }
 
-body[data-board=blue] .is2d coords {
+[data-board=blue] .is2d coords {
     ---cg-ccw: #dee3e6;
     ---cg-ccb: #788a94;
     ---cg-cs: none
 }
 
-body[data-board=blue2] .is2d cg-board::before {
+[data-board=blue2] .is2d cg-board::before {
     background-image: url("../images/board/blue2.jpg")
 }
 
-body[data-board=blue2] .is2d coords {
+[data-board=blue2] .is2d coords {
     ---cg-ccw: #97b2c7;
     ---cg-ccb: #546f82;
     ---cg-cs: none
 }
 
-body[data-board=blue3] .is2d cg-board::before {
+[data-board=blue3] .is2d cg-board::before {
     background-image: url("../images/board/blue3.jpg")
 }
 
-body[data-board=blue3] .is2d coords {
+[data-board=blue3] .is2d coords {
     ---cg-ccw: #d9e0e6;
     ---cg-ccb: #315991;
     ---cg-cs: none
 }
 
-body[data-board=blue-marble] .is2d cg-board::before {
+[data-board=blue-marble] .is2d cg-board::before {
     background-image: url("../images/board/blue-marble.jpg")
 }
 
-body[data-board=blue-marble] .is2d coords {
+[data-board=blue-marble] .is2d coords {
     ---cg-ccw: #eae6dd;
     ---cg-ccb: #7c7f87;
     ---cg-cs: none
 }
 
-body[data-board=canvas] .is2d cg-board::before {
+[data-board=canvas] .is2d cg-board::before {
     background-image: url("../images/board/canvas2.jpg")
 }
 
-body[data-board=canvas] .is2d coords {
+[data-board=canvas] .is2d coords {
     ---cg-ccw: #d7daeb;
     ---cg-ccb: #547388;
     ---cg-cs: none
 }
 
-body[data-board=wood] .is2d cg-board::before {
+[data-board=wood] .is2d cg-board::before {
     background-image: url("../images/board/wood.jpg")
 }
 
-body[data-board=wood] .is2d coords {
+[data-board=wood] .is2d coords {
     ---cg-ccw: #d8a45b;
     ---cg-ccb: #9b4d0f;
     ---cg-cs: none
 }
 
-body[data-board=wood2] .is2d cg-board::before {
+[data-board=wood2] .is2d cg-board::before {
     background-image: url("../images/board/wood2.jpg")
 }
 
-body[data-board=wood2] .is2d coords {
+[data-board=wood2] .is2d coords {
     ---cg-ccw: #a38b5d;
     ---cg-ccb: #6c5017;
     ---cg-cs: none
 }
 
-body[data-board=wood3] .is2d cg-board::before {
+[data-board=wood3] .is2d cg-board::before {
     background-image: url("../images/board/wood3.jpg")
 }
 
-body[data-board=wood3] .is2d coords {
+[data-board=wood3] .is2d coords {
     ---cg-ccw: #d0ceca;
     ---cg-ccb: #755839;
     ---cg-cs: none
 }
 
-body[data-board=wood4] .is2d cg-board::before {
+[data-board=wood4] .is2d cg-board::before {
     background-image: url("../images/board/wood4.jpg")
 }
 
-body[data-board=wood4] .is2d coords {
+[data-board=wood4] .is2d coords {
     ---cg-ccw: #caaf7d;
     ---cg-ccb: #7b5330;
     ---cg-cs: none
 }
 
-body[data-board=maple] .is2d cg-board::before {
+[data-board=maple] .is2d cg-board::before {
     background-image: url("../images/board/maple.jpg")
 }
 
-body[data-board=maple] .is2d coords {
+[data-board=maple] .is2d coords {
     ---cg-ccw: #e8ceab;
     ---cg-ccb: #bc7944;
     ---cg-cs: none
 }
 
-body[data-board=maple2] .is2d cg-board::before {
+[data-board=maple2] .is2d cg-board::before {
     background-image: url("../images/board/maple2.jpg")
 }
 
-body[data-board=maple2] .is2d coords {
+[data-board=maple2] .is2d coords {
     ---cg-ccw: #e2c89f;
     ---cg-ccb: #996633;
     ---cg-cs: none
 }
 
-body[data-board=leather] .is2d cg-board::before {
+[data-board=leather] .is2d cg-board::before {
     background-image: url("../images/board/leather.jpg")
 }
 
-body[data-board=leather] .is2d coords {
+[data-board=leather] .is2d coords {
     ---cg-ccw: #d1d1c9;
     ---cg-ccb: #c28e16;
     ---cg-cs: none
 }
 
-body[data-board=green] .is2d cg-board::before {
+[data-board=green] .is2d cg-board::before {
     background-image: url("../images/board/svg/green.svg")
 }
 
-body[data-board=green] .is2d coords {
+[data-board=green] .is2d coords {
     ---cg-ccw: #ffffdd;
     ---cg-ccb: #6d8753;
     ---cg-cs: none
 }
 
-body[data-board=brown] .is2d cg-board::before {
+[data-board=brown] .is2d cg-board::before {
     background-image: url("../images/board/svg/brown.svg")
 }
 
-body[data-board=brown] .is2d coords {
+[data-board=brown] .is2d coords {
     ---cg-ccw: #f0d9b5;
     ---cg-ccb: #946f51;
     ---cg-cs: none
 }
 
-body[data-board=pink] .is2d cg-board::before {
+[data-board=pink] .is2d cg-board::before {
     background-image: url("../images/board/pink-pyramid.png")
 }
 
-body[data-board=pink] .is2d coords {
+[data-board=pink] .is2d coords {
     ---cg-ccw: #e8e9b7;
     ---cg-ccb: #ed7272;
     ---cg-cs: none
 }
 
-body[data-board=marble] .is2d cg-board::before {
+[data-board=marble] .is2d cg-board::before {
     background-image: url("../images/board/marble.jpg")
 }
 
-body[data-board=marble] .is2d coords {
+[data-board=marble] .is2d coords {
     ---cg-ccw: #93ab91;
     ---cg-ccb: #4f644e;
     ---cg-cs: none
 }
 
-body[data-board=green-plastic] .is2d cg-board::before {
+[data-board=green-plastic] .is2d cg-board::before {
     background-image: url("../images/board/green-plastic.png")
 }
 
-body[data-board=green-plastic] .is2d coords {
+[data-board=green-plastic] .is2d coords {
     ---cg-ccw: #f2f9bb;
     ---cg-ccb: #59935d;
     ---cg-cs: none
 }
 
-body[data-board=grey] .is2d cg-board::before {
+[data-board=grey] .is2d cg-board::before {
     background-image: url("../images/board/grey.jpg")
 }
 
-body[data-board=grey] .is2d coords {
+[data-board=grey] .is2d coords {
     ---cg-ccw: #b8b8b8;
     ---cg-ccb: #7d7d7d;
     ---cg-cs: none
 }
 
-body[data-board=metal] .is2d cg-board::before {
+[data-board=metal] .is2d cg-board::before {
     background-image: url("../images/board/metal.jpg")
 }
 
-body[data-board=metal] .is2d coords {
+[data-board=metal] .is2d coords {
     ---cg-ccw: #c9c9c9;
     ---cg-ccb: #727272;
     ---cg-cs: none
 }
 
-body[data-board=olive] .is2d cg-board::before {
+[data-board=olive] .is2d cg-board::before {
     background-image: url("../images/board/olive.jpg")
 }
 
-body[data-board=olive] .is2d coords {
+[data-board=olive] .is2d coords {
     ---cg-ccw: #b8b19f;
     ---cg-ccb: #6d6655;
     ---cg-cs: none
 }
 
-body[data-board=newspaper] .is2d cg-board::before {
+[data-board=newspaper] .is2d cg-board::before {
     background-image: url("../images/board/svg/newspaper.svg")
 }
 
-body[data-board=newspaper] .is2d coords {
+[data-board=newspaper] .is2d coords {
     ---cg-ccw: #fff;
     ---cg-ccb: #8d8d8d;
     ---cg-cs: none
 }
 
-body[data-board=purple] .is2d cg-board::before {
+[data-board=purple] .is2d cg-board::before {
     background-image: url("../images/board/svg/purple.svg")
 }
 
-body[data-board=purple] .is2d coords {
+[data-board=purple] .is2d coords {
     ---cg-ccw: #9f90b0;
     ---cg-ccb: #7d4a8d;
     ---cg-cs: none
 }
 
-body[data-board=purple-diag] .is2d cg-board::before {
+[data-board=purple-diag] .is2d cg-board::before {
     background-image: url("../images/board/purple-diag.png")
 }
 
-body[data-board=purple-diag] .is2d coords {
+[data-board=purple-diag] .is2d coords {
     ---cg-ccw: #e5daf0;
     ---cg-ccb: #957ab0;
     ---cg-cs: none
 }
 
-body[data-board=ic] .is2d cg-board::before {
+[data-board=ic] .is2d cg-board::before {
     background-image: url("../images/board/svg/ic.svg")
 }
 
-body[data-board=ic] .is2d coords {
+[data-board=ic] .is2d coords {
     ---cg-ccw: #ececec;
     ---cg-ccb: #c1c18e;
     ---cg-cs: none
 }
 
-body[data-board=horsey] .is2d cg-board::before {
+[data-board=horsey] .is2d cg-board::before {
     background-image: url("../images/board/horsey.jpg")
 }
 
-body[data-board=horsey] .is2d coords {
+[data-board=horsey] .is2d coords {
     ---cg-ccw: #f0d9b5;
     ---cg-ccb: #946f51;
     ---cg-cs: none
 }
 
-body[data-board=wood-worn] .is2d cg-board::before {
+[data-board=wood-worn] .is2d cg-board::before {
     background-image: url("../images/board/wood-worn.webp")
 }
 
-body[data-board=wood-worn] .is2d coords {
+[data-board=wood-worn] .is2d coords {
     ---cg-ccw: #bd938b;
     ---cg-ccb: #7e4f3b;
     ---cg-cs: none
 }
 
-body[data-board=putt-putt] .is2d cg-board::before {
+[data-board=putt-putt] .is2d cg-board::before {
     background-image: url("../images/board/putt-putt.webp")
 }
 
-body[data-board=putt-putt] .is2d coords {
+[data-board=putt-putt] .is2d coords {
     ---cg-ccw: #d8d1c5;
     ---cg-ccb: #6d8b44;
     ---cg-cs: none
 }
 
-body[data-board=cocoa] .is2d cg-board::before {
+[data-board=cocoa] .is2d cg-board::before {
     background-image: url("../images/board/cocoa.webp")
 }
 
-body[data-board=cocoa] .is2d coords {
+[data-board=cocoa] .is2d coords {
     ---cg-ccw: #d8d1c5;
     ---cg-ccb: #a1806b;
     ---cg-cs: none
 }
 
-body[data-board=parchment] .is2d cg-board::before {
+[data-board=parchment] .is2d cg-board::before {
     background-image: url("../images/board/parchment.webp")
 }
 
-body[data-board=parchment] .is2d coords {
+[data-board=parchment] .is2d coords {
     ---cg-ccw: #c0b19d;
     ---cg-ccb: #946d46;
     ---cg-cs: none
@@ -363,7 +363,7 @@ square.oc.premove-dest {
     background: radial-gradient(transparent 0%, transparent 79%, rgba(20, 30, 85, 0.2) 80%)
 }
 
-body[data-board=green] .is2d square.last-move, body[data-board=green-plastic] .is2d square.last-move, body[data-board=marble] .is2d square.last-move {
+[data-board=green] .is2d square.last-move, [data-board=green-plastic] .is2d square.last-move, [data-board=marble] .is2d square.last-move {
     background-color: rgba(0, 155, 199, .41)
 }
 
@@ -372,7 +372,7 @@ square.last-move {
     background-color: rgba(155, 199, 0, .41)
 }
 
-body[data-board=horsey] .is2d square.last-move:not(.move-dest) {
+[data-board=horsey] .is2d square.last-move:not(.move-dest) {
     background: url(../images/board/horsey.last-move.png);
     background-size: cover
 }
@@ -385,7 +385,7 @@ square.selected {
     background-color: rgba(20, 85, 30, .5)
 }
 
-body[data-board=horsey] .is2d square.selected {
+[data-board=horsey] .is2d square.selected {
     background: url(../images/board/horsey.selected.png);
     background-size: cover
 }
@@ -394,7 +394,7 @@ square.current-premove {
     background-color: rgba(20, 30, 85, .5) !important
 }
 
-body[data-board=horsey] .is2d square.current-premove {
+[data-board=horsey] .is2d square.current-premove {
     background: url(../images/board/horsey.current-premove.png);
     background-size: cover
 }
@@ -403,7 +403,7 @@ square.move-dest:hover {
     background: rgba(20, 85, 30, .3)
 }
 
-body[data-board=horsey] .is2d square.move-dest:hover {
+[data-board=horsey] .is2d square.move-dest:hover {
     background: url(../images/board/horsey.move-dest.png);
     background-size: cover
 }
