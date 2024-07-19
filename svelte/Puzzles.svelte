@@ -376,11 +376,13 @@
             <div class="column">
               <div>Rating</div>
               <div>
-                <Spoiler minWidth="70" isShown={puzzleComplete}>
-                  <div>
-                    {currentPuzzle.rating}
-                  </div>
-                </Spoiler>
+                {#key currentPuzzle.puzzle_id}
+                  <Spoiler minWidth="70" isShown={puzzleComplete}>
+                    <div>
+                      {currentPuzzle.rating}
+                    </div>
+                  </Spoiler>
+                {/key}
               </div>
             </div>
           </div>
