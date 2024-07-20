@@ -163,7 +163,7 @@
     const isCheckmate = moveEvent.detail.isCheckmate;
     const correctMove = moves[0];
     if (move.lan === correctMove || isCheckmate) {
-      chessboard.highlightSquare(move.to, "correct-move", 1000);
+      chessboard.highlightSquare(move.to, "correct-move", 700);
       moves.shift(); // remove the user move first
       const computerMove = moves.shift();
       if (computerMove) {
@@ -178,7 +178,7 @@
       }
     } else {
       madeMistake = true;
-      chessboard.highlightSquare(move.to, "incorrect-move", 300);
+      chessboard.highlightSquare(move.to, "incorrect-move", 400);
       setTimeout(() => {
         chessboard.undo();
       }, 300);

@@ -54,3 +54,7 @@ square {
 .correct-move {
   background: generateRadialGradient($tiffany-blue);
 }
+
+.test {
+  background-color: rgba($tiffany-blue, 0.3) !important;
+}

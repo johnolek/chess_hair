@@ -22466,4 +22466,8 @@ square {
   background: radial-gradient(ellipse at center, hsl(160, 41%, 70%) 0%, #6fc3a7 25%, rgba(75, 180, 145, 0) 89%, rgba(68, 162, 130, 0) 100%);
 }
 
+.test {
+  background-color: rgba(147, 210, 189, 0.3) !important;
+}
+
 /*# sourceMappingURL=chess_hair.css.map */
