@@ -22454,4 +22454,16 @@ has-background-danger.is-hoverable:active {
   --brand-color-9: hsl(197, 100%, 5%);
 }
 
+square {
+  transition: background-color 0.5s ease-in-out;
+}
+
+.incorrect-move {
+  background: radial-gradient(ellipse at center, hsl(5, 81%, 38%) 0%, #81170e 25%, rgba(83, 15, 9, 0) 89%, rgba(60, 11, 6, 0) 100%);
+}
+
+.correct-move {
+  background: radial-gradient(ellipse at center, hsl(160, 41%, 70%) 0%, #6fc3a7 25%, rgba(75, 180, 145, 0) 89%, rgba(68, 162, 130, 0) 100%);
+}
+
 /*# sourceMappingURL=chess_hair.css.map */

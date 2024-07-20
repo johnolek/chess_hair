@@ -24,6 +24,15 @@
 
   let currentBoardStyle = $boardStyle;
 
+  let customHighlights = new Map();
+  customHighlights.set("a1", "testing2");
+
+  $: {
+    if (customHighlights && chessground) {
+      chessground.set({ highlight: { custom: customHighlights } });
+    }
+  }
+
   $: {
     if (boardStyleOverride) {
       currentBoardStyle = boardStyleOverride;
@@ -132,6 +141,17 @@
 
   export function setLastMove(lastMove) {
     chessground.set({ lastMove });
+  }
+
+  export function highlightSquare(square, className, duration) {
+    customHighlights.set(square, className);
+    customHighlights = customHighlights;
+
+    // Set a timeout to remove the highlight after the specified duration
+    setTimeout(() => {
+      customHighlights.delete(square);
+      customHighlights = customHighlights;
+    }, duration);
   }
 
   onMount(() => {

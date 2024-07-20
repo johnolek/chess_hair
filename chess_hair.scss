@@ -33,3 +33,24 @@ $auburn: hsla(358, 64%, 37%, 1);
   --brand-color-8: #{$auburn};
   --brand-color-9: #{$rich-black};
 }
+
+square {
+  transition: background-color 0.5s ease-in-out;
+}
+
+@function generateRadialGradient($startColor, $startPercent: 0%, $midPercent: 25%, $endPercentStart: 89%, $endPercentEnd: 100%) {
+  $midColor: darken($startColor, 10%);
+  $endColorStart: darken($startColor, 20%);
+  $endColorEnd: darken($startColor, 25%);
+
+  @return radial-gradient(ellipse at center, $startColor $startPercent, $midColor $midPercent, rgba($endColorStart, 0) $endPercentStart, rgba($endColorEnd, 0) $endPercentEnd);
+}
+
+
+.incorrect-move {
+  background: generateRadialGradient($rufous);
+}
+
+.correct-move {
+  background: generateRadialGradient($tiffany-blue);
+}

@@ -29,6 +29,7 @@
   let fen;
   let lastMove;
   let chessboard;
+  let chessground;
   let orientation = "white";
   let chessgroundConfig = {
     coordinates: true,
@@ -157,16 +158,19 @@
   }
 
   async function handleUserMove(moveEvent) {
+    chessground.set({ highlight: { lastMove: false } });
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
     const correctMove = moves[0];
     if (move.lan === correctMove || isCheckmate) {
+      chessboard.highlightSquare(move.to, "correct-move", 1000);
       moves.shift(); // remove the user move first
       const computerMove = moves.shift();
       if (computerMove) {
         moves = moves; // reactivity
         setTimeout(() => {
           chessboard.move(computerMove);
+          chessground.set({ highlight: { lastMove: true } });
           updateNextMove();
         }, 300);
       } else {
@@ -174,7 +178,7 @@
       }
     } else {
       madeMistake = true;
-      showFailure("Nope!");
+      chessboard.highlightSquare(move.to, "incorrect-move", 300);
       setTimeout(() => {
         chessboard.undo();
       }, 300);
@@ -305,6 +309,7 @@
         <Chessboard
           bind:fen
           {chessgroundConfig}
+          bind:chessground
           {orientation}
           bind:this={chessboard}
           on:move={handleUserMove}
