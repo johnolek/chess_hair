@@ -6,8 +6,9 @@
     whiteBoardStyle,
     blackBoardStyle,
     pieceSet,
+    whitePieceSet,
+    blackPieceSet,
   } from "./stores";
-  import { onMount } from "svelte";
 
   let pieceSetOverride;
   let boardStyleOverride;
@@ -83,6 +84,29 @@
       </label>
     {/each}
   </div>
+
+  <div class="column is-one-third">
+    <h2 class="is-size-2">Piece Set (white)</h2>
+    {#each pieceSetOptions as option (option)}
+      <label
+        on:mouseenter={() => (pieceSetOverride = option)}
+        on:focus={() => (pieceSetOverride = option)}
+        on:mouseout={() => (pieceSetOverride = null)}
+        on:blur={() => (pieceSetOverride = null)}
+      >
+        <div>
+          <input
+            name="whitePieceSet"
+            type="radio"
+            bind:group={$whitePieceSet}
+            value={option}
+          />
+          {option}
+        </div>
+      </label>
+    {/each}
+  </div>
+
   <div class="column is-one-third">
     <h2 class="is-size-2">Board Style (black)</h2>
     {#each boardOptions as option (option)}
@@ -97,6 +121,28 @@
             name="blackBoardStyle"
             type="radio"
             bind:group={$blackBoardStyle}
+            value={option}
+          />
+          {option}
+        </div>
+      </label>
+    {/each}
+  </div>
+
+  <div class="column is-one-third">
+    <h2 class="is-size-2">Piece Set (black)</h2>
+    {#each pieceSetOptions as option (option)}
+      <label
+        on:mouseenter={() => (pieceSetOverride = option)}
+        on:focus={() => (pieceSetOverride = option)}
+        on:mouseout={() => (pieceSetOverride = null)}
+        on:blur={() => (pieceSetOverride = null)}
+      >
+        <div>
+          <input
+            name="blackPieceSet"
+            type="radio"
+            bind:group={$blackPieceSet}
             value={option}
           />
           {option}

@@ -7,6 +7,8 @@
     boardStyle,
     whiteBoardStyle,
     blackBoardStyle,
+    whitePieceSet,
+    blackPieceSet,
   } from "../stores";
   import { createEventDispatcher } from "svelte";
 
@@ -23,6 +25,7 @@
   export let boardStyleOverride = null;
 
   let currentBoardStyle = $boardStyle;
+  let currentPieceSet = $pieceSet;
 
   let customHighlights = new Map();
   customHighlights.set("a1", "testing2");
@@ -39,10 +42,13 @@
     } else {
       if (orientation === "white" && $whiteBoardStyle) {
         currentBoardStyle = $whiteBoardStyle;
+        currentPieceSet = $whitePieceSet;
       } else if (orientation === "black" && $blackBoardStyle) {
         currentBoardStyle = $blackBoardStyle;
+        currentPieceSet = $blackPieceSet;
       } else {
         currentBoardStyle = $boardStyle;
+        currentPieceSet = $pieceSet;
       }
     }
   }
@@ -185,7 +191,11 @@
     rel="stylesheet"
   />
 {:else}
-  <link id="piece-sprite" href="/piece-css/{$pieceSet}.css" rel="stylesheet" />
+  <link
+    id="piece-sprite"
+    href="/piece-css/{currentPieceSet}.css"
+    rel="stylesheet"
+  />
 {/if}
 
 <div
