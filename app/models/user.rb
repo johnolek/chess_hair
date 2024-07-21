@@ -1,4 +1,6 @@
 class User < ApplicationRecord
+  after_initialize :init_active_puzzle_ids
+
   # Include default devise modules. Others available are:
   # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
   devise :database_authenticatable, :registerable,
@@ -9,6 +11,10 @@ class User < ApplicationRecord
   has_many :user_puzzle_histories
 
   serialize :active_puzzle_ids, coder: YAML
+
+  def init_active_puzzle_ids
+    self.active_puzzle_ids ||= []
+  end
 
   def config
     super || build_config
@@ -107,9 +113,5 @@ class User < ApplicationRecord
 
   def has_puzzle_id?(puzzle_id)
     self.active_puzzle_ids.include?(puzzle_id)
-  end
-
-  def active_puzzle_ids
-    super || []
   end
 end
