@@ -23,7 +23,7 @@ class UserPuzzleHistory < ApplicationRecord
     last_results = results.slice(0, required_consecutive_solves)
 
     total_duration = last_results.sum do |result|
-      result.done_at - result.seen_at
+      result.duration || 0
     end
 
     (total_duration.to_f / last_results.count) / 1000

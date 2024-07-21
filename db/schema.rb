@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_21_192327) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_21_193038) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -57,11 +57,9 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_21_192327) do
     t.bigint "user_id", null: false
     t.string "puzzle_id", null: false
     t.boolean "made_mistake", default: false, null: false
-    t.bigint "seen_at", null: false
-    t.bigint "done_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "duration"
+    t.integer "duration", null: false
     t.index ["user_id"], name: "index_puzzle_results_on_user_id"
   end
 

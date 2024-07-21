@@ -17,11 +17,10 @@
   import ProgressBar from "./components/ProgressBar.svelte";
 
   class Result {
-    constructor(puzzleId, seenAt, madeMistake = false, doneAt = null) {
+    constructor(puzzleId, duration, madeMistake = false) {
       this.puzzleId = puzzleId;
       this.madeMistake = madeMistake;
-      this.seenAt = seenAt;
-      this.doneAt = doneAt;
+      this.duration = duration;
     }
   }
 
@@ -189,9 +188,8 @@
     puzzleComplete = true;
     const result = new Result(
       currentPuzzle.puzzle_id,
-      puzzleShownAt,
+      Util.currentMicrotime() - puzzleShownAt,
       madeMistake,
-      Util.currentMicrotime(),
     );
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
@@ -260,9 +258,8 @@
       body: JSON.stringify({
         puzzle_result: {
           puzzle_id: result.puzzleId,
-          seen_at: result.seenAt,
           made_mistake: result.madeMistake,
-          done_at: result.doneAt,
+          duration: result.duration,
         },
       }),
     });
