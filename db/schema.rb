@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_21_193038) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_21_194446) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -20,20 +20,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_21_193038) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_configs_on_user_id"
-  end
-
-  create_table "lichess_puzzle_opening_tags", force: :cascade do |t|
-    t.bigint "lichess_puzzle_id", null: false
-    t.bigint "opening_tag_id", null: false
-    t.index ["lichess_puzzle_id"], name: "index_lichess_puzzle_opening_tags_on_lichess_puzzle_id"
-    t.index ["opening_tag_id"], name: "index_lichess_puzzle_opening_tags_on_opening_tag_id"
-  end
-
-  create_table "lichess_puzzle_tags", force: :cascade do |t|
-    t.bigint "lichess_puzzle_id", null: false
-    t.bigint "tag_id", null: false
-    t.index ["lichess_puzzle_id"], name: "index_lichess_puzzle_tags_on_lichess_puzzle_id"
-    t.index ["tag_id"], name: "index_lichess_puzzle_tags_on_tag_id"
   end
 
   create_table "lichess_puzzles", force: :cascade do |t|
@@ -48,11 +34,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_21_193038) do
     t.index ["puzzle_id"], name: "index_lichess_puzzles_on_puzzle_id", unique: true
   end
 
-  create_table "opening_tags", force: :cascade do |t|
-    t.string "name"
-    t.index ["name"], name: "index_opening_tags_on_name", unique: true
-  end
-
   create_table "puzzle_results", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "puzzle_id", null: false
@@ -61,11 +42,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_21_193038) do
     t.datetime "updated_at", null: false
     t.integer "duration", null: false
     t.index ["user_id"], name: "index_puzzle_results_on_user_id"
-  end
-
-  create_table "tags", force: :cascade do |t|
-    t.string "name"
-    t.index ["name"], name: "index_tags_on_name", unique: true
   end
 
   create_table "user_puzzle_histories", force: :cascade do |t|
@@ -110,10 +86,6 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_21_193038) do
   end
 
   add_foreign_key "configs", "users"
-  add_foreign_key "lichess_puzzle_opening_tags", "lichess_puzzles"
-  add_foreign_key "lichess_puzzle_opening_tags", "opening_tags"
-  add_foreign_key "lichess_puzzle_tags", "lichess_puzzles"
-  add_foreign_key "lichess_puzzle_tags", "tags"
   add_foreign_key "puzzle_results", "users"
   add_foreign_key "user_puzzle_histories", "users"
   add_foreign_key "user_puzzles", "users"
