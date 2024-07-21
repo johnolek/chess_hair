@@ -11,6 +11,8 @@ class UserPuzzleHistory < ApplicationRecord
   scope :with_theme, ->(theme) { where('themes LIKE ?', "%#{theme}%") }
   scope :without_theme, ->(theme) { where.not('themes LIKE ?', "%#{theme}%") }
 
+  has_one :lichess_puzzle, primary_key: :puzzle_id, foreign_key: :puzzle_id
+
   def related_puzzle_results
     @related_puzzle_results ||= (user.grouped_puzzle_results[puzzle_id] || []).reverse
   end
@@ -57,9 +59,8 @@ class UserPuzzleHistory < ApplicationRecord
   def api_response
     {
       puzzle_id: puzzle_id,
-      fen: fen,
-      last_move: last_move,
-      solution: solution.split(' '),
+      fen: lichess_puzzle.fen,
+      moves: lichess_puzzle.moves.split(' '),
       rating: rating,
       themes: themes.split(' '),
       average_solve_time: average_solve_duration,

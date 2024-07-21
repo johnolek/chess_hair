@@ -117,6 +117,7 @@
     if (!chessboard) {
       return;
     }
+    chessboard.enableShowLastMove();
     puzzleComplete = false;
     madeMistake = false;
 
@@ -130,24 +131,24 @@
       return;
     }
     const chessInstance = new Chess();
-    lastMove = [
-      currentPuzzle.last_move.substring(0, 2),
-      currentPuzzle.last_move.substring(2, 4),
-    ];
     chessInstance.load(currentPuzzle.fen);
-    orientation = chessInstance.turn() === "w" ? "white" : "black";
+    // It gets loaded 1 move before th current move
+    orientation = chessInstance.turn() === "w" ? "black" : "white";
     fen = currentPuzzle.fen;
     chessboard.load(fen);
-    chessboard.setLastMove(lastMove);
 
     // Clone so we don't cache a value that gets shifted later
-    moves = [...currentPuzzle.solution];
+    moves = [...currentPuzzle.moves];
 
     updateNextMove();
 
     setTimeout(() => {
+      const computerMove = moves[0];
+      moves = moves.slice(1);
+      chessboard.move(computerMove);
       puzzleShownAt = Util.currentMicrotime();
-    }, 300);
+      updateNextMove();
+    }, 700);
   }
 
   function updateNextMove() {
