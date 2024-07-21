@@ -14,7 +14,7 @@ class UserPuzzleHistory < ApplicationRecord
   has_one :lichess_puzzle, primary_key: :puzzle_id, foreign_key: :puzzle_id
 
   def related_puzzle_results
-    @related_puzzle_results ||= (user.grouped_puzzle_results[puzzle_id] || []).reverse
+    @related_puzzle_results ||= (user.grouped_puzzle_results[puzzle_id] || []).sort_by(&:created_at).reverse
   end
 
   def average_solve_duration
