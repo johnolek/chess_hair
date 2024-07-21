@@ -139,6 +139,14 @@
     updateChessground();
   }
 
+  export function enableShowLastMove() {
+    chessground.set({ highlight: { lastMove: true } });
+  }
+
+  export function disableShowLastMove() {
+    chessground.set({ highlight: { lastMove: false } });
+  }
+
   export function setLastMove(lastMove) {
     chessground.set({ lastMove });
   }

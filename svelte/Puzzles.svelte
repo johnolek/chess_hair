@@ -27,8 +27,8 @@
   // Chess board stuff
   let fen;
   let lastMove;
+  /** @type {Chessboard} */
   let chessboard;
-  let chessground;
   let orientation = "white";
   let chessgroundConfig = {
     coordinates: true,
@@ -157,7 +157,7 @@
   }
 
   async function handleUserMove(moveEvent) {
-    chessground.set({ highlight: { lastMove: false } });
+    chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
     const correctMove = moves[0];
@@ -169,7 +169,7 @@
         moves = moves; // reactivity
         setTimeout(() => {
           chessboard.move(computerMove);
-          chessground.set({ highlight: { lastMove: true } });
+          chessboard.enableShowLastMove();
           updateNextMove();
         }, 300);
       } else {
@@ -179,6 +179,7 @@
       madeMistake = true;
       chessboard.highlightSquare(move.to, "incorrect-move", 400);
       setTimeout(() => {
+        chessboard.enableShowLastMove();
         chessboard.undo();
       }, 300);
     }
@@ -306,7 +307,6 @@
         <Chessboard
           bind:fen
           {chessgroundConfig}
-          bind:chessground
           {orientation}
           bind:this={chessboard}
           on:move={handleUserMove}
