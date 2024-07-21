@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_21_194446) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_21_195146) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -31,6 +31,8 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_21_194446) do
     t.integer "rating_deviation"
     t.integer "popularity"
     t.integer "nb_plays"
+    t.string "themes"
+    t.string "opening_tags"
     t.index ["puzzle_id"], name: "index_lichess_puzzles_on_puzzle_id", unique: true
   end
 
