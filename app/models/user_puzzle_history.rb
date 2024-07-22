@@ -3,8 +3,13 @@ class UserPuzzleHistory < ApplicationRecord
 
   scope :for_puzzle_id, ->(puzzle_id) { where(puzzle_id: puzzle_id) if puzzle_id.present? }
 
-  scope :minimum_rating, ->(rating) { where('rating >= ?', rating) }
-  scope :maximum_rating, ->(rating) { where('rating <= ?', rating) }
+  scope :minimum_rating, ->(rating) {
+    where(self.arel_table[:rating].gteq(rating))
+  }
+
+  scope :maximum_rating, ->(rating) {
+    where(self.arel_table[:rating].lteq(rating))
+  }
 
   scope :solved_correctly, -> { where(win: true) }
   scope :solved_incorrectly, -> { where(win: false) }
