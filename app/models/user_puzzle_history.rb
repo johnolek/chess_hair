@@ -28,7 +28,7 @@ class UserPuzzleHistory < ApplicationRecord
     results = related_puzzle_results.reject { |result| !result.correct? }
     return nil if results.empty?
 
-    last_results = results.slice(0, required_consecutive_solves)
+    last_results = results.filter { |r| r.correct? }.slice(0, required_consecutive_solves)
 
     total_duration = last_results.sum do |result|
       result.duration || 0
