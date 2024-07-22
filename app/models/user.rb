@@ -61,7 +61,7 @@ class User < ApplicationRecord
 
     return if active_puzzle_ids.count == batch_size
 
-    histories_query = filtered_incorrectly_solved_query.where.not(puzzle_id: active_puzzle_ids)
+    histories_query = filtered_incorrectly_solved_query.where.not(puzzle_id: active_puzzle_ids).with_lichess_puzzle
 
     unsolved = histories_query.random_order.all.filter { |history| !history.complete? }
 

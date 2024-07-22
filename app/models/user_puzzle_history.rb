@@ -12,6 +12,7 @@ class UserPuzzleHistory < ApplicationRecord
   scope :without_theme, ->(theme) { where.not('themes LIKE ?', "%#{theme}%") }
 
   has_one :lichess_puzzle, primary_key: :puzzle_id, foreign_key: :puzzle_id
+  scope :with_lichess_puzzle, -> { joins(:lichess_puzzle) }
 
   def related_puzzle_results
     @related_puzzle_results ||= (user.grouped_puzzle_results[puzzle_id] || []).sort_by(&:created_at).reverse
