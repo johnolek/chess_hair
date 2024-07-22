@@ -305,26 +305,28 @@
   <div class="column is-6-desktop">
     <div class="block">
       {#if currentPuzzle}
-        <Chessboard
-          bind:fen
-          {chessgroundConfig}
-          {orientation}
-          bind:this={chessboard}
-          on:move={handleUserMove}
-        >
-          <div slot="centered-content">
-            {#if successMessage}
-              <span transition:fade class="tag is-success is-size-4">
-                {successMessage}
-              </span>
-            {/if}
-            {#if failureMessage}
-              <span transition:fade class="tag is-danger is-size-4">
-                {failureMessage}
-              </span>
-            {/if}
-          </div>
-        </Chessboard>
+        <div class="board-container">
+          <Chessboard
+            bind:fen
+            {chessgroundConfig}
+            {orientation}
+            bind:this={chessboard}
+            on:move={handleUserMove}
+          >
+            <div slot="centered-content">
+              {#if successMessage}
+                <span transition:fade class="tag is-success is-size-4">
+                  {successMessage}
+                </span>
+              {/if}
+              {#if failureMessage}
+                <span transition:fade class="tag is-danger is-size-4">
+                  {failureMessage}
+                </span>
+              {/if}
+            </div>
+          </Chessboard>
+        </div>
         {#if currentPuzzle}
           <div class="block mt-2">
             <div class="columns is-mobile">
@@ -582,5 +584,8 @@
 <style>
   .puzzle-id {
     font-family: monospace;
+  }
+  .board-container {
+    max-width: 80vh;
   }
 </style>
