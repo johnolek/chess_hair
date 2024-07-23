@@ -122,11 +122,6 @@
     puzzleComplete = false;
     madeMistake = false;
 
-    if (puzzleWasCompleted) {
-      puzzleWasCompleted = false;
-      await updateActivePuzzles();
-    }
-
     currentPuzzle = getNextPuzzle();
     if (!currentPuzzle) {
       return;
@@ -197,9 +192,7 @@
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
     await savePuzzleResult(result);
-
-    // Trigger reactivity
-    activePuzzles = activePuzzles;
+    await updateActivePuzzles();
   }
 
   let successMessage = null;
@@ -257,8 +250,6 @@
     }
   }
 
-  let puzzleWasCompleted = false;
-
   async function savePuzzleResult(result) {
     const response = await Util.fetch("api/v1/puzzle_results", {
       method: "POST",
@@ -272,7 +263,6 @@
     });
     const data = await response.json();
     const updatedPuzzle = data.puzzle;
-    puzzleWasCompleted = updatedPuzzle.complete;
     currentPuzzle = updatedPuzzle;
     activePuzzles = activePuzzles.map((puzzle) =>
       puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
