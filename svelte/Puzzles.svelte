@@ -328,10 +328,44 @@
 
 {#if loaded}
   <div class="columns is-centered">
-    <div class="column is-6-desktop">
+    <div class="column is-6">
       <div class="block">
         {#if currentPuzzle}
-          <div class="board-container">
+          <div class="block">
+            <div class="columns is-mobile">
+              <div class="column">
+                <a
+                  href={`https://lichess.org/training/${currentPuzzle.puzzle_id}`}
+                  class="puzzle-id"
+                  target="_blank"
+                  title="View on lichess.org">{currentPuzzle.puzzle_id}</a
+                >
+              </div>
+              <div class="column">
+                {#if currentPuzzle.average_solve_time}
+                  <span
+                    class:has-text-warning={currentPuzzle.average_solve_time >
+                      timeGoal}
+                    class:has-text-success={currentPuzzle.average_solve_time <=
+                      timeGoal && currentPuzzle.average_solve_time > 0}
+                    >{currentPuzzle.average_solve_time.toFixed(2)}s</span
+                  >
+                {/if}
+              </div>
+              <div class="column is-two-thirds">
+                {#key currentPuzzle.puzzle_id}
+                  <ProgressBar
+                    max={requiredConsecutiveSolves}
+                    bind:current={currentPuzzle.streak}
+                    className={currentPuzzle.streak >= requiredConsecutiveSolves
+                      ? "is-success"
+                      : "is-warning"}
+                  ></ProgressBar>
+                {/key}
+              </div>
+            </div>
+          </div>
+          <div class="board-container block">
             <Chessboard
               bind:fen
               {chessgroundConfig}
@@ -353,43 +387,6 @@
               </div>
             </Chessboard>
           </div>
-          {#if currentPuzzle}
-            <div class="block mt-2">
-              <div class="columns is-mobile">
-                <div class="column">
-                  <a
-                    href={`https://lichess.org/training/${currentPuzzle.puzzle_id}`}
-                    class="puzzle-id"
-                    target="_blank"
-                    title="View on lichess.org">{currentPuzzle.puzzle_id}</a
-                  >
-                </div>
-                <div class="column">
-                  {#if currentPuzzle.average_solve_time}
-                    <span
-                      class:has-text-warning={currentPuzzle.average_solve_time >
-                        timeGoal}
-                      class:has-text-success={currentPuzzle.average_solve_time <=
-                        timeGoal && currentPuzzle.average_solve_time > 0}
-                      >{currentPuzzle.average_solve_time.toFixed(2)}s</span
-                    >
-                  {/if}
-                </div>
-                <div class="column is-two-thirds">
-                  {#key currentPuzzle.puzzle_id}
-                    <ProgressBar
-                      max={requiredConsecutiveSolves}
-                      bind:current={currentPuzzle.streak}
-                      className={currentPuzzle.streak >=
-                      requiredConsecutiveSolves
-                        ? "is-success"
-                        : "is-warning"}
-                    ></ProgressBar>
-                  {/key}
-                </div>
-              </div>
-            </div>
-          {/if}
           <div>
             <div class="columns is-vcentered is-mobile">
               {#if puzzleComplete}
@@ -442,7 +439,7 @@
         {/if}
       </div>
     </div>
-    <div class="column is-4-desktop">
+    <div class="column is-4">
       {#if activePuzzles.length >= 1 && currentPuzzle}
         <div class="box">
           <table class="table is-fullwidth is-narrow is-striped">
