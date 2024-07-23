@@ -6,6 +6,7 @@ require 'net/http'
 
 class ApplicationController < ActionController::Base
   before_action :set_default_body_attributes
+  before_action :authenticate_user!, only: [:puzzles]
 
   def knight_moves
   end
