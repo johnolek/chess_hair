@@ -13,7 +13,7 @@ class FetchPuzzleHistoryJob < ApplicationJob
     end
 
     before = nil
-    per_request = 20
+    per_request = 50
     keep_going = true
     imported = 0
     fetched_existing = false
@@ -68,5 +68,6 @@ class FetchPuzzleHistoryJob < ApplicationJob
     end
   ensure
     user.set_data('puzzle_import_running', false)
+    user.set_data('puzzles_imported_at', Time.current.to_i)
   end
 end
