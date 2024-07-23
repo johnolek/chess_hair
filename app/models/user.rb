@@ -114,4 +114,13 @@ class User < ApplicationRecord
   def has_puzzle_id?(puzzle_id)
     self.active_puzzle_ids.include?(puzzle_id)
   end
+
+  def get_data(key, default = nil)
+    data[key] || default
+  end
+
+  def set_data(key, value)
+    self.data = data.merge({key => value})
+    save!
+  end
 end
