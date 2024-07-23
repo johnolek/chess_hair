@@ -317,9 +317,12 @@
         nextButton.click();
       }
     });
-    // Set loaded before the first puzzle is loaded so the chessboard loads
     loaded = true;
     await loadNextPuzzle();
+    setTimeout(async () => {
+      // Fix to make sure the board updates on initial load
+      await loadNextPuzzle();
+    }, 1);
   });
 </script>
 
