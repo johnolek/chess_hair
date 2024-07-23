@@ -39,19 +39,11 @@ module Api
         mapped = histories.all.map(&:api_response)
         render json: {
           puzzles: mapped,
+          random_completed_puzzle: get_random_completed_puzzle&.api_response,
           total_incorrect_puzzles_count: @user.total_incorrect_puzzles_count,
           total_filtered_puzzles_count: @user.total_filtered_puzzles_count,
           completed_filtered_puzzles_count: @user.completed_filtered_puzzles_count
         }
-      end
-
-      def random_completed_puzzle
-        history = @user.filtered_incorrectly_solved_query.random_order
-        completed = history.all.filter { |history| history.complete? }
-        if completed.count < 1
-          return render json: nil, status: :not_found
-        end
-        render json: completed.first.api_response
       end
 
       def import_new_puzzle_histories
@@ -60,6 +52,12 @@ module Api
       end
 
       private
+
+      def get_random_completed_puzzle
+        history = @user.filtered_incorrectly_solved_query.random_order
+        completed = history.all.filter { |history| history.complete? }
+        completed.first
+      end
 
       def setting_params
         params.permit(:key, :value)

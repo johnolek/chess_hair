@@ -101,7 +101,6 @@
       randomCompletedPuzzle &&
       (Math.random() < oddsOfRandomCompleted || activePuzzles.length < 1)
     ) {
-      fetchRandomCompletePuzzle();
       return randomCompletedPuzzle;
     }
     const previous = currentPuzzle ? currentPuzzle.puzzle_id : null;
@@ -221,16 +220,10 @@
     );
     const response = await activePuzzlesRequest.json();
     activePuzzles = response.puzzles;
+    randomCompletedPuzzle = response.random_completed_puzzle;
     totalIncorrectPuzzlesCount = response.total_incorrect_puzzles_count;
     totalFilteredPuzzlesCount = response.total_filtered_puzzles_count;
     completedFilteredPuzzlesCount = response.completed_filtered_puzzles_count;
-  }
-
-  async function fetchRandomCompletePuzzle() {
-    const request = await Util.fetch("/api/v1/users/random-completed-puzzle");
-    if (request.ok) {
-      randomCompletedPuzzle = await request.json();
-    }
   }
 
   let userInfo = {};
@@ -241,9 +234,6 @@
 
   async function initializePuzzles() {
     await updateActivePuzzles();
-    if (!randomCompletedPuzzle) {
-      await fetchRandomCompletePuzzle();
-    }
     if (!currentPuzzle) {
       currentPuzzle =
         Util.getRandomElement(activePuzzles) || randomCompletedPuzzle;
