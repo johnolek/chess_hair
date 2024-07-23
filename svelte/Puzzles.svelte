@@ -182,7 +182,6 @@
   }
 
   async function handlePuzzleComplete() {
-    puzzleComplete = true;
     const result = new Result(
       currentPuzzle.puzzle_id,
       Util.currentMicrotime() - puzzleShownAt,
@@ -192,6 +191,7 @@
     showSuccess(message);
     await savePuzzleResult(result);
     await updateActivePuzzles();
+    puzzleComplete = true;
   }
 
   let successMessage = null;
