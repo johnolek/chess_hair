@@ -28,6 +28,7 @@ module Api
       def info
         render json: {
           has_lichess_token: @user.lichess_api_token.present?,
+          import_in_progress: @user.puzzle_import_in_progress?,
         }
       end
 
@@ -51,6 +52,11 @@ module Api
           return render json: nil, status: :not_found
         end
         render json: completed.first.api_response
+      end
+
+      def import_new_puzzle_histories
+        FetchPuzzleHistoryJob.perform_later(user: @user)
+        render json: { message: "Importing new puzzle histories." }
       end
 
       private

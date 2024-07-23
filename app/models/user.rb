@@ -123,4 +123,8 @@ class User < ApplicationRecord
     self.data = data.merge({key => value})
     save!
   end
+
+  def puzzle_import_in_progress?
+    get_data('puzzle_import_running', false)
+  end
 end

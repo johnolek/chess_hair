@@ -26,7 +26,6 @@
 
   // Chess board stuff
   let fen;
-  let lastMove;
   /** @type {Chessboard} */
   let chessboard;
   let orientation = "white";
@@ -239,7 +238,7 @@
     }
   }
 
-  let userInfo;
+  let userInfo = {};
   async function initUserInfo() {
     const userInfoRequest = await Util.fetch("/api/v1/users/info");
     userInfo = await userInfoRequest.json();
@@ -247,9 +246,13 @@
 
   async function initializePuzzles() {
     await updateActivePuzzles();
-    await fetchRandomCompletePuzzle();
-    currentPuzzle =
-      Util.getRandomElement(activePuzzles) || randomCompletedPuzzle;
+    if (!randomCompletedPuzzle) {
+      await fetchRandomCompletePuzzle();
+    }
+    if (!currentPuzzle) {
+      currentPuzzle =
+        Util.getRandomElement(activePuzzles) || randomCompletedPuzzle;
+    }
   }
 
   let puzzleWasCompleted = false;
@@ -274,6 +277,18 @@
     );
   }
 
+  async function waitForImportComplete() {
+    const userInfoInterval = setInterval(async () => {
+      if (userInfo.import_in_progress) {
+        await initUserInfo();
+        await initializePuzzles();
+      } else {
+        clearInterval(userInfoInterval);
+        await initializePuzzles();
+      }
+    }, 5000);
+  }
+
   let batchSize;
   let requiredConsecutiveSolves;
   let timeGoal;
@@ -284,6 +299,9 @@
   onMount(async () => {
     await initSettings();
     await initUserInfo();
+    if (userInfo.import_in_progress) {
+      await waitForImportComplete();
+    }
     batchSize = getSetting("puzzles.batchSize", 15);
     timeGoal = getSetting("puzzles.timeGoal", 20);
     minimumRating = getSetting("puzzles.minRating");
@@ -411,7 +429,7 @@
           </div>
         </div>
       {:else}
-        <p>All puzzles complete, add some more!</p>
+        <p>There are no current puzzles to play.</p>
       {/if}
     </div>
   </div>
@@ -480,9 +498,24 @@
           <a href="/authenticate-with-lichess" class="button is-primary">
             Authenticate with Lichess to load puzzles
           </a>
+        {:else if userInfo && userInfo.import_in_progress}
+          <div class="block">
+            <p>
+              Puzzle import in progress. This can take a long time, especially
+              the first time.
+            </p>
+            <progress class="progress is-small is-primary" max="100"></progress>
+          </div>
         {:else}
-          <a href="/fetch-puzzle-history" class="button is-primary"
-            >Fetch latest puzzles from lichess</a
+          <button
+            on:click={async () => {
+              await Util.fetch("/api/v1/users/import-new-puzzle-histories", {
+                method: "POST",
+              });
+              userInfo = { ...userInfo, import_in_progress: true };
+              await waitForImportComplete();
+            }}
+            class="button is-primary">Fetch latest puzzles from lichess</button
           >
         {/if}
         <p><strong>{totalIncorrectPuzzlesCount}</strong> total puzzles</p>

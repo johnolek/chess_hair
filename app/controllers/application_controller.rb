@@ -10,15 +10,6 @@ class ApplicationController < ActionController::Base
   def knight_moves
   end
 
-  def testing
-    return head :not_found unless current_user
-    if params[:lichess_api_token]
-      current_user.lichess_api_token = params[:lichess_api_token]
-      current_user.save!
-    end
-    render plain: 'ok'
-  end
-
   def authenticate_with_lichess
     return render plain: 'Must be logged in' unless current_user
 
@@ -71,49 +62,12 @@ class ApplicationController < ActionController::Base
       current_user.lichess_api_token = access_token
       current_user.lichess_code_verifier = nil
       current_user.lichess_code = nil
+      current_user.set_data('lichess_token_api_response', response.body)
+      current_user.set_data('lichess_token_expires_at', Time.current.to_i + JSON.parse(response.body)['expires_in'])
       current_user.save!
+      FetchPuzzleHistoryJob.perform_later(user: current_user)
     end
     redirect_to url_for(controller: 'application', action: 'puzzles')
-  end
-
-  def fetch_puzzle_history
-    return head :not_found unless current_user
-    unless current_user.lichess_api_token
-      return render plain: 'No lichess API token'
-    end
-    before = nil
-    per_request = 40
-    keep_going = true
-    imported = 0
-    while keep_going
-      LichessApi.fetch_puzzle_activity(current_user.lichess_api_token, per_request, before) do |puzzle_json|
-        parsed = JSON.parse(puzzle_json)
-        before = parsed['date']
-        Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
-        puzzle = parsed['puzzle']
-        history = current_user.user_puzzle_histories.find_or_initialize_by({
-                                                                             puzzle_id: puzzle['id'],
-                                                                             played_at: parsed['date']
-                                                                           })
-        Rails.logger.info "Puzzle history already exists" unless history.new_record?
-        unless history.new_record?
-          keep_going = false
-          break
-        end
-        history.assign_attributes({
-                                    win: parsed['win'],
-                                    rating: puzzle['rating'],
-                                    solution: puzzle['solution'].join(' '),
-                                    fen: puzzle['fen'],
-                                    plays: puzzle['plays'],
-                                    themes: puzzle['themes'].join(' '),
-                                    last_move: puzzle['lastMove'],
-                                  })
-        history.save!
-        imported += 1
-      end
-    end
-    render plain: "Imported #{imported} puzzle histories"
   end
 
   def env

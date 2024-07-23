@@ -38,5 +38,8 @@ module ChessHair
 
     # Don't generate system test files.
     config.generators.system_tests = nil
+
+    # in memory, not advisable for production
+    config.active_job.queue_adapter = :async
   end
 end
