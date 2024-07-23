@@ -24,6 +24,8 @@
     }
   }
 
+  let loaded = false;
+
   // Chess board stuff
   let fen;
   /** @type {Chessboard} */
@@ -315,304 +317,319 @@
         nextButton.click();
       }
     });
+    // Set loaded before the first puzzle is loaded so the chessboard loads
+    loaded = true;
     await loadNextPuzzle();
   });
 </script>
 
-<div class="columns is-centered">
-  <div class="column is-6-desktop">
-    <div class="block">
-      {#if currentPuzzle}
-        <div class="board-container">
-          <Chessboard
-            bind:fen
-            {chessgroundConfig}
-            {orientation}
-            bind:this={chessboard}
-            on:move={handleUserMove}
-          >
-            <div slot="centered-content">
-              {#if successMessage}
-                <span transition:fade class="tag is-success is-size-4">
-                  {successMessage}
-                </span>
-              {/if}
-              {#if failureMessage}
-                <span transition:fade class="tag is-danger is-size-4">
-                  {failureMessage}
-                </span>
-              {/if}
-            </div>
-          </Chessboard>
-        </div>
+{#if loaded}
+  <div class="columns is-centered">
+    <div class="column is-6-desktop">
+      <div class="block">
         {#if currentPuzzle}
-          <div class="block mt-2">
-            <div class="columns is-mobile">
-              <div class="column">
-                <a
-                  href={`https://lichess.org/training/${currentPuzzle.puzzle_id}`}
-                  class="puzzle-id"
-                  target="_blank"
-                  title="View on lichess.org">{currentPuzzle.puzzle_id}</a
-                >
-              </div>
-              <div class="column">
-                {#if currentPuzzle.average_solve_time}
-                  <span
-                    class:has-text-warning={currentPuzzle.average_solve_time >
-                      timeGoal}
-                    class:has-text-success={currentPuzzle.average_solve_time <=
-                      timeGoal && currentPuzzle.average_solve_time > 0}
-                    >{currentPuzzle.average_solve_time.toFixed(2)}s</span
-                  >
+          <div class="board-container">
+            <Chessboard
+              bind:fen
+              {chessgroundConfig}
+              {orientation}
+              bind:this={chessboard}
+              on:move={handleUserMove}
+            >
+              <div slot="centered-content">
+                {#if successMessage}
+                  <span transition:fade class="tag is-success is-size-4">
+                    {successMessage}
+                  </span>
+                {/if}
+                {#if failureMessage}
+                  <span transition:fade class="tag is-danger is-size-4">
+                    {failureMessage}
+                  </span>
                 {/if}
               </div>
-              <div class="column is-two-thirds">
-                {#key currentPuzzle.puzzle_id}
-                  <ProgressBar
-                    max={requiredConsecutiveSolves}
-                    bind:current={currentPuzzle.streak}
-                    className={currentPuzzle.streak >= requiredConsecutiveSolves
-                      ? "is-success"
-                      : "is-warning"}
-                  ></ProgressBar>
-                {/key}
+            </Chessboard>
+          </div>
+          {#if currentPuzzle}
+            <div class="block mt-2">
+              <div class="columns is-mobile">
+                <div class="column">
+                  <a
+                    href={`https://lichess.org/training/${currentPuzzle.puzzle_id}`}
+                    class="puzzle-id"
+                    target="_blank"
+                    title="View on lichess.org">{currentPuzzle.puzzle_id}</a
+                  >
+                </div>
+                <div class="column">
+                  {#if currentPuzzle.average_solve_time}
+                    <span
+                      class:has-text-warning={currentPuzzle.average_solve_time >
+                        timeGoal}
+                      class:has-text-success={currentPuzzle.average_solve_time <=
+                        timeGoal && currentPuzzle.average_solve_time > 0}
+                      >{currentPuzzle.average_solve_time.toFixed(2)}s</span
+                    >
+                  {/if}
+                </div>
+                <div class="column is-two-thirds">
+                  {#key currentPuzzle.puzzle_id}
+                    <ProgressBar
+                      max={requiredConsecutiveSolves}
+                      bind:current={currentPuzzle.streak}
+                      className={currentPuzzle.streak >=
+                      requiredConsecutiveSolves
+                        ? "is-success"
+                        : "is-warning"}
+                    ></ProgressBar>
+                  {/key}
+                </div>
               </div>
             </div>
-          </div>
-        {/if}
-        <div>
-          <div class="columns is-vcentered is-mobile">
-            {#if puzzleComplete}
+          {/if}
+          <div>
+            <div class="columns is-vcentered is-mobile">
+              {#if puzzleComplete}
+                <div class="column">
+                  <button
+                    class="button is-primary"
+                    bind:this={nextButton}
+                    on:click={async () => {
+                      await loadNextPuzzle();
+                    }}
+                    >Next
+                  </button>
+                </div>
+              {/if}
+              {#if !puzzleComplete}
+                <div class="column">
+                  <span class="tag is-{orientation} is-size-4">
+                    {orientation} to play
+                  </span>
+                </div>
+                <div class="column">
+                  {#if nextMove}
+                    <div>Next Move</div>
+                    <div>
+                      <Spoiler minWidth="70">
+                        <div>
+                          {nextMove}
+                        </div>
+                      </Spoiler>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
               <div class="column">
-                <button
-                  class="button is-primary"
-                  bind:this={nextButton}
-                  on:click={async () => {
-                    await loadNextPuzzle();
-                  }}
-                  >Next
-                </button>
-              </div>
-            {/if}
-            {#if !puzzleComplete}
-              <div class="column">
-                <span class="tag is-{orientation} is-size-4">
-                  {orientation} to play
-                </span>
-              </div>
-              <div class="column">
-                {#if nextMove}
-                  <div>Next Move</div>
-                  <div>
-                    <Spoiler minWidth="70">
+                <div>Rating</div>
+                <div>
+                  {#key currentPuzzle.puzzle_id}
+                    <Spoiler minWidth="70" isShown={puzzleComplete}>
                       <div>
-                        {nextMove}
+                        {currentPuzzle.rating}
                       </div>
                     </Spoiler>
-                  </div>
-                {/if}
-              </div>
-            {/if}
-            <div class="column">
-              <div>Rating</div>
-              <div>
-                {#key currentPuzzle.puzzle_id}
-                  <Spoiler minWidth="70" isShown={puzzleComplete}>
-                    <div>
-                      {currentPuzzle.rating}
-                    </div>
-                  </Spoiler>
-                {/key}
+                  {/key}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      {:else}
-        <p>There are no current puzzles to play.</p>
-      {/if}
-    </div>
-  </div>
-  <div class="column is-4-desktop">
-    {#if activePuzzles.length >= 1 && currentPuzzle}
-      <div class="box">
-        <table class="table is-fullwidth is-narrow is-striped">
-          <thead>
-            <tr>
-              <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
-              <th><abbr title="Average solve time">Avg</abbr></th>
-              <th><abbr title="Correct solves in a row">Streak</abbr></th>
-              <th><abbr title="Total correct solves">Solves</abbr></th>
-              <th><abbr title="Failure Count">Fails</abbr></th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle.puzzle_id)}
-              <tr
-                animate:flip={{ duration: 400 }}
-                class:is-selected={currentPuzzle.puzzle_id === puzzle.puzzle_id}
-              >
-                <td class="puzzle-id"
-                  ><a
-                    href={`https://lichess.org/training/${puzzle.puzzle_id}`}
-                    target="_blank"
-                    title="View on lichess.org">{puzzle.puzzle_id}</a
-                  ></td
-                >
-                {#if puzzle.average_solve_time}
-                  <td
-                    class:has-text-warning={puzzle.average_solve_time >
-                      timeGoal}
-                    class:has-text-success={puzzle.average_solve_time <=
-                      timeGoal && puzzle.average_solve_time > 0}
-                  >
-                    {puzzle.average_solve_time.toFixed(2)}s
-                  </td>
-                {:else}
-                  <td>?</td>
-                {/if}
-                <td>
-                  <ProgressBar
-                    max={requiredConsecutiveSolves}
-                    bind:current={puzzle.streak}
-                    className={puzzle.streak >= requiredConsecutiveSolves
-                      ? "is-success"
-                      : "is-warning"}
-                  ></ProgressBar>
-                </td>
-                <td>
-                  {puzzle.total_solves}
-                </td>
-                <td>
-                  {puzzle.total_fails}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    {/if}
-    <div class="box">
-      <div class="block">
-        {#if userInfo && !userInfo.has_lichess_token}
-          <a href="/authenticate-with-lichess" class="button is-primary">
-            Authenticate with Lichess to load puzzles
-          </a>
-        {:else if userInfo && userInfo.import_in_progress}
-          <div class="block">
-            <p>
-              Puzzle import in progress. This can take a long time, especially
-              the first time.
-            </p>
-            <progress class="progress is-small is-primary" max="100"></progress>
-          </div>
         {:else}
-          <button
-            on:click={async () => {
-              await Util.fetch("/api/v1/users/import-new-puzzle-histories", {
-                method: "POST",
-              });
-              userInfo = { ...userInfo, import_in_progress: true };
-              await waitForImportComplete();
-            }}
-            class="button is-primary">Fetch latest puzzles from lichess</button
-          >
+          <p>There are no current puzzles to play.</p>
         {/if}
-        <p><strong>{totalIncorrectPuzzlesCount}</strong> total puzzles</p>
-        {#if totalIncorrectPuzzlesCount !== totalFilteredPuzzlesCount}
-          <p>
-            <strong>{totalFilteredPuzzlesCount}</strong> puzzles after filtering
-          </p>
-        {/if}
-        {#if totalFilteredPuzzlesCount && completedFilteredPuzzlesCount}
-          <p>
-            <strong>{completedFilteredPuzzlesCount}</strong> of
-            <strong>{totalFilteredPuzzlesCount}</strong> completed
-          </p>
-          <ProgressBar
-            max={totalFilteredPuzzlesCount}
-            bind:current={completedFilteredPuzzlesCount}
-          />
-        {/if}
-        <p>
-          Target solve time: <strong>{timeGoal}</strong> seconds
-        </p>
-        <p>
-          Must solve <strong>{requiredConsecutiveSolves}</strong>
-          time{requiredConsecutiveSolves > 1 ? "s" : ""} in a row
-        </p>
       </div>
     </div>
-    <CollapsibleBox title="Config" defaultOpen={true}>
-      <NumberInput
-        label="Batch Size"
-        min={5}
-        max={50}
-        step={1}
-        bind:value={batchSize}
-        onChange={async (value) => {
-          await updateSetting("puzzles.batchSize", value);
-          await updateActivePuzzles();
-        }}
-      />
-      <NumberInput
-        label="Time Goal"
-        min={10}
-        max={60}
-        step={1}
-        bind:value={timeGoal}
-        onChange={async (value) => {
-          await updateSetting("puzzles.timeGoal", value);
-          await updateActivePuzzles();
-        }}
-      />
-      <NumberInput
-        label="Required Consecutive Solves"
-        min={1}
-        max={10}
-        step={1}
-        bind:value={requiredConsecutiveSolves}
-        onChange={async (value) => {
-          await updateSetting("puzzles.consecutiveSolves", value);
-          await updateActivePuzzles();
-        }}
-      />
-      <NumberInput
-        label="Minimum Rating"
-        min={1}
-        max={3500}
-        step={1}
-        bind:value={minimumRating}
-        onChange={async (value) => {
-          await updateSetting("puzzles.minRating", value);
-          await updateActivePuzzles();
-        }}
-      />
-      <NumberInput
-        label="Maximum Rating"
-        min={1}
-        max={3500}
-        step={1}
-        bind:value={maximumRating}
-        onChange={async (value) => {
-          await updateSetting("puzzles.maxRating", value);
-          await updateActivePuzzles();
-        }}
-      />
-      <NumberInput
-        label="Odds of Random Completed Puzzle"
-        min={0}
-        max={1}
-        step={0.01}
-        bind:value={oddsOfRandomCompleted}
-        onChange={async (value) => {
-          await updateSetting("puzzles.oddsOfRandomCompleted", value);
-          await updateActivePuzzles();
-        }}
-      />
-    </CollapsibleBox>
+    <div class="column is-4-desktop">
+      {#if activePuzzles.length >= 1 && currentPuzzle}
+        <div class="box">
+          <table class="table is-fullwidth is-narrow is-striped">
+            <thead>
+              <tr>
+                <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
+                <th><abbr title="Average solve time">Avg</abbr></th>
+                <th><abbr title="Correct solves in a row">Streak</abbr></th>
+                <th><abbr title="Total correct solves">Solves</abbr></th>
+                <th><abbr title="Failure Count">Fails</abbr></th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle.puzzle_id)}
+                <tr
+                  animate:flip={{ duration: 400 }}
+                  class:is-selected={currentPuzzle.puzzle_id ===
+                    puzzle.puzzle_id}
+                >
+                  <td class="puzzle-id"
+                    ><a
+                      href={`https://lichess.org/training/${puzzle.puzzle_id}`}
+                      target="_blank"
+                      title="View on lichess.org">{puzzle.puzzle_id}</a
+                    ></td
+                  >
+                  {#if puzzle.average_solve_time}
+                    <td
+                      class:has-text-warning={puzzle.average_solve_time >
+                        timeGoal}
+                      class:has-text-success={puzzle.average_solve_time <=
+                        timeGoal && puzzle.average_solve_time > 0}
+                    >
+                      {puzzle.average_solve_time.toFixed(2)}s
+                    </td>
+                  {:else}
+                    <td>?</td>
+                  {/if}
+                  <td>
+                    <ProgressBar
+                      max={requiredConsecutiveSolves}
+                      bind:current={puzzle.streak}
+                      className={puzzle.streak >= requiredConsecutiveSolves
+                        ? "is-success"
+                        : "is-warning"}
+                    ></ProgressBar>
+                  </td>
+                  <td>
+                    {puzzle.total_solves}
+                  </td>
+                  <td>
+                    {puzzle.total_fails}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+      <div class="box">
+        <div class="block">
+          {#if userInfo && !userInfo.has_lichess_token}
+            <a href="/authenticate-with-lichess" class="button is-primary">
+              Authenticate with Lichess to load puzzles
+            </a>
+          {:else if userInfo && userInfo.import_in_progress}
+            <div class="block">
+              <p>
+                Puzzle import in progress. This can take a long time, especially
+                the first time.
+              </p>
+              <progress class="progress is-small is-primary" max="100"
+              ></progress>
+            </div>
+          {:else}
+            <button
+              on:click={async () => {
+                await Util.fetch("/api/v1/users/import-new-puzzle-histories", {
+                  method: "POST",
+                });
+                userInfo = { ...userInfo, import_in_progress: true };
+                await waitForImportComplete();
+              }}
+              class="button is-primary"
+              >Fetch latest puzzles from lichess</button
+            >
+          {/if}
+          <p><strong>{totalIncorrectPuzzlesCount}</strong> total puzzles</p>
+          {#if totalIncorrectPuzzlesCount !== totalFilteredPuzzlesCount}
+            <p>
+              <strong>{totalFilteredPuzzlesCount}</strong> puzzles after filtering
+            </p>
+          {/if}
+          {#if totalFilteredPuzzlesCount && completedFilteredPuzzlesCount}
+            <p>
+              <strong>{completedFilteredPuzzlesCount}</strong> of
+              <strong>{totalFilteredPuzzlesCount}</strong> completed
+            </p>
+            <ProgressBar
+              max={totalFilteredPuzzlesCount}
+              bind:current={completedFilteredPuzzlesCount}
+            />
+          {/if}
+          <p>
+            Target solve time: <strong>{timeGoal}</strong> seconds
+          </p>
+          <p>
+            Must solve <strong>{requiredConsecutiveSolves}</strong>
+            time{requiredConsecutiveSolves > 1 ? "s" : ""} in a row
+          </p>
+        </div>
+      </div>
+      <CollapsibleBox title="Config" defaultOpen={true}>
+        <NumberInput
+          label="Batch Size"
+          min={5}
+          max={50}
+          step={1}
+          bind:value={batchSize}
+          onChange={async (value) => {
+            await updateSetting("puzzles.batchSize", value);
+            await updateActivePuzzles();
+          }}
+        />
+        <NumberInput
+          label="Time Goal"
+          min={10}
+          max={60}
+          step={1}
+          bind:value={timeGoal}
+          onChange={async (value) => {
+            await updateSetting("puzzles.timeGoal", value);
+            await updateActivePuzzles();
+          }}
+        />
+        <NumberInput
+          label="Required Consecutive Solves"
+          min={1}
+          max={10}
+          step={1}
+          bind:value={requiredConsecutiveSolves}
+          onChange={async (value) => {
+            await updateSetting("puzzles.consecutiveSolves", value);
+            await updateActivePuzzles();
+          }}
+        />
+        <NumberInput
+          label="Minimum Rating"
+          min={1}
+          max={3500}
+          step={1}
+          bind:value={minimumRating}
+          onChange={async (value) => {
+            await updateSetting("puzzles.minRating", value);
+            await updateActivePuzzles();
+          }}
+        />
+        <NumberInput
+          label="Maximum Rating"
+          min={1}
+          max={3500}
+          step={1}
+          bind:value={maximumRating}
+          onChange={async (value) => {
+            await updateSetting("puzzles.maxRating", value);
+            await updateActivePuzzles();
+          }}
+        />
+        <NumberInput
+          label="Odds of Random Completed Puzzle"
+          min={0}
+          max={1}
+          step={0.01}
+          bind:value={oddsOfRandomCompleted}
+          onChange={async (value) => {
+            await updateSetting("puzzles.oddsOfRandomCompleted", value);
+            await updateActivePuzzles();
+          }}
+        />
+      </CollapsibleBox>
+    </div>
   </div>
-</div>
+{:else}
+  <div class="container">
+    <div class="block has-text-centered">
+      <h2>Loading</h2>
+      <progress class="progress is-small is-primary" max="100" />
+    </div>
+  </div>
+{/if}
 
 <style>
   .puzzle-id {
