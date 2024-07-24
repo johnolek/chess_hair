@@ -56,14 +56,24 @@
 
   // Puzzle Data
   let activePuzzles = [];
+  let puzzleHistory = [];
   let currentPuzzle;
   let puzzleShownAt;
   let totalIncorrectPuzzlesCount;
   let totalFilteredPuzzlesCount;
   let completedFilteredPuzzlesCount;
   let randomCompletedPuzzle;
+  let minimumPuzzlesBetweenReviews;
 
-  // Behavioral Config
+  $: {
+    if (loaded) {
+      if (activePuzzles.length === 0) {
+        minimumPuzzlesBetweenReviews = 0;
+      } else if (minimumPuzzlesBetweenReviews >= activePuzzles.length) {
+        minimumPuzzlesBetweenReviews = activePuzzles.length - 1;
+      }
+    }
+  }
 
   // Current puzzle state
   let moves;
@@ -103,14 +113,18 @@
     ) {
       return randomCompletedPuzzle;
     }
-    const previous = currentPuzzle ? currentPuzzle.puzzle_id : null;
-    const others = activePuzzles.filter(
-      (puzzle) => puzzle.puzzle_id !== previous,
+
+    const lastSeen = puzzleHistory.slice(0, minimumPuzzlesBetweenReviews);
+
+    const eligiblePuzzles = activePuzzles.filter(
+      (puzzle) => !lastSeen.includes(puzzle.puzzle_id),
     );
-    if (others.length === 0) {
-      return currentPuzzle;
+
+    if (eligiblePuzzles.length >= 1) {
+      return Util.getRandomElement(eligiblePuzzles);
     }
-    return Util.getRandomElement(others);
+
+    return Util.getRandomElement(activePuzzles);
   }
 
   async function loadNextPuzzle() {
@@ -122,9 +136,13 @@
     madeMistake = false;
 
     currentPuzzle = getNextPuzzle();
+
     if (!currentPuzzle) {
       return;
     }
+
+    puzzleHistory = [currentPuzzle.puzzle_id, ...puzzleHistory];
+
     const chessInstance = new Chess();
     chessInstance.load(currentPuzzle.fen);
     // It gets loaded 1 move before th current move
@@ -220,6 +238,9 @@
     );
     const response = await activePuzzlesRequest.json();
     activePuzzles = response.puzzles;
+    if (puzzleHistory.length === 0) {
+      puzzleHistory = response.most_recent_seen;
+    }
     randomCompletedPuzzle = response.random_completed_puzzle;
     totalIncorrectPuzzlesCount = response.total_incorrect_puzzles_count;
     totalFilteredPuzzlesCount = response.total_filtered_puzzles_count;
@@ -291,6 +312,10 @@
     requiredConsecutiveSolves = getSetting("puzzles.consecutiveSolves", 2);
     oddsOfRandomCompleted = getSetting("puzzles.oddsOfRandomCompleted", 0.1);
     await initializePuzzles();
+    minimumPuzzlesBetweenReviews = getSetting(
+      "puzzles.minimumPuzzlesBetweenReviews",
+      Math.max(activePuzzles.length - 3, 0),
+    );
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
         event.preventDefault();
@@ -597,6 +622,16 @@
           onChange={async (value) => {
             await updateSetting("puzzles.oddsOfRandomCompleted", value);
             await updateActivePuzzles();
+          }}
+        />
+        <NumberInput
+          label="Minimum Puzzles Between Reviews"
+          min={0}
+          max={Math.max(activePuzzles.length - 1, 0)}
+          step={1}
+          bind:value={minimumPuzzlesBetweenReviews}
+          onChange={async (value) => {
+            await updateSetting("puzzles.minimumPuzzlesBetweenReviews", value);
           }}
         />
       </CollapsibleBox>

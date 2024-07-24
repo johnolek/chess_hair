@@ -37,8 +37,10 @@ module Api
 
         histories = @user.user_puzzle_histories.where(puzzle_id: @user.active_puzzle_ids).with_lichess_puzzle
         mapped = histories.all.map(&:api_response)
+        most_recent_seen = @user.puzzle_results.order(created_at: :desc).limit(30).pluck(:puzzle_id)
         render json: {
           puzzles: mapped,
+          most_recent_seen: most_recent_seen,
           random_completed_puzzle: get_random_completed_puzzle&.api_response,
           total_incorrect_puzzles_count: @user.total_incorrect_puzzles_count,
           total_filtered_puzzles_count: @user.total_filtered_puzzles_count,
