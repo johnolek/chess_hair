@@ -76,4 +76,21 @@ class UserPuzzleHistory < ApplicationRecord
       complete: complete?,
     }
   end
+
+  def convert_to_user_puzzle
+    return unless lichess_puzzle.present? && lichess_puzzle.fen
+    return if user.user_puzzles.exists?(fen: lichess_puzzle.fen)
+    all_data = api_response
+    user.user_puzzles.create!(
+      lichess_puzzle_id: all_data[:puzzle_id],
+      lichess_rating: all_data[:rating],
+      fen: all_data[:fen],
+      uci_moves: lichess_puzzle.moves,
+      average_solve_time: all_data[:average_solve_time],
+      solve_streak: all_data[:streak],
+      total_fails: all_data[:total_fails],
+      total_solves: all_data[:total_solves],
+      complete: all_data[:complete],
+    )
+  end
 end
