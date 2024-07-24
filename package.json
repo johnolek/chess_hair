@@ -12,7 +12,8 @@
 	"scripts": {
 		"dev": "rollup -c -w & pnpm run build-bulma",
 		"build": "rollup -c",
-		"build-bulma": "sass --load-path=node_modules --watch chess_hair.scss app/assets/stylesheets/chess_hair.css"
+		"build-bulma": "sass --load-path=node_modules --watch chess_hair.scss app/assets/stylesheets/chess_hair.css",
+		"prod-styles": "sass --load-path=node_modules --style=compressed chess_hair.scss app/assets/stylesheets/chess_hair.css"
 	},
 	"devDependencies": {
 		"@rollup/plugin-node-resolve": "^15.2.3",

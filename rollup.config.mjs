@@ -1,11 +1,12 @@
 import svelte from 'rollup-plugin-svelte';
 import resolve from '@rollup/plugin-node-resolve';
+const isProduction = process.env.RAILS_ENV === 'production';
 
 export default {
   plugins: [
     svelte({
       compilerOptions: {
-        dev: true,
+        dev: !isProduction,
       },
       include: './svelte/**/*.svelte',
       emitCss: false
