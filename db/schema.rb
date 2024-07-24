@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_24_034509) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_24_184849) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -74,9 +74,17 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_24_034509) do
 
   create_table "user_puzzles", force: :cascade do |t|
     t.bigint "user_id", null: false
-    t.string "puzzle_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "lichess_puzzle_id"
+    t.integer "lichess_rating"
+    t.string "fen", null: false
+    t.string "uci_moves", null: false
+    t.float "average_solve_time"
+    t.integer "solve_streak", default: 0, null: false
+    t.integer "total_fails", default: 0, null: false
+    t.integer "total_solves", default: 0, null: false
+    t.boolean "complete", default: false, null: false
     t.index ["user_id"], name: "index_user_puzzles_on_user_id"
   end
 
