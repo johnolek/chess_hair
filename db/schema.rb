@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_23_175134) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_24_033312) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -43,6 +43,9 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_23_175134) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "duration", null: false
+    t.index ["created_at"], name: "index_puzzle_results_on_created_at"
+    t.index ["made_mistake"], name: "index_puzzle_results_on_made_mistake"
+    t.index ["user_id", "puzzle_id"], name: "index_puzzle_results_on_user_id_and_puzzle_id"
     t.index ["user_id"], name: "index_puzzle_results_on_user_id"
   end
 
@@ -59,7 +62,10 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_23_175134) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "themes", null: false
+    t.index ["created_at"], name: "index_user_puzzle_histories_on_created_at"
+    t.index ["puzzle_id"], name: "index_user_puzzle_histories_on_puzzle_id"
     t.index ["user_id", "puzzle_id", "played_at"], name: "idx_on_user_id_puzzle_id_played_at_b3473fc27c", unique: true
+    t.index ["user_id", "puzzle_id"], name: "index_user_puzzle_histories_on_user_id_and_puzzle_id"
     t.index ["user_id"], name: "index_user_puzzle_histories_on_user_id"
   end
 
