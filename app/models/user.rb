@@ -37,7 +37,7 @@ class User < ApplicationRecord
   end
 
   def completed_filtered_puzzles_count
-    filtered_incorrectly_solved_query.all.filter { |history| history.complete? }.count
+    filtered_incorrectly_solved_query.includes(:lichess_puzzle).all.filter { |history| history.complete? }.count
   end
 
   def filtered_incorrectly_solved_query
@@ -75,7 +75,7 @@ class User < ApplicationRecord
 
   def remove_complete_from_active
     return unless active_puzzle_ids.count > 0
-    histories = user_puzzle_histories.where(puzzle_id: active_puzzle_ids)
+    histories = user_puzzle_histories.where(puzzle_id: active_puzzle_ids).includes(:lichess_puzzle)
     complete = histories.all.filter { | history| history.complete? }
     ids = complete.map(&:puzzle_id)
     remove_puzzle_ids(ids)
