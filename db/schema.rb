@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_24_033312) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_24_034509) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -64,9 +64,12 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_24_033312) do
     t.string "themes", null: false
     t.index ["created_at"], name: "index_user_puzzle_histories_on_created_at"
     t.index ["puzzle_id"], name: "index_user_puzzle_histories_on_puzzle_id"
+    t.index ["rating"], name: "index_user_puzzle_histories_on_rating"
+    t.index ["themes"], name: "index_user_puzzle_histories_on_themes"
     t.index ["user_id", "puzzle_id", "played_at"], name: "idx_on_user_id_puzzle_id_played_at_b3473fc27c", unique: true
     t.index ["user_id", "puzzle_id"], name: "index_user_puzzle_histories_on_user_id_and_puzzle_id"
     t.index ["user_id"], name: "index_user_puzzle_histories_on_user_id"
+    t.index ["win"], name: "index_user_puzzle_histories_on_win"
   end
 
   create_table "user_puzzles", force: :cascade do |t|
