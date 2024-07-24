@@ -44,6 +44,7 @@ class User < ApplicationRecord
     query = incorrectly_solved_puzzles_query
     query = query.minimum_rating(config.puzzle_min_rating) if config.puzzle_min_rating
     query = query.maximum_rating(config.puzzle_max_rating) if config.puzzle_max_rating
+    query.includes(:lichess_puzzle)
     query
   end
 
@@ -63,7 +64,7 @@ class User < ApplicationRecord
 
     histories_query = filtered_incorrectly_solved_query.where.not(puzzle_id: active_puzzle_ids).with_lichess_puzzle
 
-    unsolved = histories_query.random_order.all.filter { |history| !history.complete? }
+    unsolved = histories_query.all.filter { |history| !history.complete? }
 
     additional_required = batch_size - active_puzzle_ids.count
 

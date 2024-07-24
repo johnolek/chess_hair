@@ -56,9 +56,9 @@ module Api
       private
 
       def get_random_completed_puzzle
-        history = @user.filtered_incorrectly_solved_query.random_order
+        history = @user.filtered_incorrectly_solved_query
         completed = history.all.filter { |history| history.complete? }
-        completed.first
+        completed.sample
       end
 
       def setting_params
