@@ -37,7 +37,7 @@ class User < ApplicationRecord
   end
 
   def completed_filtered_puzzles_count
-    filtered_incorrectly_solved_query.includes(:lichess_puzzle).all.filter { |history| history.complete? }.count
+    filtered_incorrectly_solved_query.all.filter { |history| history.complete? }.count
   end
 
   def filtered_incorrectly_solved_query
