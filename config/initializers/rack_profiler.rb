@@ -1,7 +1,5 @@
-require 'rack-mini-profiler'
+if Rails.env.development?
+  require 'rack-mini-profiler'
 
-Rack::MiniProfilerRails.initialize!(Rails.application)
-
-Rack::MiniProfiler.authorize_request do |request|
-  current_user&.admin?
+  Rack::MiniProfilerRails.initialize!(Rails.application)
 end
