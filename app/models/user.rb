@@ -48,6 +48,12 @@ class User < ApplicationRecord
     query
   end
 
+  def filtered_user_puzzles
+    query = user_puzzles.where('lichess_rating >= ?', config.puzzle_min_rating) if config.puzzle_min_rating
+    query = query.where('lichess_rating <= ?', config.puzzle_max_rating) if config.puzzle_max_rating
+    query
+  end
+
   def recalculate_active_puzzles
     base_query = user_puzzles.where(complete: false)
     base_query = base_query.where('lichess_rating >= ?', config.puzzle_min_rating) if config.puzzle_min_rating
@@ -64,6 +70,8 @@ class User < ApplicationRecord
     end
 
     return if existing.count == batch_size
+
+    self.active_puzzle_ids = existing.pluck(:lichess_puzzle_id)
 
     additional_required = batch_size - active_puzzle_ids.count
 

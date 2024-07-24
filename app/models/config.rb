@@ -3,9 +3,12 @@ class Config < ApplicationRecord
 
   validate :user_can_have_only_one_config
 
+  after_update :maybe_recalculate_user_puzzles
+
   def set_setting(key, value)
     current_settings = settings || {}
     current_settings[key] = value
+    @settings_before = settings
     self.settings = current_settings
     save!
   end
@@ -47,6 +50,23 @@ class Config < ApplicationRecord
 
   def settings
     Config.default_settings.merge(super)
+  end
+
+  def completion_criteria_changed?
+    return false unless @settings_before
+    return true if @settings_before['puzzles.timeGoal'] != settings['puzzles.timeGoal']
+    return true if @settings_before['puzzles.consecutiveSolves'] != settings['puzzles.consecutiveSolves']
+
+    false
+  end
+
+  def maybe_recalculate_user_puzzles
+    if completion_criteria_changed?
+      user.user_puzzles.each do |puzzle|
+        puzzle.complete = puzzle.complete?
+        puzzle.save!
+      end
+    end
   end
 
   private

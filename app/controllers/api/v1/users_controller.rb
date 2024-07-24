@@ -38,11 +38,11 @@ module Api
         most_recent_seen = @user.puzzle_results.order(created_at: :desc).limit(30).pluck(:puzzle_id)
         render json: {
           puzzles: @user.active_puzzles,
-          random_completed_puzzle: get_random_completed_puzzle&.api_response,
+          random_completed_puzzle: @user.filtered_user_puzzles.where(complete: true).sample,
           most_recent_seen: most_recent_seen,
           total_incorrect_puzzles_count: @user.total_incorrect_puzzles_count,
-          total_filtered_puzzles_count: @user.total_filtered_puzzles_count,
-          completed_filtered_puzzles_count: @user.completed_filtered_puzzles_count
+          total_filtered_puzzles_count: @user.filtered_user_puzzles.count,
+          completed_filtered_puzzles_count: @user.filtered_user_puzzles.where(complete: true).count,
         }
       end
 

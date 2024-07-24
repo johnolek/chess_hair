@@ -19,7 +19,7 @@ class UserPuzzle < ApplicationRecord
     (total_duration.to_f / last_results.count) / 1000
   end
 
-  def solve_streak
+  def calculate_solve_streak
     streak = 0
     puzzle_results.order(created_at: :desc).each do |result|
       break unless result.correct?
@@ -37,13 +37,12 @@ class UserPuzzle < ApplicationRecord
   end
 
   def recalculate_stats
-    update!(
-      total_solves: puzzle_results.correct.count,
-      total_fails: puzzle_results.incorrect.count,
-      average_solve_time: calculate_average_solve_duration,
-      solve_streak: solve_streak,
-      complete: complete?
-    )
+    self.total_solves = puzzle_results.correct.count
+    self.total_fails = puzzle_results.incorrect.count
+    self.average_solve_time = calculate_average_solve_duration
+    self.solve_streak = calculate_solve_streak
+    self.complete = complete?
+    save!
   end
 
   def as_json(options = nil)
