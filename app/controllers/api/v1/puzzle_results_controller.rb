@@ -4,8 +4,9 @@ module Api
       def create
         puzzle_result = @user.puzzle_results.new(puzzle_result_params)
         if puzzle_result.save
-          history = @user.user_puzzle_histories.find_by(puzzle_id: puzzle_result_params[:puzzle_id])
-          render json: { result: puzzle_result, puzzle: history.api_response }, status: :created
+          updated_puzzle = @user.user_puzzles.find_by(lichess_puzzle_id: puzzle_result.puzzle_id)
+          updated_puzzle.reload
+          render json: { result: puzzle_result, puzzle: updated_puzzle }, status: :created
         else
           render json: { errors: puzzle_result.errors.full_messages }, status: :unprocessable_entity
         end
