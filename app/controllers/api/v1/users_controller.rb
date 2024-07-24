@@ -35,7 +35,7 @@ module Api
       def active_puzzles
         @user.recalculate_active_puzzles
 
-        histories = @user.user_puzzle_histories.where(puzzle_id: @user.active_puzzle_ids).with_lichess_puzzle
+        histories = @user.user_puzzle_histories.where(puzzle_id: @user.active_puzzle_ids).includes(:lichess_puzzle)
         mapped = histories.all.map(&:api_response)
         most_recent_seen = @user.puzzle_results.order(created_at: :desc).limit(30).pluck(:puzzle_id)
         render json: {
