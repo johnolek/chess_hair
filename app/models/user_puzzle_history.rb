@@ -20,7 +20,7 @@ class UserPuzzleHistory < ApplicationRecord
   scope :with_lichess_puzzle, -> { joins(:lichess_puzzle) }
 
   def related_puzzle_results
-    @related_puzzle_results ||= user.puzzle_results.order(created_at: :desc).where(puzzle_id: puzzle_id)
+    @related_puzzle_results ||= (user.grouped_puzzle_results[puzzle_id] || []).sort_by(&:created_at).reverse
   end
 
   def average_solve_duration

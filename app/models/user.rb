@@ -20,6 +20,10 @@ class User < ApplicationRecord
     super || build_config
   end
 
+  def grouped_puzzle_results
+    @grouped_puzzle_results ||= puzzle_results.group_by(&:puzzle_id)
+  end
+
   def incorrectly_solved_puzzles_query
     user_puzzle_histories.solved_incorrectly
   end
