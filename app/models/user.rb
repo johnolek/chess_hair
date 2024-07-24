@@ -49,43 +49,31 @@ class User < ApplicationRecord
   end
 
   def recalculate_active_puzzles
-    remove_complete_from_active
-    remove_filtered_puzzles_from_active
+    base_query = user_puzzles.where(complete: false)
+    base_query = base_query.where('lichess_rating >= ?', config.puzzle_min_rating) if config.puzzle_min_rating
+    base_query = base_query.where('lichess_rating <= ?', config.puzzle_max_rating) if config.puzzle_max_rating
+
+    existing = base_query.where(lichess_puzzle_id: active_puzzle_ids)
 
     batch_size = config.puzzle_batch_size
 
-    if active_puzzle_ids.count > batch_size
-      self.active_puzzle_ids = active_puzzle_ids.slice(0, batch_size)
+    if existing.count > batch_size
+      self.active_puzzle_ids = existing.pluck(:lichess_puzzle_id).sample(batch_size)
       save!
       return
     end
 
-    return if active_puzzle_ids.count == batch_size
-
-    histories_query = filtered_incorrectly_solved_query.where.not(puzzle_id: active_puzzle_ids).joins(:lichess_puzzle)
-
-    unsolved = histories_query.all.filter { |history| !history.complete? }
+    return if existing.count == batch_size
 
     additional_required = batch_size - active_puzzle_ids.count
 
-    puzzle_ids = unsolved.sample(additional_required).map(&:puzzle_id)
+    extra = base_query.random_order.limit(additional_required).pluck(:lichess_puzzle_id)
 
-    add_puzzle_ids(puzzle_ids)
+    add_puzzle_ids(extra)
   end
 
-  def remove_complete_from_active
-    return unless active_puzzle_ids.count > 0
-    histories = user_puzzle_histories.where(puzzle_id: active_puzzle_ids).includes(:lichess_puzzle)
-    complete = histories.all.filter { | history| history.complete? }
-    ids = complete.map(&:puzzle_id)
-    remove_puzzle_ids(ids)
-  end
-
-  def remove_filtered_puzzles_from_active
-    return unless active_puzzle_ids.count > 0
-    included_active_ids = filtered_incorrectly_solved_query.where(puzzle_id: active_puzzle_ids).map(&:puzzle_id)
-    not_included = active_puzzle_ids - included_active_ids
-    remove_puzzle_ids(not_included)
+  def active_puzzles
+    user_puzzles.where(lichess_puzzle_id: active_puzzle_ids)
   end
 
   def add_puzzle_id(puzzle_id)
@@ -121,7 +109,7 @@ class User < ApplicationRecord
   end
 
   def set_data(key, value)
-    self.data = data.merge({key => value})
+    self.data = data.merge({ key => value })
     save!
   end
 

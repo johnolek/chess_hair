@@ -45,4 +45,15 @@ class UserPuzzle < ApplicationRecord
       complete: complete?
     )
   end
+
+  def as_json(options = nil)
+    super
+      .merge(
+        puzzle_id: lichess_puzzle_id,
+        rating: lichess_rating,
+        average_solve_time: average_solve_time || nil,
+        moves: uci_moves.split(' '),
+        streak: solve_streak,
+        )
+  end
 end
