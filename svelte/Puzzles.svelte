@@ -140,7 +140,10 @@
     if (eligiblePuzzles.length >= 1) {
       return Util.getRandomElement(eligiblePuzzles);
     } else {
-      if (randomCompletedPuzzle) {
+      if (
+        randomCompletedPuzzle &&
+        !lastSeen.includes(randomCompletedPuzzle.puzzle_id)
+      ) {
         return randomCompletedPuzzle;
       }
     }
@@ -695,7 +698,7 @@
         <NumberInput
           label="Minimum Puzzles Between Reviews"
           min={0}
-          max={Math.max(activePuzzles.length - 1, 0)}
+          max={activePuzzles.length + completedFilteredPuzzlesCount - 1}
           step={1}
           isLoading={settingUpdating}
           bind:value={minimumPuzzlesBetweenReviews}
