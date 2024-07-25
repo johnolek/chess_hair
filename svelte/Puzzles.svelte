@@ -139,6 +139,10 @@
 
     if (eligiblePuzzles.length >= 1) {
       return Util.getRandomElement(eligiblePuzzles);
+    } else {
+      if (randomCompletedPuzzle) {
+        return randomCompletedPuzzle;
+      }
     }
 
     return Util.getRandomElement(activePuzzles);
