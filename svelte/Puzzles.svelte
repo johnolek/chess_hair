@@ -66,16 +66,6 @@
   let minimumPuzzlesBetweenReviews;
   let settingUpdating = false;
 
-  $: {
-    if (loaded) {
-      if (activePuzzles.length === 0) {
-        minimumPuzzlesBetweenReviews = 0;
-      } else if (minimumPuzzlesBetweenReviews >= activePuzzles.length) {
-        minimumPuzzlesBetweenReviews = activePuzzles.length - 1;
-      }
-    }
-  }
-
   let activePuzzleIds = [];
   $: {
     activePuzzleIds = activePuzzles.map((puzzle) => puzzle.puzzle_id);
