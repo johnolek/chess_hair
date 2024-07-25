@@ -6,6 +6,7 @@
   export let step = null;
   export let value = min; // Default value is min
   export let additionalClasses = "";
+  export let isLoading = false;
   export let onChange = () => {};
 
   // Reactive statement to enforce min and max
@@ -23,7 +24,9 @@
     {label}
     <input
       class="input"
+      class:is-loading={isLoading}
       type="number"
+      disabled={isLoading}
       {min}
       {max}
       {step}

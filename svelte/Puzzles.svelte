@@ -64,6 +64,7 @@
   let completedFilteredPuzzlesCount;
   let randomCompletedPuzzle;
   let minimumPuzzlesBetweenReviews;
+  let settingUpdating = false;
 
   $: {
     if (loaded) {
@@ -575,10 +576,13 @@
           min={5}
           max={50}
           step={1}
+          isLoading={settingUpdating}
           bind:value={batchSize}
           onChange={async (value) => {
+            settingUpdating = true;
             await updateSetting("puzzles.batchSize", value);
             await updateActivePuzzles();
+            settingUpdating = false;
           }}
         />
         <NumberInput
@@ -586,10 +590,13 @@
           min={10}
           max={60}
           step={1}
+          isLoading={settingUpdating}
           bind:value={timeGoal}
           onChange={async (value) => {
+            settingUpdating = true;
             await updateSetting("puzzles.timeGoal", value);
             await updateActivePuzzles();
+            settingUpdating = false;
           }}
         />
         <NumberInput
@@ -597,10 +604,13 @@
           min={1}
           max={10}
           step={1}
+          isLoading={settingUpdating}
           bind:value={requiredConsecutiveSolves}
           onChange={async (value) => {
+            settingUpdating = true;
             await updateSetting("puzzles.consecutiveSolves", value);
             await updateActivePuzzles();
+            settingUpdating = false;
           }}
         />
         <NumberInput
@@ -608,10 +618,13 @@
           min={1}
           max={3500}
           step={1}
+          isLoading={settingUpdating}
           bind:value={minimumRating}
           onChange={async (value) => {
+            settingUpdating = true;
             await updateSetting("puzzles.minRating", value);
             await updateActivePuzzles();
+            settingUpdating = false;
           }}
         />
         <NumberInput
@@ -619,10 +632,13 @@
           min={1}
           max={3500}
           step={1}
+          isLoading={settingUpdating}
           bind:value={maximumRating}
           onChange={async (value) => {
+            settingUpdating = true;
             await updateSetting("puzzles.maxRating", value);
             await updateActivePuzzles();
+            settingUpdating = false;
           }}
         />
         <NumberInput
@@ -630,10 +646,13 @@
           min={0}
           max={1}
           step={0.01}
+          isLoading={settingUpdating}
           bind:value={oddsOfRandomCompleted}
           onChange={async (value) => {
+            settingUpdating = true;
             await updateSetting("puzzles.oddsOfRandomCompleted", value);
             await updateActivePuzzles();
+            settingUpdating = false;
           }}
         />
         <NumberInput
@@ -641,11 +660,18 @@
           min={0}
           max={Math.max(activePuzzles.length - 1, 0)}
           step={1}
+          isLoading={settingUpdating}
           bind:value={minimumPuzzlesBetweenReviews}
           onChange={async (value) => {
+            settingUpdating = true;
             await updateSetting("puzzles.minimumPuzzlesBetweenReviews", value);
+            settingUpdating = false;
           }}
         />
+        {#if settingUpdating}
+          <h2>Updating...</h2>
+          <progress class="progress is-small is-primary" max="100" />
+        {/if}
       </CollapsibleBox>
     </div>
   </div>
