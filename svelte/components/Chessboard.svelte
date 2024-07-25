@@ -12,6 +12,7 @@
   } from "../stores";
   import { createEventDispatcher } from "svelte";
 
+  let wrapperWidth;
   let boardContainer;
   let resizer;
   export let chessgroundConfig = {};
@@ -19,7 +20,6 @@
 
   export let fen;
   export let chessground;
-  let containerWidth;
   let size;
   let minSize = 200;
 
@@ -48,8 +48,8 @@
     if (newSize < minSize) {
       newSize = minSize;
     }
-    if (newSize > containerWidth) {
-      newSize = containerWidth;
+    if (newSize > wrapperWidth) {
+      newSize = wrapperWidth;
     }
     size = newSize;
   }
@@ -225,6 +225,12 @@
     }
     size = originalSize = boardContainer.clientWidth;
 
+    window.addEventListener("resize", () => {
+      if (size > wrapperWidth) {
+        size = wrapperWidth;
+      }
+    });
+
     setTimeout(() => {
       // Allow the board to render before adding the resizer
       boardContainer.appendChild(resizer);
@@ -246,14 +252,17 @@
   />
 {/if}
 
-<div class="board-wrapper" data-board={currentBoardStyle}>
+<div
+  class="board-wrapper"
+  bind:clientWidth={wrapperWidth}
+  data-board={currentBoardStyle}
+>
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>
   <div
     class="is2d"
     bind:this={boardContainer}
-    bind:clientWidth={containerWidth}
     style="position: relative;width: {size}px; height: {size}px"
   ></div>
   <div
@@ -291,6 +300,7 @@
     cursor: nwse-resize;
     background-color: transparent;
     touch-action: none;
+    user-select: none;
   }
 
   .resizer:hover {
