@@ -225,7 +225,7 @@
     if (fen) {
       this.load(fen);
     }
-    size = originalSize = boardContainer.clientWidth;
+    size = boardContainer.clientWidth;
 
     window.addEventListener("resize", () => {
       if (size > wrapperWidth) {
