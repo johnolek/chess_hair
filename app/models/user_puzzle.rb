@@ -7,7 +7,10 @@ class UserPuzzle < ApplicationRecord
 
   def calculate_average_solve_duration
     required_consecutive_solves = user.config.puzzle_consecutive_solves
-    results = puzzle_results.correct.limit(required_consecutive_solves)
+    results = puzzle_results
+      .correct
+      .order(created_at: :desc)
+      .limit(required_consecutive_solves)
     return nil if results.empty?
 
     last_results = results.slice(0, required_consecutive_solves)
