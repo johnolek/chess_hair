@@ -38,12 +38,17 @@ module Api
         most_recent_seen = @user.puzzle_results.order(created_at: :desc).limit(30).pluck(:puzzle_id)
         render json: {
           puzzles: @user.active_puzzles,
-          random_completed_puzzle: @user.filtered_user_puzzles.where(complete: true).sample,
           most_recent_seen: most_recent_seen,
           total_incorrect_puzzles_count: @user.user_puzzles.count,
           total_filtered_puzzles_count: @user.filtered_user_puzzles.count,
           completed_filtered_puzzles_count: @user.filtered_user_puzzles.where(complete: true).count,
         }
+      end
+
+      def random_completed_puzzle
+        query = @user.filtered_user_puzzles.completed.ordered_by_weighted_fail_ratio
+        query = query.where.not(lichess_puzzle_id: params[:exclude_puzzle_id]) if params[:exclude_puzzle_id]
+        render json: query.first
       end
 
       def import_new_puzzle_histories

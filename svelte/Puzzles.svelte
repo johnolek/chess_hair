@@ -124,7 +124,9 @@
       randomCompletedPuzzle &&
       (Math.random() < oddsOfRandomCompleted || activePuzzles.length < 1)
     ) {
-      void updateActivePuzzles();
+      setTimeout(() => {
+        void updateRandomCompletedPuzzle();
+      }, 100);
       return randomCompletedPuzzle;
     }
 
@@ -254,10 +256,25 @@
     if (puzzleHistory.length === 0) {
       puzzleHistory = response.most_recent_seen;
     }
-    randomCompletedPuzzle = response.random_completed_puzzle;
     totalIncorrectPuzzlesCount = response.total_incorrect_puzzles_count;
     totalFilteredPuzzlesCount = response.total_filtered_puzzles_count;
     completedFilteredPuzzlesCount = response.completed_filtered_puzzles_count;
+  }
+
+  async function updateRandomCompletedPuzzle() {
+    const baseUrl = "/api/v1/users/random-completed-puzzle";
+    const params = {};
+    if (randomCompletedPuzzle) {
+      params["exclude_puzzle_id"] = randomCompletedPuzzle.puzzle_id;
+    }
+    const queryString = new URLSearchParams(params).toString();
+    const urlWithParams = `${baseUrl}?${queryString}`;
+    const response = await Util.fetch(urlWithParams);
+    if (response.ok) {
+      randomCompletedPuzzle = await response.json();
+    } else {
+      randomCompletedPuzzle = null;
+    }
   }
 
   let userInfo = {};
@@ -293,7 +310,10 @@
       puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
     );
 
-    if (currentPuzzleId === randomCompletedPuzzle.puzzle_id) {
+    if (
+      randomCompletedPuzzle &&
+      currentPuzzleId === randomCompletedPuzzle.puzzle_id
+    ) {
       return;
     }
 
@@ -334,6 +354,7 @@
     requiredConsecutiveSolves = getSetting("puzzles.consecutiveSolves", 2);
     oddsOfRandomCompleted = getSetting("puzzles.oddsOfRandomCompleted", 0.1);
     await initializePuzzles();
+    void updateRandomCompletedPuzzle();
     minimumPuzzlesBetweenReviews = getSetting(
       "puzzles.minimumPuzzlesBetweenReviews",
       Math.max(activePuzzles.length - 3, 0),
