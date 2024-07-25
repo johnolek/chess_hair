@@ -134,6 +134,9 @@
         randomCompletedPuzzle &&
         !lastSeen.includes(randomCompletedPuzzle.puzzle_id)
       ) {
+        setTimeout(() => {
+          void updateRandomCompletedPuzzle();
+        }, 100);
         return randomCompletedPuzzle;
       }
     }
