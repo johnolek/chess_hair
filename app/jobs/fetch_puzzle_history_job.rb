@@ -54,7 +54,7 @@ class FetchPuzzleHistoryJob < ApplicationJob
           }
         )
         history.save!
-        history.convert_to_user_puzzle unless history.win?
+        history.create_user_puzzle unless history.win?
         oldest_saved = parsed['date'] if oldest_saved.nil? || parsed['date'] < oldest_saved
         imported += 1
       end

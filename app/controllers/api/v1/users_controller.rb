@@ -40,7 +40,7 @@ module Api
           puzzles: @user.active_puzzles,
           random_completed_puzzle: @user.filtered_user_puzzles.where(complete: true).sample,
           most_recent_seen: most_recent_seen,
-          total_incorrect_puzzles_count: @user.total_incorrect_puzzles_count,
+          total_incorrect_puzzles_count: @user.user_puzzles.count,
           total_filtered_puzzles_count: @user.filtered_user_puzzles.count,
           completed_filtered_puzzles_count: @user.filtered_user_puzzles.where(complete: true).count,
         }
@@ -52,12 +52,6 @@ module Api
       end
 
       private
-
-      def get_random_completed_puzzle
-        history = @user.filtered_incorrectly_solved_query
-        completed = history.all.filter { |history| history.complete? }
-        completed.sample
-      end
 
       def setting_params
         params.permit(:key, :value)

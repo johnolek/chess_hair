@@ -24,30 +24,6 @@ class User < ApplicationRecord
     @grouped_puzzle_results ||= puzzle_results.group_by(&:puzzle_id)
   end
 
-  def incorrectly_solved_puzzles_query
-    user_puzzle_histories.solved_incorrectly
-  end
-
-  def total_incorrect_puzzles_count
-    incorrectly_solved_puzzles_query.count
-  end
-
-  def total_filtered_puzzles_count
-    filtered_incorrectly_solved_query.count
-  end
-
-  def completed_filtered_puzzles_count
-    filtered_incorrectly_solved_query.all.filter { |history| history.complete? }.count
-  end
-
-  def filtered_incorrectly_solved_query
-    query = incorrectly_solved_puzzles_query
-    query = query.minimum_rating(config.puzzle_min_rating) if config.puzzle_min_rating
-    query = query.maximum_rating(config.puzzle_max_rating) if config.puzzle_max_rating
-    query.includes(:lichess_puzzle)
-    query
-  end
-
   def filtered_user_puzzles
     query = user_puzzles.where('lichess_rating >= ?', config.puzzle_min_rating) if config.puzzle_min_rating
     query = query.where('lichess_rating <= ?', config.puzzle_max_rating) if config.puzzle_max_rating
