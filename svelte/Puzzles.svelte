@@ -15,6 +15,7 @@
     getSetting,
   } from "./settingsManager.js";
   import ProgressBar from "./components/ProgressBar.svelte";
+  import FocusTimer from "./components/FocusTimer.svelte";
 
   class Result {
     constructor(puzzleId, duration, madeMistake = false) {
@@ -58,7 +59,6 @@
   let activePuzzles = [];
   let puzzleHistory = [];
   let currentPuzzle;
-  let puzzleShownAt;
   let totalIncorrectPuzzlesCount;
   let totalFilteredPuzzlesCount;
   let completedFilteredPuzzlesCount;
@@ -93,6 +93,7 @@
   let nextMove;
   let madeMistake = false;
   let puzzleComplete = false;
+  let elapsedTime = 0;
 
   // DOM elements
   let nextButton;
@@ -175,7 +176,6 @@
       const computerMove = moves[0];
       moves = moves.slice(1);
       chessboard.move(computerMove);
-      puzzleShownAt = Util.currentMicrotime();
       updateNextMove();
     }, 700);
   }
@@ -218,7 +218,7 @@
   async function handlePuzzleComplete() {
     const result = new Result(
       currentPuzzle.puzzle_id,
-      Util.currentMicrotime() - puzzleShownAt,
+      elapsedTime,
       madeMistake,
     );
     let message = madeMistake ? "Completed with mistake" : "Correct!";
@@ -414,6 +414,9 @@
             </div>
           </div>
           <div class="board-container block">
+            {#key currentPuzzle.puzzle_id}
+              <FocusTimer bind:elapsedTime />
+            {/key}
             <Chessboard
               bind:fen
               {chessgroundConfig}
