@@ -75,6 +75,18 @@
     }
   }
 
+  let activePuzzleIds = [];
+  $: {
+    activePuzzleIds = activePuzzles.map((puzzle) => puzzle.puzzle_id);
+  }
+
+  let currentPuzzleId;
+  $: {
+    if (currentPuzzle) {
+      currentPuzzleId = currentPuzzle.puzzle_id;
+    }
+  }
+
   // Current puzzle state
   let moves;
   let nextMove;
