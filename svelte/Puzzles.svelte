@@ -221,7 +221,6 @@
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
     await savePuzzleResult(result);
-    await updateActivePuzzles();
     puzzleComplete = true;
   }
 
@@ -288,9 +287,15 @@
     const data = await response.json();
     const updatedPuzzle = data.puzzle;
     currentPuzzle = updatedPuzzle;
+    if (currentPuzzleId === randomCompletedPuzzle.puzzle_id) {
+      return;
+    }
     activePuzzles = activePuzzles.map((puzzle) =>
       puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
     );
+    if (currentPuzzle.complete) {
+      await updateActivePuzzles();
+    }
   }
 
   async function waitForImportComplete() {
