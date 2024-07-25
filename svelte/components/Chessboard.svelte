@@ -13,12 +13,54 @@
   import { createEventDispatcher } from "svelte";
 
   let boardContainer;
+  let resizer;
   export let chessgroundConfig = {};
   export let orientation = "white";
 
   export let fen;
   export let chessground;
-  export let size;
+  let containerWidth;
+  let size;
+  let minSize = 200;
+
+  let isResizing = false;
+  let startX, startY, startSize, originalSize;
+
+  function startResizing(event) {
+    isResizing = true;
+    startX = event.touches ? event.touches[0].clientX : event.clientX;
+    startY = event.touches ? event.touches[0].clientY : event.clientY;
+    startSize = size;
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", stopResizing);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", stopResizing);
+  }
+
+  function onMove(event) {
+    if (!isResizing) return;
+    event.preventDefault();
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
+    let newSize = Math.max(startSize + dx, startSize + dy);
+    if (newSize < minSize) {
+      newSize = minSize;
+    }
+    if (newSize > containerWidth) {
+      newSize = containerWidth;
+    }
+    size = newSize;
+  }
+
+  function stopResizing() {
+    isResizing = false;
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", stopResizing);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", stopResizing);
+  }
 
   let chessInstance = new Chess();
   export let pieceSetOverride = null;
@@ -181,6 +223,12 @@
     if (fen) {
       this.load(fen);
     }
+    size = originalSize = boardContainer.clientWidth;
+
+    setTimeout(() => {
+      // Allow the board to render before adding the resizer
+      boardContainer.appendChild(resizer);
+    }, 100);
   });
 </script>
 
@@ -198,18 +246,23 @@
   />
 {/if}
 
-<div
-  class="board-wrapper"
-  bind:clientWidth={size}
-  data-board={currentBoardStyle}
->
+<div class="board-wrapper" data-board={currentBoardStyle}>
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>
   <div
     class="is2d"
     bind:this={boardContainer}
+    bind:clientWidth={containerWidth}
     style="position: relative;width: {size}px; height: {size}px"
+  ></div>
+  <div
+    bind:this={resizer}
+    class="resizer"
+    on:mousedown={startResizing}
+    on:touchstart={startResizing}
+    role="button"
+    tabindex="0"
   ></div>
 </div>
 
@@ -226,5 +279,21 @@
     transform: translate(-50%, -50%);
     z-index: 3; /* required to appear in front of pieces */
     opacity: 0.8;
+  }
+
+  /* Add these styles for the resizer */
+  .resizer {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    bottom: -5px;
+    right: -5px;
+    cursor: nwse-resize;
+    background-color: transparent;
+    touch-action: none;
+  }
+
+  .resizer:hover {
+    background-color: rgba(0, 0, 0, 0.1);
   }
 </style>
