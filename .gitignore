@@ -41,3 +41,4 @@ node_modules/
 
 app/javascript/dist/app.js
 app/javascript/dist/app.js.map
+.irbrc
