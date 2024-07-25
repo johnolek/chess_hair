@@ -124,6 +124,7 @@
       randomCompletedPuzzle &&
       (Math.random() < oddsOfRandomCompleted || activePuzzles.length < 1)
     ) {
+      void updateActivePuzzles();
       return randomCompletedPuzzle;
     }
 
