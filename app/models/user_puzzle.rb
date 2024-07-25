@@ -5,6 +5,8 @@ class UserPuzzle < ApplicationRecord
 
   has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :puzzle_id
 
+  scope :weighted_by_fail_ratio, -> { order(Arel.sql('RANDOM() * (total_fails / NULLIF(total_solves, 0) + 1) DESC')) }
+
   def calculate_average_solve_duration
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     results = puzzle_results
