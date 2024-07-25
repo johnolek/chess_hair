@@ -24,10 +24,12 @@
   let minSize = 200;
 
   let isResizing = false;
-  let startX, startY, startSize, originalSize;
+  let resized = false;
+  let startX, startY, startSize;
 
   function startResizing(event) {
     isResizing = true;
+    resized = true;
     startX = event.touches ? event.touches[0].clientX : event.clientX;
     startY = event.touches ? event.touches[0].clientY : event.clientY;
     startSize = size;
@@ -227,6 +229,9 @@
 
     window.addEventListener("resize", () => {
       if (size > wrapperWidth) {
+        size = wrapperWidth;
+      }
+      if (!resized) {
         size = wrapperWidth;
       }
     });
