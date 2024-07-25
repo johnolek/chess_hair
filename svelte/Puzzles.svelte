@@ -287,14 +287,17 @@
     });
     const data = await response.json();
     const updatedPuzzle = data.puzzle;
+    const wasComplete = currentPuzzle.complete;
     currentPuzzle = updatedPuzzle;
-    if (currentPuzzleId === randomCompletedPuzzle.puzzle_id) {
-      return;
-    }
     activePuzzles = activePuzzles.map((puzzle) =>
       puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
     );
-    if (currentPuzzle.complete) {
+
+    if (currentPuzzleId === randomCompletedPuzzle.puzzle_id) {
+      return;
+    }
+
+    if (currentPuzzle.complete || (wasComplete && !currentPuzzle.complete)) {
       await updateActivePuzzles();
     }
   }
