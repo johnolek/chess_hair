@@ -353,8 +353,8 @@
     maximumRating = getSetting("puzzles.maxRating");
     requiredConsecutiveSolves = getSetting("puzzles.consecutiveSolves", 2);
     oddsOfRandomCompleted = getSetting("puzzles.oddsOfRandomCompleted", 0.1);
+    await updateRandomCompletedPuzzle();
     await initializePuzzles();
-    void updateRandomCompletedPuzzle();
     minimumPuzzlesBetweenReviews = getSetting(
       "puzzles.minimumPuzzlesBetweenReviews",
       Math.max(activePuzzles.length - 3, 0),
