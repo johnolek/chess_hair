@@ -651,13 +651,6 @@
               bind:current={completedFilteredPuzzlesCount}
             />
           {/if}
-          <p>
-            Target solve time: <strong>{timeGoal}</strong> seconds
-          </p>
-          <p>
-            Must solve <strong>{requiredConsecutiveSolves}</strong>
-            time{requiredConsecutiveSolves > 1 ? "s" : ""} in a row
-          </p>
         </div>
       </div>
       <CollapsibleBox title="Config" defaultOpen={true}>
