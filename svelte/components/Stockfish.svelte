@@ -20,14 +20,13 @@
 
   const dispatch = createEventDispatcher();
 
-  function getMoveSan(uciMove) {
+  function getFullMove(uciMove) {
     if (!fen) {
       return null;
     }
     const chessInstance = new Chess();
     chessInstance.load(fen);
-    const move = chessInstance.move(uciMove);
-    return move.san;
+    return chessInstance.move(uciMove);
   }
 
   function parseStockfishInfo(infoLine) {
@@ -106,11 +105,15 @@
   }
 
   function dispatchBestMove() {
-    dispatch("bestmove", { bestMove });
+    if (bestMove !== "") {
+      dispatch("bestmove", { bestMove: getFullMove(bestMove) });
+    }
   }
 
   function dispatchTopMoves() {
-    dispatch("topmoves", { topMoves });
+    if (topMoves.length > 0) {
+      dispatch("topmoves", { topMoves });
+    }
   }
 
   function analyzePosition() {
@@ -165,7 +168,7 @@
       <tbody>
         {#each topMoves as move}
           <tr>
-            <td>{getMoveSan(move.principalVariation[0])}</td>
+            <td>{getFullMove(move.principalVariation[0]).san}</td>
             <td>{move.score > 0 ? "+" : ""}{move.score}</td>
             <td>{move.depth}</td>
           </tr>

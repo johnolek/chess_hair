@@ -16,6 +16,7 @@
   } from "./settingsManager.js";
   import ProgressBar from "./components/ProgressBar.svelte";
   import FocusTimer from "./components/FocusTimer.svelte";
+  import Stockfish from "./components/Stockfish.svelte";
 
   class Result {
     constructor(puzzleId, duration, madeMistake = false) {
@@ -201,8 +202,9 @@
 
     updateNextMove();
 
+    const computerMove = currentPuzzle.moves[0];
+
     setTimeout(() => {
-      const computerMove = currentPuzzle.moves[0];
       chessboard.move(computerMove);
       moveIndex = 1;
       maxMoveIndex = 1;
@@ -617,6 +619,19 @@
               {/each}
             </tbody>
           </table>
+          {#if fen}
+            <Stockfish
+              depth={19}
+              {fen}
+              on:topmoves={(event) => {
+                const moves = event.detail.topMoves;
+              }}
+              on:bestmove={(event) => {
+                const bestMove = event.detail.bestMove;
+                chessboard.drawArrow(bestMove);
+              }}
+            />
+          {/if}
         </div>
       {/if}
       <div class="box">

@@ -283,6 +283,20 @@
     chessground.set({ lastMove });
   }
 
+  export function drawArrow(move, brush = "brand1", width = 10) {
+    const shape = {
+      orig: move.from,
+      dest: move.to,
+      brush: brush,
+      modifiers: { lineWidth: width },
+    };
+    chessground.set({ drawable: { shapes: [shape] } });
+  }
+
+  export function clearDrawings() {
+    chessground.set({ drawable: { shapes: [] } });
+  }
+
   export function highlightSquare(square, className, duration) {
     customHighlights.set(square, className);
     customHighlights = customHighlights;
