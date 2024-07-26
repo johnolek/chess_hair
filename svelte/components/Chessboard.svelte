@@ -11,10 +11,15 @@
     blackPieceSet,
   } from "../stores";
   import { createEventDispatcher } from "svelte";
+  import PromotionModal from "./PromotionModal.svelte";
 
   let wrapperWidth;
   let boardContainer;
   let resizer;
+  let showPromotion = false;
+  let promotionColor = "white";
+  let promotionFrom, promotionTo;
+
   export let chessgroundConfig = {};
   export let orientation = "white";
 
@@ -148,20 +153,31 @@
       );
     };
 
-    let promotion = "q"; // Default to queen
-
     if (isPromotion(from, to)) {
-      const choice = prompt("Promote pawn to (q, r, b, n):", "q");
-      if (["q", "r", "b", "n"].includes(choice)) {
-        promotion = choice;
+      showPromotion = true;
+      promotionFrom = from;
+      promotionTo = to;
+      return;
+    } else {
+      const move = chessInstance.move({ from, to });
+      if (move) {
+        updateChessground();
+        dispatch("move", { move, isCheckmate: chessInstance.isCheckmate() });
       }
     }
+  }
 
-    const move = chessInstance.move({ from, to, promotion });
+  function selectPromotionPiece(piece) {
+    const move = chessInstance.move({
+      from: promotionFrom,
+      to: promotionTo,
+      promotion: piece,
+    });
     if (move) {
       updateChessground();
       dispatch("move", { move, isCheckmate: chessInstance.isCheckmate() });
     }
+    showPromotion = false;
   }
 
   export function undo() {
@@ -270,6 +286,15 @@
   bind:clientWidth={wrapperWidth}
   data-board={currentBoardStyle}
 >
+  <PromotionModal
+    isOpen={showPromotion}
+    color={promotionColor}
+    on:select={(event) => selectPromotionPiece(event.detail.piece)}
+    on:close={() => {
+      showPromotion = false;
+      updateChessground();
+    }}
+  />
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>

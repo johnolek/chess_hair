@@ -8,13 +8,12 @@
 
   function selectPiece(piece) {
     dispatch("select", { piece });
-    close();
+    isOpen = false;
   }
 
   function handleClickOutside(event) {
     if (isOpen && !event.target.closest(".modal-content")) {
-      dispatch("close");
-      isOpen = false;
+      close();
     }
   }
 
@@ -50,6 +49,7 @@
   function handleEnter(event) {
     const focusedElement = document.activeElement;
     if (focusedElement.tagName === "BUTTON") {
+      event.preventDefault();
       focusedElement.click();
     }
   }
@@ -57,15 +57,16 @@
   onMount(() => {
     document.addEventListener("click", handleClickOutside);
     document.addEventListener("keydown", handleKeyDown);
-    if (isOpen) {
-      modalContent.querySelector("button").focus();
-    }
   });
 
   onDestroy(() => {
     document.removeEventListener("click", handleClickOutside);
     document.removeEventListener("keydown", handleKeyDown);
   });
+
+  $: if (isOpen && modalContent) {
+    modalContent.querySelector("button").focus();
+  }
 </script>
 
 {#if isOpen}
