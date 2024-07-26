@@ -478,6 +478,16 @@
                   {/if}
                 </div>
               </Chessboard>
+              {#if puzzleComplete}
+                <button
+                  class="button is-primary is-large next-button"
+                  bind:this={nextButton}
+                  on:click={async () => {
+                    await loadNextPuzzle();
+                  }}
+                  >Next
+                </button>
+              {/if}
             </div>
           </div>
 
@@ -511,18 +521,6 @@
           </div>
           <div>
             <div class="columns is-vcentered is-mobile">
-              {#if puzzleComplete}
-                <div class="column">
-                  <button
-                    class="button is-primary"
-                    bind:this={nextButton}
-                    on:click={async () => {
-                      await loadNextPuzzle();
-                    }}
-                    >Next
-                  </button>
-                </div>
-              {/if}
               {#if !puzzleComplete}
                 <div class="column">
                   <span class="tag is-{orientation} is-size-4">
@@ -794,10 +792,15 @@
   .puzzle-id {
     font-family: monospace;
   }
-  .board-container {
-    max-width: 80vh;
-  }
   .history-button {
     touch-action: manipulation;
+  }
+  .board-container {
+    position: relative;
+  }
+  .next-button {
+    position: absolute;
+    bottom: -75px;
+    right: 0;
   }
 </style>
