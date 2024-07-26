@@ -5,7 +5,10 @@ class UserPuzzle < ApplicationRecord
 
   has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :puzzle_id
 
-  scope :with_weighted_fail_ratio, -> { select(arel_table[Arel.star], Arel.sql('RANDOM() * CAST(total_fails + 3 AS FLOAT) / (total_solves + 3) as weighted_fail_ratio')) }
+  scope :with_weighted_fail_ratio, -> { select(
+    arel_table[Arel.star],
+    Arel.sql('RANDOM() + ((total_fails + 1.0) / (total_solves + 1.0)) as weighted_fail_ratio')
+  ) }
   scope :ordered_by_weighted_fail_ratio, -> { with_weighted_fail_ratio.order(weighted_fail_ratio: :desc) }
   scope :completed, -> { where(complete: true) }
   scope :incomplete, -> { where(complete: false) }
