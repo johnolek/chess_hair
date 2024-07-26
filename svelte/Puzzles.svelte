@@ -670,6 +670,36 @@
           }}
         />
         <NumberInput
+          label="Minimum Puzzles Between Reviews"
+          helpText="The number of other puzzles you will see before repeating a puzzle. Can't be more than the total number of active puzzles + completed puzzles."
+          min={0}
+          max={activePuzzles.length + completedFilteredPuzzlesCount - 1}
+          step={1}
+          isLoading={settingUpdating}
+          bind:value={minimumPuzzlesBetweenReviews}
+          onChange={async (value) => {
+            settingUpdating = true;
+            await updateSetting("puzzles.minimumPuzzlesBetweenReviews", value);
+            settingUpdating = false;
+          }}
+        />
+        <NumberInput
+          label="Odds of Random Completed Puzzle"
+          helpText="A number between 0 and 1 representing the odds of getting a random completed puzzle instead of one from the current batch. 1 = always random, 0 = never random, .25 = 25% chance."
+          min={0}
+          max={1}
+          step={0.01}
+          isLoading={settingUpdating}
+          bind:value={oddsOfRandomCompleted}
+          onChange={async (value) => {
+            settingUpdating = true;
+            await updateSetting("puzzles.oddsOfRandomCompleted", value);
+            await updateActivePuzzles();
+            settingUpdating = false;
+          }}
+        />
+        <hr />
+        <NumberInput
           label="Required Consecutive Solves"
           helpText="How many times you need to solve a puzzle correctly in a row to consider it completed."
           min={1}
@@ -699,6 +729,7 @@
             settingUpdating = false;
           }}
         />
+        <hr />
         <NumberInput
           label="Minimum Rating"
           helpText="Only include Lichess puzzles with a rating of at least this amount."
@@ -725,21 +756,6 @@
           onChange={async (value) => {
             settingUpdating = true;
             await updateSetting("puzzles.maxRating", value);
-            await updateActivePuzzles();
-            settingUpdating = false;
-          }}
-        />
-        <NumberInput
-          label="Odds of Random Completed Puzzle"
-          helpText="A number between 0 and 1 representing the odds of getting a random completed puzzle instead of one from the current batch. 1 = always random, 0 = never random, .25 = 25% chance."
-          min={0}
-          max={1}
-          step={0.01}
-          isLoading={settingUpdating}
-          bind:value={oddsOfRandomCompleted}
-          onChange={async (value) => {
-            settingUpdating = true;
-            await updateSetting("puzzles.oddsOfRandomCompleted", value);
             await updateActivePuzzles();
             settingUpdating = false;
           }}
