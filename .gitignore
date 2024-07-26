@@ -41,4 +41,6 @@ node_modules/
 
 app/javascript/dist/app.js
 app/javascript/dist/app.js.map
+app/assets/stylesheets/chess_hair.css
+app/assets/stylesheets/chess_hair.css.map
 .irbrc
