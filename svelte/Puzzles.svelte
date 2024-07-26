@@ -700,20 +700,6 @@
           }}
         />
         <NumberInput
-          label="Required Consecutive Solves"
-          min={1}
-          max={10}
-          step={1}
-          isLoading={settingUpdating}
-          bind:value={requiredConsecutiveSolves}
-          onChange={async (value) => {
-            settingUpdating = true;
-            await updateSetting("puzzles.consecutiveSolves", value);
-            await updateActivePuzzles();
-            settingUpdating = false;
-          }}
-        />
-        <NumberInput
           label="Minimum Rating"
           helpText="Only include Lichess puzzles with a rating of at least this amount."
           min={1}
