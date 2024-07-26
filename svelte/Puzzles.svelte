@@ -663,6 +663,7 @@
       <CollapsibleBox title="Config" defaultOpen={true}>
         <NumberInput
           label="Batch Size"
+          helpText="How many puzzles you want to focus on at a time."
           min={5}
           max={50}
           step={1}
@@ -676,9 +677,25 @@
           }}
         />
         <NumberInput
+          label="Required Consecutive Solves"
+          helpText="How many times you need to solve a puzzle correctly in a row to consider it completed."
+          min={1}
+          max={10}
+          step={1}
+          isLoading={settingUpdating}
+          bind:value={requiredConsecutiveSolves}
+          onChange={async (value) => {
+            settingUpdating = true;
+            await updateSetting("puzzles.consecutiveSolves", value);
+            await updateActivePuzzles();
+            settingUpdating = false;
+          }}
+        />
+        <NumberInput
           label="Time Goal"
+          helpText={`The target time to solve a puzzle in seconds. A puzzle will be considered completed if the average of the last ${requiredConsecutiveSolves} solves is less than this time.`}
           min={10}
-          max={60}
+          max={1000}
           step={1}
           isLoading={settingUpdating}
           bind:value={timeGoal}
@@ -705,6 +722,7 @@
         />
         <NumberInput
           label="Minimum Rating"
+          helpText="Only include Lichess puzzles with a rating of at least this amount."
           min={1}
           max={3500}
           step={1}
@@ -719,6 +737,7 @@
         />
         <NumberInput
           label="Maximum Rating"
+          helpText="Only include Lichess puzzles with a rating less than this amount."
           min={1}
           max={3500}
           step={1}
@@ -733,6 +752,7 @@
         />
         <NumberInput
           label="Odds of Random Completed Puzzle"
+          helpText="A number between 0 and 1 representing the odds of getting a random completed puzzle instead of one from the current batch. 1 = always random, 0 = never random, .25 = 25% chance."
           min={0}
           max={1}
           step={0.01}
@@ -742,19 +762,6 @@
             settingUpdating = true;
             await updateSetting("puzzles.oddsOfRandomCompleted", value);
             await updateActivePuzzles();
-            settingUpdating = false;
-          }}
-        />
-        <NumberInput
-          label="Minimum Puzzles Between Reviews"
-          min={0}
-          max={activePuzzles.length + completedFilteredPuzzlesCount - 1}
-          step={1}
-          isLoading={settingUpdating}
-          bind:value={minimumPuzzlesBetweenReviews}
-          onChange={async (value) => {
-            settingUpdating = true;
-            await updateSetting("puzzles.minimumPuzzlesBetweenReviews", value);
             settingUpdating = false;
           }}
         />

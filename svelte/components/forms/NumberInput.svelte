@@ -7,6 +7,7 @@
   export let value = min; // Default value is min
   export let additionalClasses = "";
   export let isLoading = false;
+  export let helpText = "";
   export let onChange = () => {};
 
   // Reactive statement to enforce min and max
@@ -45,4 +46,7 @@
       />
     {/if}
   </label>
+  {#if helpText}
+    <p class="help">{helpText}</p>
+  {/if}
 </div>
