@@ -620,8 +620,8 @@
             </tbody>
           </table>
           {#if fen}
+            <h3 class="is-size-4">Analysis</h3>
             <Stockfish
-              depth={19}
               {fen}
               on:topmoves={(event) => {
                 const moves = event.detail.topMoves;

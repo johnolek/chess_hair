@@ -7,7 +7,7 @@
   let analyzing = false;
 
   export let fen;
-  export let depth = 20;
+  export let depth = 22;
 
   $: if (fen) {
     // Clear when the FEN changes
@@ -146,16 +146,36 @@
 </script>
 
 <div>
+  <div class="field is-inline-block">
+    <label class="label"
+      >Depth
+      <div class="control">
+        <input
+          class="input"
+          type="number"
+          bind:value={depth}
+          min="10"
+          max="30"
+        />
+      </div></label
+    >
+  </div>
+  <br />
   <button
-    class="button is-primary"
+    class="button is-primary is-small"
     on:click={analyzePosition}
     disabled={analyzing}
     class:is-loading={analyzing}
     >Analyze Position
   </button>
-  <button class="button is-danger" on:click={stopAnalysis} disabled={!analyzing}
-    >Stop Analysis
-  </button>
+  {#if analyzing}
+    <button
+      class="button is-danger is-small"
+      on:click={stopAnalysis}
+      disabled={!analyzing}
+      >Stop Analysis
+    </button>
+  {/if}
   {#if topMoves.length > 0}
     <table class="table is-striped is-fullwidth">
       <thead>
