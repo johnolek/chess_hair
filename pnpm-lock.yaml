@@ -29,6 +29,9 @@ importers:
       sass:
         specifier: ^1.77.5
         version: 1.77.5
+      stockfish:
+        specifier: ^16.0.0
+        version: 16.0.0
       svelte-persisted-store:
         specifier: ^0.11.0
         version: 0.11.0(svelte@4.2.18)
@@ -386,6 +389,10 @@ packages:
     resolution: {integrity: sha512-itJW8lvSA0TXEphiRoawsCksnlf8SyvmFzIhltqAHluXd88pkCd+cXJVHTDwdCr0IzwptSm035IHQktUu1QUMg==}
     engines: {node: '>=0.10.0'}
 
+  stockfish@16.0.0:
+    resolution: {integrity: sha512-uu4AqsE2x0tD+SsYzZy4UtqeH4U9zDi1V8loDFDbMwCtvumGXF9j81Pg1ZmIkUgZhwQqPxQAv8IN5oy6hZa7Bw==}
+    hasBin: true
+
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
@@ -716,6 +723,8 @@ snapshots:
   snabbdom@3.6.2: {}
 
   source-map-js@1.2.0: {}
+
+  stockfish@16.0.0: {}
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
