@@ -10,8 +10,8 @@ class ApplicationController < ActionController::Base
 
   before_action do
     # For stockfish
-    headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
-    headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+    headers['Cross-Origin-Embedder-Policy'] ||= 'require-corp'
+    headers['Cross-Origin-Opener-Policy'] ||= 'same-origin'
   end
 
   def knight_moves
