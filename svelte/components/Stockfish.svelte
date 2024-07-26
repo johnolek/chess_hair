@@ -1,5 +1,6 @@
 <script>
   import { onMount, createEventDispatcher } from "svelte";
+  import { Chess } from "chess.js";
 
   let bestMove = "";
   let topMoves = [];
@@ -18,6 +19,16 @@
   );
 
   const dispatch = createEventDispatcher();
+
+  function getMoveSan(uciMove) {
+    if (!fen) {
+      return null;
+    }
+    const chessInstance = new Chess();
+    chessInstance.load(fen);
+    const move = chessInstance.move(uciMove);
+    return move.san;
+  }
 
   function parseStockfishInfo(infoLine) {
     const regex =
@@ -154,7 +165,7 @@
       <tbody>
         {#each topMoves as move}
           <tr>
-            <td>{move.principalVariation[0]}</td>
+            <td>{getMoveSan(move.principalVariation[0])}</td>
             <td>{move.score > 0 ? "+" : ""}{move.score}</td>
             <td>{move.depth}</td>
           </tr>
