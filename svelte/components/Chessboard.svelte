@@ -12,6 +12,64 @@
   } from "../stores";
   import { createEventDispatcher } from "svelte";
   import PromotionModal from "./PromotionModal.svelte";
+  import { Util } from "src/util";
+
+  const customBrushes = {
+    brand1: {
+      key: "brand1",
+      color: Util.getRootCssVarValue("--brand-color-1"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand2: {
+      key: "brand2",
+      color: Util.getRootCssVarValue("--brand-color-2"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand3: {
+      key: "brand3",
+      color: Util.getRootCssVarValue("--brand-color-3"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand4: {
+      key: "brand4",
+      color: Util.getRootCssVarValue("--brand-color-4"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand5: {
+      key: "brand5",
+      color: Util.getRootCssVarValue("--brand-color-5"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand6: {
+      key: "brand6",
+      color: Util.getRootCssVarValue("--brand-color-6"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand7: {
+      key: "brand7",
+      color: Util.getRootCssVarValue("--brand-color-7"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand8: {
+      key: "brand8",
+      color: Util.getRootCssVarValue("--brand-color-8"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+    brand9: {
+      key: "brand9",
+      color: Util.getRootCssVarValue("--brand-color-9"),
+      opacity: 1,
+      lineWidth: 15,
+    },
+  };
 
   let wrapperWidth;
   let boardContainer;
@@ -244,6 +302,9 @@
         events: {
           after: handleMove,
         },
+      },
+      drawable: {
+        brushes: customBrushes,
       },
     });
     if (fen) {
