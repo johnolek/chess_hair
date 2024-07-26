@@ -472,7 +472,7 @@
               <div class="column">
                 <button
                   disabled={moveIndex === 0}
-                  class="button is-primary is-large"
+                  class="button is-primary is-large history-button"
                   bind:this={historyBackButton}
                   on:click={() => {
                     isViewingHistory = true;
@@ -482,7 +482,7 @@
                 >
                 <button
                   disabled={moveIndex === maxMoveIndex}
-                  class="button is-primary is-large"
+                  class="button is-primary is-large history-button"
                   bind:this={historyForwardButton}
                   on:click={() => {
                     chessboard.move(currentPuzzle.moves[moveIndex]);
@@ -766,5 +766,8 @@
   }
   .board-container {
     max-width: 80vh;
+  }
+  .history-button {
+    touch-action: manipulation;
   }
 </style>
