@@ -7,7 +7,7 @@ class UserPuzzle < ApplicationRecord
 
   scope :with_weighted_fail_ratio, -> { select(
     arel_table[Arel.star],
-    Arel.sql('(RANDOM() * 2) + ((total_fails + 1.0) / (total_solves + 1.0)) as weighted_fail_ratio')
+    Arel.sql('(RANDOM() * 5) + ((total_fails + 1.0) / (total_solves + 1.0)) as weighted_fail_ratio')
   ) }
   scope :ordered_by_weighted_fail_ratio, -> { with_weighted_fail_ratio.order(weighted_fail_ratio: :desc) }
   scope :completed, -> { where(complete: true) }
