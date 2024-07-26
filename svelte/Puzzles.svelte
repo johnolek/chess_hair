@@ -78,6 +78,19 @@
     }
   }
 
+  let moves = [];
+  $: {
+    if (currentPuzzle) {
+      moves = [];
+      const chessInstance = new Chess();
+      chessInstance.load(currentPuzzle.fen);
+      currentPuzzle.moves.forEach((uciMove) => {
+        const move = chessInstance.move(uciMove);
+        moves.push(move);
+      });
+    }
+  }
+
   // Current puzzle state
   let nextMove;
   let madeMistake = false;
