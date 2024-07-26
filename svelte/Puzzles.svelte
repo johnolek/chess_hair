@@ -181,6 +181,7 @@
     chessboard.enableShowLastMove();
     puzzleComplete = false;
     madeMistake = false;
+    isViewingHistory = false;
 
     currentPuzzle = getNextPuzzle();
 
