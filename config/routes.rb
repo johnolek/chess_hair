@@ -30,5 +30,5 @@ Rails.application.routes.draw do
     end
   end
 
-  root "application#knight_moves"
+  root "application#puzzles"
 end
