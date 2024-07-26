@@ -21,6 +21,10 @@ Rails.application.configure do
   # config.require_master_key = true
 
   config.public_file_server.enabled = true
+  config.public_file_server.headers = {
+    'Cross-Origin-Embedder-Policy' => 'require-corp',
+    'Cross-Origin-Opener-Policy' => 'same-origin',
+  }
 
   # Compress CSS using a preprocessor.
   # config.assets.css_compressor = :sass
