@@ -79,11 +79,28 @@
   }
 
   // Current puzzle state
-  let moves;
   let nextMove;
   let madeMistake = false;
   let puzzleComplete = false;
   let elapsedTime = 0;
+
+  // History browsing
+  let isViewingHistory = false;
+  let moveIndex = 0;
+  let maxMoveIndex = 0;
+  let historyBackButton;
+  let historyForwardButton;
+
+  $: {
+    if (loaded && chessboard) {
+      if (isViewingHistory) {
+        chessboard.enableViewOnly();
+        chessboard.enableShowLastMove();
+      } else {
+        chessboard.disableViewOnly();
+      }
+    }
+  }
 
   // DOM elements
   let nextButton;
@@ -159,6 +176,7 @@
     }
 
     puzzleHistory = [currentPuzzle.puzzle_id, ...puzzleHistory];
+    moveIndex = 0;
 
     const chessInstance = new Chess();
     chessInstance.load(currentPuzzle.fen);
@@ -167,22 +185,20 @@
     fen = currentPuzzle.fen;
     chessboard.load(fen);
 
-    // Clone so we don't cache a value that gets shifted later
-    moves = [...currentPuzzle.moves];
-
     updateNextMove();
 
     setTimeout(() => {
-      const computerMove = moves[0];
-      moves = moves.slice(1);
+      const computerMove = currentPuzzle.moves[0];
       chessboard.move(computerMove);
+      moveIndex = 1;
+      maxMoveIndex = 1;
       updateNextMove();
     }, 700);
   }
 
   function updateNextMove() {
     const chessInstance = new Chess(fen);
-    const correctMove = chessInstance.move(moves[0]);
+    const correctMove = chessInstance.move(currentPuzzle.moves[moveIndex]);
     nextMove = correctMove.san;
   }
 
@@ -190,14 +206,15 @@
     chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
-    const correctMove = moves[0];
-    if (move.lan === correctMove || isCheckmate) {
+    if (move.san === nextMove || isCheckmate || puzzleComplete) {
+      moveIndex = moveIndex + 1;
+      maxMoveIndex = maxMoveIndex + 1;
       chessboard.highlightSquare(move.to, "correct-move", 700);
-      moves.shift(); // remove the user move first
-      const computerMove = moves.shift();
+      const computerMove = currentPuzzle.moves[moveIndex];
       if (computerMove) {
-        moves = moves; // reactivity
         setTimeout(() => {
+          moveIndex = moveIndex + 1;
+          maxMoveIndex = maxMoveIndex + 1;
           chessboard.move(computerMove);
           chessboard.enableShowLastMove();
           updateNextMove();
@@ -364,6 +381,14 @@
         event.preventDefault();
         nextButton.click();
       }
+      if (event.key === "ArrowRight" && historyForwardButton) {
+        event.preventDefault();
+        historyForwardButton.click();
+      }
+      if (event.key === "ArrowLeft" && historyBackButton) {
+        event.preventDefault();
+        historyBackButton.click();
+      }
     });
     loaded = true;
     await loadNextPuzzle();
@@ -413,30 +438,62 @@
               </div>
             </div>
           </div>
-          <div class="board-container block">
-            {#key currentPuzzle.puzzle_id}
-              <FocusTimer bind:elapsedTime />
-            {/key}
-            <Chessboard
-              bind:fen
-              {chessgroundConfig}
-              {orientation}
-              bind:this={chessboard}
-              on:move={handleUserMove}
-            >
-              <div slot="centered-content">
-                {#if successMessage}
-                  <span transition:fade class="tag is-success is-size-4">
-                    {successMessage}
-                  </span>
-                {/if}
-                {#if failureMessage}
-                  <span transition:fade class="tag is-danger is-size-4">
-                    {failureMessage}
-                  </span>
-                {/if}
+
+          <div class="block">
+            <div class="board-container">
+              {#key currentPuzzle.puzzle_id}
+                <FocusTimer bind:elapsedTime />
+              {/key}
+              <Chessboard
+                bind:fen
+                {chessgroundConfig}
+                {orientation}
+                bind:this={chessboard}
+                on:move={handleUserMove}
+              >
+                <div slot="centered-content">
+                  {#if successMessage}
+                    <span transition:fade class="tag is-success is-size-4">
+                      {successMessage}
+                    </span>
+                  {/if}
+                  {#if failureMessage}
+                    <span transition:fade class="tag is-danger is-size-4">
+                      {failureMessage}
+                    </span>
+                  {/if}
+                </div>
+              </Chessboard>
+            </div>
+          </div>
+
+          <div class="block">
+            <div class="columns is-centered">
+              <div class="column">
+                <button
+                  disabled={moveIndex === 0}
+                  class="button is-primary is-large"
+                  bind:this={historyBackButton}
+                  on:click={() => {
+                    isViewingHistory = true;
+                    moveIndex -= 1;
+                    chessboard.undo();
+                  }}>&#x276E;</button
+                >
+                <button
+                  disabled={moveIndex === maxMoveIndex}
+                  class="button is-primary is-large"
+                  bind:this={historyForwardButton}
+                  on:click={() => {
+                    chessboard.move(currentPuzzle.moves[moveIndex]);
+                    moveIndex += 1;
+                    if (moveIndex === maxMoveIndex) {
+                      isViewingHistory = false;
+                    }
+                  }}>&#x276F;</button
+                >
               </div>
-            </Chessboard>
+            </div>
           </div>
           <div>
             <div class="columns is-vcentered is-mobile">

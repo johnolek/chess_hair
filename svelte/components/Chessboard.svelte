@@ -169,6 +169,14 @@
     updateChessground();
   }
 
+  export function enableViewOnly() {
+    chessground.set({ viewOnly: true });
+  }
+
+  export function disableViewOnly() {
+    chessground.set({ viewOnly: false });
+  }
+
   export function reset() {
     chessInstance.reset();
     updateChessground();
