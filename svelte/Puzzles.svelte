@@ -468,7 +468,7 @@
           </div>
 
           <div class="block">
-            <div class="columns is-centered">
+            <div class="columns has-text-centered">
               <div class="column">
                 <button
                   disabled={moveIndex === 0}
