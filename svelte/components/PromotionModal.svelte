@@ -110,17 +110,33 @@
     padding: 20px;
     border-radius: 5px;
     text-align: center;
+    display: flex;
+    justify-content: space-around;
+    width: 95%;
+  }
+
+  .piece-options {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
   }
 
   .piece-options button {
     margin: 5px;
-    padding: 10px;
+    padding: 0;
+    width: 25%; /* 25% of the modal content width */
+    aspect-ratio: 1; /* Maintain square aspect ratio */
+  }
+
+  button {
+    touch-action: manipulation;
   }
 
   piece {
     display: inline-block;
     position: relative;
-    width: 75px;
-    height: 75px;
+    width: 100%;
+    height: 100%;
+    touch-action: manipulation;
   }
 </style>

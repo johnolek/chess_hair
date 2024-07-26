@@ -15,7 +15,6 @@
 
   let wrapperWidth;
   let boardContainer;
-  let resizer;
   let showPromotion = false;
   let promotionColor = "white";
   let promotionFrom, promotionTo;
@@ -146,6 +145,7 @@
       const fromRank = from[1];
       const toRank = to[1];
       const piece = chessInstance.get(from).type;
+      promotionColor = chessInstance.turn() === "w" ? "white" : "black";
       return (
         piece === "p" &&
         ((fromRank === "7" && toRank === "8") ||
@@ -259,11 +259,6 @@
         size = wrapperWidth;
       }
     });
-
-    setTimeout(() => {
-      // Allow the board to render before adding the resizer
-      boardContainer.appendChild(resizer);
-    }, 100);
   });
 </script>
 
@@ -286,31 +281,32 @@
   bind:clientWidth={wrapperWidth}
   data-board={currentBoardStyle}
 >
-  <PromotionModal
-    isOpen={showPromotion}
-    color={promotionColor}
-    on:select={(event) => selectPromotionPiece(event.detail.piece)}
-    on:close={() => {
-      showPromotion = false;
-      updateChessground();
-    }}
-  />
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>
-  <div
-    class="is2d"
-    bind:this={boardContainer}
-    style="position: relative;width: {size}px; height: {size}px"
-  ></div>
-  <div
-    bind:this={resizer}
-    class="resizer"
-    on:mousedown={startResizing}
-    on:touchstart={startResizing}
-    role="button"
-    tabindex="0"
-  ></div>
+  <div style="position: relative;width: {size}px; height: {size}px">
+    <div
+      class="is2d"
+      bind:this={boardContainer}
+      style="position: relative;width: {size}px; height: {size}px"
+    ></div>
+    <div
+      class="resizer"
+      on:mousedown={startResizing}
+      on:touchstart={startResizing}
+      role="button"
+      tabindex="0"
+    ></div>
+    <PromotionModal
+      isOpen={showPromotion}
+      color={promotionColor}
+      on:select={(event) => selectPromotionPiece(event.detail.piece)}
+      on:close={() => {
+        showPromotion = false;
+        updateChessground();
+      }}
+    />
+  </div>
 </div>
 
 <style>
