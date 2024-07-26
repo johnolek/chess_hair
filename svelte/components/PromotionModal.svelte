@@ -18,6 +18,9 @@
   }
 
   function handleKeyDown(event) {
+    if (!isOpen) {
+      return;
+    }
     if (event.key === "Escape") {
       close();
     } else if (event.key === "Tab") {
