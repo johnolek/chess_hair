@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       bulma:
-        specifier: ^1.0.1
-        version: 1.0.1
+        specifier: ^1.0.2
+        version: 1.0.2
       bulma-extensions:
         specifier: ^6.2.7
         version: 6.2.7
@@ -220,8 +220,8 @@ packages:
   bulma-extensions@6.2.7:
     resolution: {integrity: sha512-y3dHsxlCYkuxUg87KKN9H4InM8NCk8tdnrlxLkYak8sd2WQdllg3wP2Nv41lj8X46uPXX2ADP0MO65LlXPHt/Q==}
 
-  bulma@1.0.1:
-    resolution: {integrity: sha512-+xv/BIAEQakHkR0QVz+s+RjNqfC53Mx9ZYexyaFNFo9wx5i76HXArNdwW7bccyJxa5mgV/T5DcVGqsAB19nBJQ==}
+  bulma@1.0.2:
+    resolution: {integrity: sha512-D7GnDuF6seb6HkcnRMM9E739QpEY9chDzzeFrHMyEns/EXyDJuQ0XA0KxbBl/B2NTsKSoDomW61jFGFaAxhK5A==}
 
   chess.js@1.0.0-beta.8:
     resolution: {integrity: sha512-UngzUMXmexcQaQA/UEJuJj5vatEy34awYMD5YMOp/FW3HM7lqspp7ymYs5JAmquDq0WROtURRfSffoa/vrCCyw==}
@@ -538,7 +538,7 @@ snapshots:
 
   bulma-extensions@6.2.7: {}
 
-  bulma@1.0.1: {}
+  bulma@1.0.2: {}
 
   chess.js@1.0.0-beta.8: {}
 
