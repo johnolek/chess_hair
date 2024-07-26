@@ -41,5 +41,10 @@ module ChessHair
 
     # in memory, not advisable for production
     config.active_job.queue_adapter = :async
+
+    config.public_file_server.headers = {
+      'Cross-Origin-Embedder-Policy' => 'require-corp',
+      'Cross-Origin-Opener-Policy' => 'same-origin',
+    }
   end
 end
