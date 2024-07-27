@@ -76,9 +76,12 @@
 
         if (moveIndex === -1) {
           topMoves.push(info);
+        } else {
+          topMoves[moveIndex] = info;
         }
 
-        topMoves[moveIndex] = info;
+        // Filter out moves from earlier depths
+        topMoves = topMoves.filter((move) => move.depth >= info.depth - 2); // Purge earlier depths
 
         // Sort topMoves by eval score in descending order
         topMoves = topMoves.sort((a, b) => b.score - a.score);
