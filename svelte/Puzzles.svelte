@@ -512,7 +512,7 @@
             </div>
           </div>
 
-          <div class="block">
+          <div class="block mb-1">
             <div class="board-container">
               {#key currentPuzzle.puzzle_id}
                 <FocusTimer bind:elapsedTime />
@@ -537,78 +537,59 @@
                   {/if}
                 </div>
               </Chessboard>
-              {#if !continuous}
-                <button
-                  class="button is-primary is-small"
-                  class:is-danger={!puzzleComplete}
-                  on:click={() => {
-                    continuous = true;
-                    madeMistake = true;
-                  }}
-                  >Enable Analysis
-                </button>
-              {:else}
-                <button
-                  class="button is-dark is-small"
-                  on:click={() => {
-                    continuous = false;
-                  }}
-                  >Stop Analysis
-                </button>
-              {/if}
-              {#if puzzleComplete}
-                <button
-                  class="button is-primary is-large next-button"
-                  bind:this={nextButton}
-                  on:click={async () => {
-                    await loadNextPuzzle();
-                  }}
-                  >Next
-                </button>
-              {/if}
             </div>
           </div>
 
           <div class="block">
-            <div class="columns has-text-centered">
-              <div class="column">
-                <button
-                  disabled={moveIndex === 0}
-                  class="button is-primary is-large history-button"
-                  bind:this={historyBackButton}
-                  on:click={() => {
-                    isViewingHistory = true;
-                    moveIndex -= 1;
-                    chessboard.undo();
-                    if (continuous) {
-                      topStockfishMoves = [];
-                      stockfish.analyzePosition();
-                    }
-                  }}>&#x276E;</button
-                >
-                <button
-                  disabled={moveIndex === maxMoveIndex}
-                  class="button is-primary is-large history-button"
-                  bind:this={historyForwardButton}
-                  on:click={() => {
-                    makeMove(currentPuzzle.moves[moveIndex]);
-                  }}>&#x276F;</button
-                >
+            <div class="columns is-mobile has-text-centered is-vcentered">
+              <div class="column has-text-left">
+                {#if !continuous}
+                  <button
+                    class="button is-primary is-small"
+                    class:is-danger={!puzzleComplete}
+                    on:click={() => {
+                      continuous = true;
+                      madeMistake = true;
+                    }}
+                    >Enable Analysis
+                  </button>
+                {:else}
+                  <button
+                    class="button is-dark is-small is-inline-block"
+                    on:click={() => {
+                      continuous = false;
+                    }}
+                    >Stop Analysis
+                  </button>
+                {/if}
               </div>
-            </div>
-          </div>
-          <div>
-            <div class="columns is-vcentered is-mobile">
-              {#if !puzzleComplete}
-                <div class="column">
-                  <span class="tag is-{orientation} is-size-4">
-                    {orientation} to play
-                  </span>
-                </div>
-              {/if}
-              <div class="column">
-                <div>Rating</div>
+              <div class="column has-text-centered">
                 <div>
+                  <button
+                    disabled={moveIndex === 0}
+                    class="button is-primary history-button"
+                    bind:this={historyBackButton}
+                    on:click={() => {
+                      isViewingHistory = true;
+                      moveIndex -= 1;
+                      chessboard.undo();
+                      if (continuous) {
+                        topStockfishMoves = [];
+                        stockfish.analyzePosition();
+                      }
+                    }}>&#x276E;</button
+                  >
+                  <button
+                    disabled={moveIndex === maxMoveIndex}
+                    class="button is-primary history-button"
+                    bind:this={historyForwardButton}
+                    on:click={() => {
+                      makeMove(currentPuzzle.moves[moveIndex]);
+                    }}>&#x276F;</button
+                  >
+                </div>
+                <div class="has-text-centered">
+                  <div>Rating</div>
                   {#key currentPuzzle.puzzle_id}
                     <Spoiler minWidth="70" isShown={puzzleComplete}>
                       <div>
@@ -617,6 +598,24 @@
                     </Spoiler>
                   {/key}
                 </div>
+              </div>
+
+              <div class="column has-text-right">
+                <div class="is-inline-block"></div>
+                {#if !puzzleComplete}
+                  <span class="tag is-{orientation} is-size-4 ml-2">
+                    {orientation}
+                  </span>
+                {:else}
+                  <button
+                    class="button is-primary next-button ml-2"
+                    bind:this={nextButton}
+                    on:click={async () => {
+                      await loadNextPuzzle();
+                    }}
+                    >Next
+                  </button>
+                {/if}
               </div>
             </div>
           </div>
@@ -945,10 +944,5 @@
   }
   .board-container {
     position: relative;
-  }
-  .next-button {
-    position: absolute;
-    bottom: -75px;
-    right: 0;
   }
 </style>
