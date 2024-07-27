@@ -58,3 +58,7 @@ square {
 .test {
   background-color: rgba($tiffany-blue, 0.3) !important;
 }
+
+html, body {
+  overflow-x: hidden;
+}
