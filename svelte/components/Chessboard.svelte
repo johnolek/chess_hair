@@ -83,7 +83,7 @@
     },
     drawMove: {
       key: "drawMove",
-      color: Util.getRootCssVarValue("--bulma-grey"),
+      color: Util.getRootCssVarValue("--bulma-grey-dark"),
       opacity: 1,
       lineWidth: 8,
     },
