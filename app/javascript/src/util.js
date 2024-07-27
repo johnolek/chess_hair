@@ -69,6 +69,15 @@ class Util {
     // Call the original fetch with the modified options
     return fetch(url, options);
   }
+
+  static isProduction() {
+    // Check if is client side
+    return (
+      typeof window !== "undefined" &&
+      window.document !== undefined &&
+      window.location.hostname === "chess.hair"
+    );
+  }
 }
 
 export { Util };
