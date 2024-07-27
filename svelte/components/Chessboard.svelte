@@ -18,56 +18,74 @@
     brand1: {
       key: "brand1",
       color: Util.getRootCssVarValue("--brand-color-1"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand2: {
       key: "brand2",
       color: Util.getRootCssVarValue("--brand-color-2"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand3: {
       key: "brand3",
       color: Util.getRootCssVarValue("--brand-color-3"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand4: {
       key: "brand4",
       color: Util.getRootCssVarValue("--brand-color-4"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand5: {
       key: "brand5",
       color: Util.getRootCssVarValue("--brand-color-5"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand6: {
       key: "brand6",
       color: Util.getRootCssVarValue("--brand-color-6"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand7: {
       key: "brand7",
       color: Util.getRootCssVarValue("--brand-color-7"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand8: {
       key: "brand8",
       color: Util.getRootCssVarValue("--brand-color-8"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
     },
     brand9: {
       key: "brand9",
       color: Util.getRootCssVarValue("--brand-color-9"),
-      opacity: 1,
+      opacity: 0.85,
       lineWidth: 15,
+    },
+    greatMove: {
+      key: "greatMove",
+      color: Util.getRootCssVarValue("--bulma-success"),
+      opacity: 0.95,
+      lineWidth: 17,
+    },
+    drawMove: {
+      key: "drawMove",
+      color: Util.getRootCssVarValue("--bulma-grey"),
+      opacity: 0.85,
+      lineWidth: 7,
+    },
+    badMove: {
+      key: "badMove",
+      color: Util.getRootCssVarValue("--bulma-danger"),
+      opacity: 0.85,
+      lineWidth: 12,
     },
   };
 
@@ -283,17 +301,19 @@
     chessground.set({ lastMove });
   }
 
-  export function drawArrow(move, brush = "brand1", width = 10) {
+  let shapes = [];
+  export function drawArrow(move, brush = "brand1") {
     const shape = {
       orig: move.from,
       dest: move.to,
       brush: brush,
-      modifiers: { lineWidth: width },
     };
-    chessground.set({ drawable: { shapes: [shape] } });
+    shapes = [...shapes, shape];
+    chessground.set({ drawable: { shapes: shapes } });
   }
 
   export function clearDrawings() {
+    shapes = [];
     chessground.set({ drawable: { shapes: [] } });
   }
 

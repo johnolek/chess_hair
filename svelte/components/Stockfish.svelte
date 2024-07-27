@@ -1,17 +1,18 @@
 <script>
   import { onMount, createEventDispatcher } from "svelte";
+  import { Util } from "src/util";
   import { Chess } from "chess.js";
 
   let bestMove = "";
   let topMoves = [];
-  let analyzing = false;
+  export let analyzing = false;
 
   export let fen;
-  export let depth = 22;
+  let analysisFen;
+  export let depth = 20;
 
-  $: if (fen) {
-    // Clear when the FEN changes
-    clearData();
+  $: if (fen && analysisFen && fen !== analysisFen) {
+    stopAnalysis();
   }
 
   const stockfish = new Worker(
@@ -19,15 +20,6 @@
   );
 
   const dispatch = createEventDispatcher();
-
-  function getFullMove(uciMove) {
-    if (!fen) {
-      return null;
-    }
-    const chessInstance = new Chess();
-    chessInstance.load(fen);
-    return chessInstance.move(uciMove);
-  }
 
   function parseStockfishInfo(infoLine) {
     const regex =
@@ -68,10 +60,11 @@
 
   stockfish.onmessage = (event) => {
     const message = event.data;
+    if (!Util.isProduction()) {
+      // console.log(message);
+    }
     if (message.startsWith("bestmove")) {
-      bestMove = message.split(" ")[1];
-      dispatchBestMove();
-      stopAnalysis();
+      analyzing = false;
     } else if (message.startsWith("info depth") && message.includes("pv")) {
       const info = parseStockfishInfo(message);
       if (info) {
@@ -95,18 +88,41 @@
           topMoves = topMoves.slice(0, 5);
         }
 
+        topMoves = topMoves.map((moveData) => {
+          return {
+            ...moveData,
+            fullMove: getFullMove(moveData.principalVariation[0]),
+            fen: analysisFen,
+          };
+        });
+
+        topMoves = topMoves.filter((move) => move.fullMove !== null);
+
         dispatchTopMoves();
       }
     }
   };
 
-  function uciMessage(message) {
+  function getFullMove(uciMove) {
+    if (!analysisFen) {
+      return null;
+    }
+    const chessInstance = new Chess();
+    chessInstance.load(analysisFen);
+    try {
+      return chessInstance.move(uciMove);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  export function uciMessage(message) {
     stockfish.postMessage(message);
   }
 
   function dispatchBestMove() {
     if (bestMove !== "") {
-      dispatch("bestmove", { bestMove: getFullMove(bestMove) });
+      dispatch("bestmove", { bestMove });
     }
   }
 
@@ -116,86 +132,36 @@
     }
   }
 
-  function analyzePosition() {
+  export function analyzePosition() {
+    if (analyzing) {
+      stopAnalysis();
+      setTimeout(analyzePosition, 500);
+      return;
+    }
     if (fen) {
-      clearData();
       analyzing = true;
+      clearData();
+      analysisFen = fen;
       uciMessage(`position fen ${fen}`);
       uciMessage("setoption name MultiPV value 5");
       uciMessage(`go depth ${depth}`);
     }
   }
 
-  function stopAnalysis() {
-    analyzing = false;
+  export function stopAnalysis() {
     uciMessage("stop");
+    uciMessage("uci");
+    analyzing = false;
+    topMoves = [];
+    dispatchTopMoves();
   }
 
   function clearData() {
     bestMove = "";
     topMoves = [];
-    dispatchBestMove();
-    dispatchTopMoves();
   }
 
   onMount(() => {
-    uciMessage("uci");
-    uciMessage("isready");
     uciMessage("setoption name Use NNUE value true");
   });
 </script>
-
-<div>
-  <div class="field is-inline-block">
-    <label class="label"
-      >Depth
-      <div class="control">
-        <input
-          class="input"
-          type="number"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          bind:value={depth}
-          min="10"
-          max="50"
-        />
-      </div></label
-    >
-  </div>
-  <br />
-  <button
-    class="button is-primary is-small"
-    on:click={analyzePosition}
-    disabled={analyzing}
-    class:is-loading={analyzing}
-    >Analyze Position
-  </button>
-  {#if analyzing}
-    <button
-      class="button is-danger is-small"
-      on:click={stopAnalysis}
-      disabled={!analyzing}
-      >Stop Analysis
-    </button>
-  {/if}
-  {#if topMoves.length > 0}
-    <table class="table is-striped is-fullwidth">
-      <thead>
-        <tr>
-          <th>Move</th>
-          <th>Evaluation</th>
-          <th>Depth</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each topMoves as move}
-          <tr>
-            <td>{getFullMove(move.principalVariation[0]).san}</td>
-            <td>{move.score > 0 ? "+" : ""}{move.score}</td>
-            <td>{move.depth}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  {/if}
-</div>

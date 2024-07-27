@@ -208,6 +208,10 @@
       chessboard.move(computerMove);
       moveIndex = 1;
       maxMoveIndex = 1;
+      if (continuous) {
+        topStockfishMoves = [];
+        stockfish.analyzePosition();
+      }
       updateNextMove();
     }, 700);
   }
@@ -216,6 +220,20 @@
     const chessInstance = new Chess(fen);
     const correctMove = chessInstance.move(currentPuzzle.moves[moveIndex]);
     nextMove = correctMove.san;
+  }
+
+  function makeMove(move) {
+    if (chessboard) {
+      chessboard.move(move);
+      moveIndex = moveIndex + 1;
+      if (moveIndex === maxMoveIndex) {
+        isViewingHistory = false;
+      }
+      if (continuous) {
+        topStockfishMoves = [];
+        stockfish.analyzePosition();
+      }
+    }
   }
 
   async function handleUserMove(moveEvent) {
@@ -229,9 +247,8 @@
       const computerMove = currentPuzzle.moves[moveIndex];
       if (computerMove) {
         setTimeout(() => {
-          moveIndex = moveIndex + 1;
           maxMoveIndex = maxMoveIndex + 1;
-          chessboard.move(computerMove);
+          makeMove(computerMove);
           chessboard.enableShowLastMove();
           updateNextMove();
         }, 300);
@@ -413,6 +430,42 @@
       await loadNextPuzzle();
     }, 1);
   });
+
+  // Stockfish
+  /** @type {Stockfish} */
+  let stockfish;
+  let depth = 20;
+  let topStockfishMoves = [];
+  let continuous;
+
+  $: {
+    if (stockfish) {
+      if (fen && continuous) {
+        stockfish.analyzePosition();
+      }
+    }
+  }
+
+  function drawStockfishArrows() {
+    chessboard.clearDrawings();
+    if (topStockfishMoves.length > 0) {
+      topStockfishMoves.forEach((move) => {
+        const fullMove = move.fullMove;
+        const analysisFen = move.fen;
+        if (fullMove !== null && analysisFen === fen) {
+          let arrowType = "brand1";
+          if (move.score > 3) {
+            arrowType = "greatMove";
+          } else if (Math.abs(move.score) < 0.42) {
+            arrowType = "drawMove";
+          } else if (move.score < -0.75) {
+            arrowType = "badMove";
+          }
+          chessboard.drawArrow(fullMove, arrowType);
+        }
+      });
+    }
+  }
 </script>
 
 {#if loaded}
@@ -504,6 +557,10 @@
                     isViewingHistory = true;
                     moveIndex -= 1;
                     chessboard.undo();
+                    if (continuous) {
+                      topStockfishMoves = [];
+                      stockfish.analyzePosition();
+                    }
                   }}>&#x276E;</button
                 >
                 <button
@@ -511,11 +568,7 @@
                   class="button is-primary is-large history-button"
                   bind:this={historyForwardButton}
                   on:click={() => {
-                    chessboard.move(currentPuzzle.moves[moveIndex]);
-                    moveIndex += 1;
-                    if (moveIndex === maxMoveIndex) {
-                      isViewingHistory = false;
-                    }
+                    makeMove(currentPuzzle.moves[moveIndex]);
                   }}>&#x276F;</button
                 >
               </div>
@@ -622,15 +675,78 @@
           {#if fen}
             <h3 class="is-size-4">Analysis</h3>
             <Stockfish
+              bind:this={stockfish}
               {fen}
+              {depth}
               on:topmoves={(event) => {
-                const moves = event.detail.topMoves;
-              }}
-              on:bestmove={(event) => {
-                const bestMove = event.detail.bestMove;
-                chessboard.drawArrow(bestMove);
+                topStockfishMoves = event.detail.topMoves;
+                if (continuous) {
+                  drawStockfishArrows();
+                }
               }}
             />
+            <div>
+              <div class="field is-inline-block">
+                <label class="label"
+                  >Depth
+                  <div class="control">
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      bind:value={depth}
+                      min="10"
+                      max="50"
+                      on:change={() => {
+                        if (continuous) {
+                          topStockfishMoves = [];
+                          stockfish.analyzePosition();
+                        }
+                      }}
+                    />
+                  </div></label
+                >
+              </div>
+              <br />
+              {#if !continuous}
+                <button
+                  class="button is-primary is-small"
+                  on:click={() => {
+                    continuous = true;
+                  }}
+                  >Enable Analysis
+                </button>
+              {:else}
+                <button
+                  class="button is-primary is-dark is-small"
+                  on:click={() => {
+                    continuous = false;
+                  }}
+                  >Stop Analysis
+                </button>
+              {/if}
+              {#if topStockfishMoves.length > 0}
+                <table class="table is-striped is-narrow is-fullwidth">
+                  <thead>
+                    <tr>
+                      <th>Move</th>
+                      <th>Evaluation</th>
+                      <th>Depth</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each topStockfishMoves as move}
+                      <tr>
+                        <td>{move.fullMove.san}</td>
+                        <td>{move.score > 0 ? "+" : ""}{move.score}</td>
+                        <td>{move.depth}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {/if}
+            </div>
           {/if}
         </div>
       {/if}
