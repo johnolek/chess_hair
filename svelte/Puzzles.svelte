@@ -179,6 +179,10 @@
     if (!chessboard) {
       return;
     }
+    if (continuous) {
+      continuous = false;
+      topStockfishMoves = [];
+    }
     chessboard.enableShowLastMove();
     puzzleComplete = false;
     madeMistake = false;
@@ -434,7 +438,7 @@
   // Stockfish
   /** @type {Stockfish} */
   let stockfish;
-  let depth = 20;
+  let depth = 22;
   let topStockfishMoves = [];
   let continuous;
 
@@ -443,21 +447,28 @@
       if (fen && continuous) {
         stockfish.analyzePosition();
       }
+      if (!continuous) {
+        chessboard.clearDrawings();
+      }
     }
   }
 
   function drawStockfishArrows() {
     chessboard.clearDrawings();
     if (topStockfishMoves.length > 0) {
-      topStockfishMoves.forEach((move) => {
+      // We want to draw the best move last so it appears on top of others
+      const sortedAscending = topStockfishMoves.sort(
+        (a, b) => b.score - a.score,
+      );
+      sortedAscending.forEach((move) => {
         const fullMove = move.fullMove;
         const analysisFen = move.fen;
         if (fullMove !== null && analysisFen === fen) {
-          let arrowType = "brand1";
+          let arrowType = "drawMove";
           if (move.score > 3) {
             arrowType = "greatMove";
-          } else if (Math.abs(move.score) < 0.42) {
-            arrowType = "drawMove";
+          } else if (move.score > 1.25) {
+            arrowType = "goodMove";
           } else if (move.score < -0.75) {
             arrowType = "badMove";
           }
@@ -533,6 +544,23 @@
                   {/if}
                 </div>
               </Chessboard>
+              {#if !continuous}
+                <button
+                  class="button is-primary is-small"
+                  on:click={() => {
+                    continuous = true;
+                  }}
+                  >Enable Analysis
+                </button>
+              {:else}
+                <button
+                  class="button is-danger is-small"
+                  on:click={() => {
+                    continuous = false;
+                  }}
+                  >Stop Analysis
+                </button>
+              {/if}
               {#if puzzleComplete}
                 <button
                   class="button is-primary is-large next-button"
@@ -617,6 +645,86 @@
     <div class="column is-4">
       {#if activePuzzles.length >= 1 && currentPuzzle}
         <div class="box">
+          {#if fen}
+            <h3 class="is-size-4">Analysis</h3>
+            <Stockfish
+              bind:this={stockfish}
+              {fen}
+              {depth}
+              on:topmoves={(event) => {
+                if (!continuous) {
+                  return;
+                }
+                topStockfishMoves = event.detail.topMoves;
+                drawStockfishArrows();
+              }}
+            />
+            <div>
+              <div class="field is-inline-block">
+                <label class="label"
+                  >Depth
+                  <div class="control">
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      bind:value={depth}
+                      min="10"
+                      max="50"
+                      on:change={() => {
+                        if (continuous) {
+                          topStockfishMoves = [];
+                          stockfish.analyzePosition();
+                        }
+                      }}
+                    />
+                  </div></label
+                >
+              </div>
+              <br />
+              {#if !continuous}
+                <button
+                  class="button is-primary is-small"
+                  on:click={() => {
+                    continuous = true;
+                  }}
+                  >Enable Analysis
+                </button>
+              {:else}
+                <button
+                  class="button is-danger is-small"
+                  on:click={() => {
+                    continuous = false;
+                    topStockfishMoves = [];
+                  }}
+                  >Stop Analysis
+                </button>
+              {/if}
+              {#if topStockfishMoves.length > 0}
+                <table class="table is-striped is-narrow is-fullwidth">
+                  <thead>
+                    <tr>
+                      <th>Move</th>
+                      <th>Evaluation</th>
+                      <th>Depth</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each topStockfishMoves as move}
+                      <tr>
+                        <td>{move.fullMove.san}</td>
+                        <td>{move.score > 0 ? "+" : ""}{move.score}</td>
+                        <td>{move.depth}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {/if}
+            </div>
+          {/if}
+        </div>
+        <div class="box">
           <table class="table is-fullwidth is-narrow is-striped">
             <thead>
               <tr>
@@ -672,82 +780,6 @@
               {/each}
             </tbody>
           </table>
-          {#if fen}
-            <h3 class="is-size-4">Analysis</h3>
-            <Stockfish
-              bind:this={stockfish}
-              {fen}
-              {depth}
-              on:topmoves={(event) => {
-                topStockfishMoves = event.detail.topMoves;
-                if (continuous) {
-                  drawStockfishArrows();
-                }
-              }}
-            />
-            <div>
-              <div class="field is-inline-block">
-                <label class="label"
-                  >Depth
-                  <div class="control">
-                    <input
-                      class="input"
-                      type="number"
-                      inputmode="numeric"
-                      pattern="[0-9]*"
-                      bind:value={depth}
-                      min="10"
-                      max="50"
-                      on:change={() => {
-                        if (continuous) {
-                          topStockfishMoves = [];
-                          stockfish.analyzePosition();
-                        }
-                      }}
-                    />
-                  </div></label
-                >
-              </div>
-              <br />
-              {#if !continuous}
-                <button
-                  class="button is-primary is-small"
-                  on:click={() => {
-                    continuous = true;
-                  }}
-                  >Enable Analysis
-                </button>
-              {:else}
-                <button
-                  class="button is-primary is-dark is-small"
-                  on:click={() => {
-                    continuous = false;
-                  }}
-                  >Stop Analysis
-                </button>
-              {/if}
-              {#if topStockfishMoves.length > 0}
-                <table class="table is-striped is-narrow is-fullwidth">
-                  <thead>
-                    <tr>
-                      <th>Move</th>
-                      <th>Evaluation</th>
-                      <th>Depth</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each topStockfishMoves as move}
-                      <tr>
-                        <td>{move.fullMove.san}</td>
-                        <td>{move.score > 0 ? "+" : ""}{move.score}</td>
-                        <td>{move.depth}</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              {/if}
-            </div>
-          {/if}
         </div>
       {/if}
       <div class="box">

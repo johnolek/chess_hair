@@ -69,23 +69,29 @@
       opacity: 0.85,
       lineWidth: 15,
     },
+    goodMove: {
+      key: "goodMove",
+      color: Util.getRootCssVarValue("--bulma-success-30"),
+      opacity: 0.85,
+      lineWidth: 11,
+    },
     greatMove: {
       key: "greatMove",
       color: Util.getRootCssVarValue("--bulma-success"),
-      opacity: 0.95,
-      lineWidth: 17,
+      opacity: 1,
+      lineWidth: 14,
     },
     drawMove: {
       key: "drawMove",
       color: Util.getRootCssVarValue("--bulma-grey"),
-      opacity: 0.85,
-      lineWidth: 7,
+      opacity: 1,
+      lineWidth: 8,
     },
     badMove: {
       key: "badMove",
       color: Util.getRootCssVarValue("--bulma-danger"),
-      opacity: 0.85,
-      lineWidth: 12,
+      opacity: 0.99,
+      lineWidth: 5,
     },
   };
 
