@@ -413,7 +413,7 @@
 <style>
   .board-wrapper {
     position: relative;
-    width: 100%;
+    width: 99%; /* TODO: Figure out proper centering */
   }
 
   .centered-content {
