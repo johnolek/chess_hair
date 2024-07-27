@@ -8,6 +8,14 @@ class ApplicationController < ActionController::Base
   before_action :set_default_body_attributes
   before_action :authenticate_user!, only: [:puzzles]
 
+  before_action do
+    # For stockfish
+    if Rails.env.development?
+      headers['Cross-Origin-Embedder-Policy'] ||= 'require-corp'
+      headers['Cross-Origin-Opener-Policy'] ||= 'same-origin'
+    end
+  end
+
   def knight_moves
   end
 
