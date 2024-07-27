@@ -93,7 +93,6 @@
   }
 
   // Current puzzle state
-  let nextMove;
   let madeMistake = false;
   let puzzleComplete = false;
   let elapsedTime = 0;
@@ -204,8 +203,6 @@
     fen = currentPuzzle.fen;
     chessboard.load(fen);
 
-    updateNextMove();
-
     const computerMove = currentPuzzle.moves[0];
 
     setTimeout(() => {
@@ -216,14 +213,7 @@
         topStockfishMoves = [];
         stockfish.analyzePosition();
       }
-      updateNextMove();
     }, 700);
-  }
-
-  function updateNextMove() {
-    const chessInstance = new Chess(fen);
-    const correctMove = chessInstance.move(currentPuzzle.moves[moveIndex]);
-    nextMove = correctMove.san;
   }
 
   function makeMove(move) {
@@ -244,7 +234,11 @@
     chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
-    if (move.san === nextMove || isCheckmate || puzzleComplete) {
+    if (
+      move.lan === currentPuzzle.moves[moveIndex] ||
+      isCheckmate ||
+      puzzleComplete
+    ) {
       moveIndex = moveIndex + 1;
       maxMoveIndex = maxMoveIndex + 1;
       chessboard.highlightSquare(move.to, "correct-move", 700);
@@ -254,7 +248,6 @@
           maxMoveIndex = maxMoveIndex + 1;
           makeMove(computerMove);
           chessboard.enableShowLastMove();
-          updateNextMove();
         }, 300);
       } else {
         return await handlePuzzleComplete();
@@ -547,14 +540,16 @@
               {#if !continuous}
                 <button
                   class="button is-primary is-small"
+                  class:is-danger={!puzzleComplete}
                   on:click={() => {
                     continuous = true;
+                    madeMistake = true;
                   }}
                   >Enable Analysis
                 </button>
               {:else}
                 <button
-                  class="button is-danger is-small"
+                  class="button is-dark is-small"
                   on:click={() => {
                     continuous = false;
                   }}
@@ -609,18 +604,6 @@
                   <span class="tag is-{orientation} is-size-4">
                     {orientation} to play
                   </span>
-                </div>
-                <div class="column">
-                  {#if nextMove}
-                    <div>Next Move</div>
-                    <div>
-                      <Spoiler minWidth="70">
-                        <div>
-                          {nextMove}
-                        </div>
-                      </Spoiler>
-                    </div>
-                  {/if}
                 </div>
               {/if}
               <div class="column">
@@ -686,14 +669,16 @@
               {#if !continuous}
                 <button
                   class="button is-primary is-small"
+                  class:is-danger={!puzzleComplete}
                   on:click={() => {
                     continuous = true;
+                    madeMistake = true;
                   }}
                   >Enable Analysis
                 </button>
               {:else}
                 <button
-                  class="button is-danger is-small"
+                  class="button is-dark is-small"
                   on:click={() => {
                     continuous = false;
                     topStockfishMoves = [];
