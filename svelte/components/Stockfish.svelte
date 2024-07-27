@@ -153,9 +153,11 @@
         <input
           class="input"
           type="number"
+          inputmode="numeric"
+          pattern="[0-9]*"
           bind:value={depth}
           min="10"
-          max="30"
+          max="50"
         />
       </div></label
     >
