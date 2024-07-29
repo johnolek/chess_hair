@@ -735,8 +735,8 @@
             </div>
           {/if}
         </div>
-        <div class="box">
-          {#if activePuzzles.length > 0}
+        {#if activePuzzles.length > 0}
+          <div class="box">
             <table class="table is-fullwidth is-narrow is-striped">
               <thead>
                 <tr>
@@ -792,8 +792,8 @@
                 {/each}
               </tbody>
             </table>
-          {/if}
-        </div>
+          </div>
+        {/if}
       {/if}
       <div class="box">
         <div class="block">
