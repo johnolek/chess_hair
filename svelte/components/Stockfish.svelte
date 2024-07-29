@@ -102,21 +102,7 @@
         topMoves = topMoves.filter((move) => move.depth >= info.depth - 2); // Purge earlier depths
 
         // Sort topMoves by eval score in descending order
-        topMoves = topMoves.sort((a, b) => {
-          if (a.scoreType === b.scoreType) {
-            if (a.scoreType === "mate") {
-              return a.value - b.value; // Ascending order for mates, fewer moves = better
-            }
-            return b.value - a.value;
-          }
-          if (a.type === "mate") {
-            return -1;
-          }
-          if (b.type === "mate") {
-            return 1;
-          }
-          return 0;
-        });
+        topMoves = topMoves.sort(compareMoves);
 
         // Keep only the top 5 unique moves, including the absolute top move
         if (topMoves.length > 5) {
@@ -137,6 +123,40 @@
       }
     }
   };
+
+  function compareMoves(a, b) {
+    const isMateA = a.scoreType === "mate";
+    const isMateB = b.scoreType === "mate";
+    const isCentipawnA = a.scoreType === "cp";
+    const isCentipawnB = b.scoreType === "cp";
+
+    if (isMateA && isMateB) {
+      if (a.value < 0 && b.value < 0) {
+        return b.value - a.value; // Descending order for negative mates, more moves = worse
+      }
+      if (a.value < 0) {
+        return 1; // Negative mates are worse
+      }
+      if (b.value < 0) {
+        return -1; // Negative mates are worse
+      }
+      return a.value - b.value; // Ascending order for positive mates, fewer moves = better
+    }
+
+    if (isMateA) {
+      return a.value < 0 ? 1 : -1; // Negative mates are worse
+    }
+
+    if (isMateB) {
+      return b.value < 0 ? -1 : 1; // Negative mates are worse
+    }
+
+    if (isCentipawnA && isCentipawnB) {
+      return b.value - a.value; // Descending order for centipawns
+    }
+
+    return 0;
+  }
 
   function getFullMove(uciMove) {
     if (!analysisFen) {

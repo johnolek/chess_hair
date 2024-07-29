@@ -181,6 +181,7 @@
     if (continuous) {
       continuous = false;
       topStockfishMoves = [];
+      stockfish.stopAnalysis();
     }
     chessboard.enableShowLastMove();
     puzzleComplete = false;
@@ -442,6 +443,9 @@
         stockfish.analyzePosition();
       }
       if (!continuous) {
+        if (stockfish) {
+          stockfish.stopAnalysis();
+        }
         chessboard.clearDrawings();
       }
     }
@@ -560,7 +564,6 @@
                     on:click={() => {
                       continuous = false;
                       topStockfishMoves = [];
-                      stockfish.stopAnalysis();
                     }}
                     >Stop Analysis
                   </button>
@@ -707,7 +710,6 @@
                   on:click={() => {
                     continuous = false;
                     topStockfishMoves = [];
-                    stockfish.stopAnalysis();
                   }}
                   >Stop Analysis
                 </button>
