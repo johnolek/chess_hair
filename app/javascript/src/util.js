@@ -76,7 +76,7 @@ class Util {
       typeof window !== "undefined" &&
       window.document !== undefined &&
       (window.location.hostname !== "chess.hair" ||
-        (window.search && window.search.includes("debug=1")))
+        window.location.search.includes("debug=1"))
     );
   }
 }
