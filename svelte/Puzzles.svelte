@@ -706,7 +706,7 @@
                       pattern="[0-9]*"
                       bind:value={lines}
                       min="1"
-                      max="15"
+                      max="100"
                       on:change={() => {
                         if (continuous) {
                           topStockfishMoves = [];
