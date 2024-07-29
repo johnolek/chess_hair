@@ -463,7 +463,7 @@
         const analysisFen = move.fen;
         if (fullMove !== null && analysisFen === fen) {
           let arrowType = "drawMove";
-          if (move.score > 3 || move.scoreType === "mate") {
+          if (move.score > 3 || (move.scoreType === "mate" && move.score > 0)) {
             arrowType = "greatMove";
           } else if (move.score > 1.25) {
             arrowType = "goodMove";
