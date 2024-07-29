@@ -53,6 +53,7 @@ class UserPuzzle < ApplicationRecord
     self.average_solve_time = calculate_average_solve_duration
     self.solve_streak = calculate_solve_streak
     self.complete = complete?
+    self.last_played = puzzle_results.last&.created_at
     save!
   end
 
