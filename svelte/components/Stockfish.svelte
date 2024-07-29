@@ -4,7 +4,7 @@
   import { Chess } from "chess.js";
 
   let bestMove = "";
-  let topMoves = [];
+  let topMoves = {};
   export let analyzing = false;
 
   export let fen;
@@ -54,7 +54,7 @@
       : null;
     const pv = parts.slice(parts.indexOf("pv") + 1).join(" ");
 
-    const score = scoreType === "cp" ? scoreValue / 100 : `${scoreValue}`;
+    const score = scoreType === "cp" ? scoreValue / 100 : scoreValue;
     const scoreDisplay =
       scoreType === "cp"
         ? scoreValue > 0
@@ -80,93 +80,19 @@
   stockfish.onmessage = (event) => {
     const message = event.data;
     if (Util.isDev()) {
-      console.log(message);
+      console.debug(message);
     }
     if (message.startsWith("bestmove")) {
       analyzing = false;
     } else if (message.startsWith("info depth") && message.includes("pv")) {
       const info = parseStockfishInfo(message);
       if (info) {
-        const moves = info.principalVariation;
-        let firstMove = moves[0];
-        let moveIndex = topMoves.findIndex(
-          (move) => move.principalVariation[0] === firstMove,
-        );
-
-        if (moveIndex === -1) {
-          topMoves.push(info);
-        } else {
-          topMoves[moveIndex] = info;
-        }
-
-        // Filter out moves from earlier depths
-        topMoves = topMoves.filter((move) => move.depth >= info.depth - 2); // Purge earlier depths
-
-        // Sort topMoves by eval score in descending order
-        topMoves = topMoves.sort(compareMoves);
-
-        // Keep only the top 5 unique moves, including the absolute top move
-        if (topMoves.length > lines) {
-          topMoves = topMoves.slice(0, lines);
-        }
-
-        topMoves = topMoves.map((moveData) => {
-          return {
-            ...moveData,
-            fullMove: getFullMove(moveData.principalVariation[0]),
-            fen: analysisFen,
-          };
-        });
-
-        topMoves = topMoves.filter((move) => move.fullMove !== null);
+        topMoves[info.multiPV] = info;
 
         dispatchTopMoves();
       }
     }
   };
-
-  function compareMoves(a, b) {
-    const isMateA = a.scoreType === "mate";
-    const isMateB = b.scoreType === "mate";
-    const isCentipawnA = a.scoreType === "cp";
-    const isCentipawnB = b.scoreType === "cp";
-
-    if (isMateA && isMateB) {
-      if (a.value < 0 && b.value < 0) {
-        return b.value - a.value; // Descending order for negative mates, more moves = worse
-      }
-      if (a.value < 0) {
-        return 1; // Negative mates are worse
-      }
-      if (b.value < 0) {
-        return -1; // Negative mates are worse
-      }
-      return a.value - b.value; // Ascending order for positive mates, fewer moves = better
-    }
-
-    if (isMateA) {
-      return a.value < 0 ? 1 : -1; // Negative mates are worse
-    }
-
-    if (isMateB) {
-      return b.value < 0 ? -1 : 1; // Negative mates are worse
-    }
-
-    if (isCentipawnA && isCentipawnB) {
-      return b.value - a.value; // Descending order for centipawns
-    }
-
-    if (isCentipawnA) {
-      return 1; // Centipawns are better than non-centipawns
-    }
-
-    if (isCentipawnB) {
-      return -1; // Centipawns are better than non-centipawns
-    }
-
-    return 0;
-  }
-
   function getFullMove(uciMove) {
     if (!analysisFen) {
       return null;
@@ -191,8 +117,22 @@
   }
 
   function dispatchTopMoves() {
-    if (topMoves.length > 0) {
-      dispatch("topmoves", { topMoves });
+    const topMovesArray = Object.values(topMoves)
+      .slice(0, lines)
+      .map((moveData) => {
+        return {
+          ...moveData,
+          fullMove: getFullMove(moveData.principalVariation[0]),
+          fen: analysisFen,
+        };
+      })
+      .filter((moveData) => moveData.fullMove);
+
+    if (topMovesArray.length > 0) {
+      topMoves = Object.fromEntries(
+        topMovesArray.map((move, index) => [index + 1, move]),
+      );
+      dispatch("topmoves", { topMoves: Object.values(topMoves) });
     }
   }
 
@@ -217,13 +157,13 @@
     uciMessage("stop");
     uciMessage("uci");
     analyzing = false;
-    topMoves = [];
+    clearData();
     dispatchTopMoves();
   }
 
   function clearData() {
     bestMove = "";
-    topMoves = [];
+    topMoves = {};
   }
 
   onMount(() => {
