@@ -5,7 +5,7 @@ export const settings = writable({});
 let localSettings = {};
 
 export async function initSettings() {
-  const settingsResponse = await Util.fetch("/api/v1/users/settings");
+  const settingsResponse = await Util.fetch("/api/v1/user/settings");
   const settingsData = await settingsResponse.json();
   settings.set(settingsData);
   localSettings = settingsData;
@@ -13,7 +13,7 @@ export async function initSettings() {
 
 // Update a setting both locally and on the server
 export async function updateSetting(key, value) {
-  const response = await Util.fetch("/api/v1/users/update_setting", {
+  const response = await Util.fetch("/api/v1/user/update_setting", {
     method: "POST",
     body: JSON.stringify({ key, value }),
   });

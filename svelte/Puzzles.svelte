@@ -296,7 +296,7 @@
 
   async function updateActivePuzzles() {
     const activePuzzlesRequest = await Util.fetch(
-      "/api/v1/users/active-puzzles",
+      "/api/v1/user/active-puzzles",
     );
     const response = await activePuzzlesRequest.json();
     activePuzzles = response.puzzles;
@@ -309,7 +309,7 @@
   }
 
   async function updateRandomCompletedPuzzle() {
-    const baseUrl = "/api/v1/users/random-completed-puzzle";
+    const baseUrl = "/api/v1/user/random-completed-puzzle";
     const params = {};
     if (randomCompletedPuzzle) {
       params["exclude_puzzle_id"] = randomCompletedPuzzle.puzzle_id;
@@ -326,7 +326,7 @@
 
   let userInfo = {};
   async function initUserInfo() {
-    const userInfoRequest = await Util.fetch("/api/v1/users/info");
+    const userInfoRequest = await Util.fetch("/api/v1/user/info");
     userInfo = await userInfoRequest.json();
   }
 
@@ -784,7 +784,7 @@
           {:else}
             <button
               on:click={async () => {
-                await Util.fetch("/api/v1/users/import-new-puzzle-histories", {
+                await Util.fetch("/api/v1/user/import-new-puzzle-histories", {
                   method: "POST",
                 });
                 userInfo = { ...userInfo, import_in_progress: true };

@@ -18,14 +18,14 @@ Rails.application.routes.draw do
     namespace :v1 do
       resources :user_puzzles, only: [:create, :show, :index]
       resources :puzzle_results, only: [:create, :show, :index]
-      resources :users, only: [] do
-        get 'settings', on: :collection
-        get 'active-puzzles', to: 'users#active_puzzles', on: :collection
-        get 'random-completed-puzzle', to: 'users#random_completed_puzzle', on: :collection
-        get 'info', to: 'users#info', on: :collection
-        post 'update_setting', to: 'users#update_setting', on: :collection
-        get 'get_setting/:key', to: 'users#get_setting', on: :collection
-        post 'import-new-puzzle-histories', to: 'users#import_new_puzzle_histories', on: :collection
+      resource :user, only: [] do
+        get 'settings'
+        get 'active-puzzles'
+        get 'random-completed-puzzle'
+        get 'info'
+        post 'update_setting'
+        get 'get_setting/:key', action: :get_setting
+        post 'import-new-puzzle-histories'
       end
     end
   end
