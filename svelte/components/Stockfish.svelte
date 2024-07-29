@@ -10,6 +10,7 @@
   export let fen;
   let analysisFen;
   export let depth = 20;
+  export let numCores = 1;
 
   $: if (fen && analysisFen && fen !== analysisFen) {
     stopAnalysis();
@@ -178,6 +179,7 @@
       analysisFen = fen;
       uciMessage(`position fen ${fen}`);
       uciMessage("setoption name MultiPV value 5");
+      uciMessage(`setoption name Threads value ${numCores}`); // Set number of cores
       uciMessage(`go depth ${depth}`);
     }
   }

@@ -432,6 +432,7 @@
   /** @type {Stockfish} */
   let stockfish;
   let depth = 22;
+  let numCores = 1;
   let topStockfishMoves = [];
   let continuous;
 
@@ -635,6 +636,7 @@
               bind:this={stockfish}
               {fen}
               {depth}
+              {numCores}
               on:topmoves={(event) => {
                 if (!continuous) {
                   return;
@@ -663,8 +665,30 @@
                         }
                       }}
                     />
-                  </div></label
-                >
+                  </div>
+                </label>
+              </div>
+              <div class="field is-inline-block">
+                <label class="label"
+                  >CPU Threads
+                  <div class="control">
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      bind:value={numCores}
+                      min="1"
+                      max="12"
+                      on:change={() => {
+                        if (continuous) {
+                          topStockfishMoves = [];
+                          stockfish.analyzePosition();
+                        }
+                      }}
+                    />
+                  </div>
+                </label>
               </div>
               <br />
               {#if !continuous}
