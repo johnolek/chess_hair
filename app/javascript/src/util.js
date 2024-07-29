@@ -70,12 +70,13 @@ class Util {
     return fetch(url, options);
   }
 
-  static isProduction() {
+  static isDev() {
     // Check if is client side
     return (
       typeof window !== "undefined" &&
       window.document !== undefined &&
-      window.location.hostname === "chess.hair"
+      (window.location.hostname !== "chess.hair" ||
+        window.search.includes("debug=1"))
     );
   }
 }

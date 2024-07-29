@@ -60,8 +60,8 @@
 
   stockfish.onmessage = (event) => {
     const message = event.data;
-    if (!Util.isProduction()) {
-      // console.log(message);
+    if (Util.isDev()) {
+      console.log(message);
     }
     if (message.startsWith("bestmove")) {
       analyzing = false;
