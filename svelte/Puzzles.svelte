@@ -736,61 +736,63 @@
           {/if}
         </div>
         <div class="box">
-          <table class="table is-fullwidth is-narrow is-striped">
-            <thead>
-              <tr>
-                <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
-                <th><abbr title="Average solve time">Avg</abbr></th>
-                <th><abbr title="Correct solves in a row">Streak</abbr></th>
-                <th><abbr title="Total correct solves">Solves</abbr></th>
-                <th><abbr title="Failure Count">Fails</abbr></th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle.puzzle_id)}
-                <tr
-                  animate:flip={{ duration: 400 }}
-                  class:is-selected={currentPuzzle.puzzle_id ===
-                    puzzle.puzzle_id}
-                >
-                  <td class="puzzle-id"
-                    ><a
-                      href={`https://lichess.org/training/${puzzle.puzzle_id}`}
-                      target="_blank"
-                      title="View on lichess.org">{puzzle.puzzle_id}</a
-                    ></td
-                  >
-                  {#if puzzle.average_solve_time}
-                    <td
-                      class:has-text-warning={puzzle.average_solve_time >
-                        timeGoal}
-                      class:has-text-success={puzzle.average_solve_time <=
-                        timeGoal && puzzle.average_solve_time > 0}
-                    >
-                      {puzzle.average_solve_time.toFixed(2)}s
-                    </td>
-                  {:else}
-                    <td>?</td>
-                  {/if}
-                  <td>
-                    <ProgressBar
-                      max={requiredConsecutiveSolves}
-                      bind:current={puzzle.streak}
-                      className={puzzle.streak >= requiredConsecutiveSolves
-                        ? "is-success"
-                        : "is-warning"}
-                    ></ProgressBar>
-                  </td>
-                  <td>
-                    {puzzle.total_solves}
-                  </td>
-                  <td>
-                    {puzzle.total_fails}
-                  </td>
+          {#if activePuzzles.length > 0}
+            <table class="table is-fullwidth is-narrow is-striped">
+              <thead>
+                <tr>
+                  <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
+                  <th><abbr title="Average solve time">Avg</abbr></th>
+                  <th><abbr title="Correct solves in a row">Streak</abbr></th>
+                  <th><abbr title="Total correct solves">Solves</abbr></th>
+                  <th><abbr title="Failure Count">Fails</abbr></th>
                 </tr>
-              {/each}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {#each activePuzzles.sort(sortPuzzlesBySolveTime) as puzzle (puzzle.puzzle_id)}
+                  <tr
+                    animate:flip={{ duration: 400 }}
+                    class:is-selected={currentPuzzle.puzzle_id ===
+                      puzzle.puzzle_id}
+                  >
+                    <td class="puzzle-id"
+                      ><a
+                        href={`https://lichess.org/training/${puzzle.puzzle_id}`}
+                        target="_blank"
+                        title="View on lichess.org">{puzzle.puzzle_id}</a
+                      ></td
+                    >
+                    {#if puzzle.average_solve_time}
+                      <td
+                        class:has-text-warning={puzzle.average_solve_time >
+                          timeGoal}
+                        class:has-text-success={puzzle.average_solve_time <=
+                          timeGoal && puzzle.average_solve_time > 0}
+                      >
+                        {puzzle.average_solve_time.toFixed(2)}s
+                      </td>
+                    {:else}
+                      <td>?</td>
+                    {/if}
+                    <td>
+                      <ProgressBar
+                        max={requiredConsecutiveSolves}
+                        bind:current={puzzle.streak}
+                        className={puzzle.streak >= requiredConsecutiveSolves
+                          ? "is-success"
+                          : "is-warning"}
+                      ></ProgressBar>
+                    </td>
+                    <td>
+                      {puzzle.total_solves}
+                    </td>
+                    <td>
+                      {puzzle.total_fails}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
         </div>
       {/if}
       <div class="box">
