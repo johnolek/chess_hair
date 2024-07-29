@@ -156,6 +156,14 @@
       return b.value - a.value; // Descending order for centipawns
     }
 
+    if (isCentipawnA) {
+      return -1; // Centipawns are better than non-centipawns
+    }
+
+    if (isCentipawnB) {
+      return 1; // Centipawns are better than non-centipawns
+    }
+
     return 0;
   }
 
