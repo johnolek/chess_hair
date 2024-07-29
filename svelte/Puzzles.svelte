@@ -626,7 +626,7 @@
       </div>
     </div>
     <div class="column is-4">
-      {#if activePuzzles.length >= 1 && currentPuzzle}
+      {#if currentPuzzle}
         <div class="box">
           {#if fen}
             <h3 class="is-size-4">Analysis</h3>
@@ -945,5 +945,10 @@
   }
   .board-container {
     position: relative;
+  }
+  .full-width-stuff {
+    background-color: red;
+    width: 100%;
+    height: 100%;
   }
 </style>
