@@ -558,6 +558,7 @@
                     class="button is-dark is-small is-inline-block"
                     on:click={() => {
                       continuous = false;
+                      topStockfishMoves = [];
                     }}
                     >Stop Analysis
                   </button>
