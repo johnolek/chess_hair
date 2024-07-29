@@ -150,7 +150,10 @@
     document.removeEventListener("touchend", stopResizing);
   }
 
+  let showingAlt = false;
   let chessInstance = new Chess();
+  let alternateChessInstance = new Chess();
+
   export let pieceSetOverride = null;
   export let boardStyleOverride = null;
 
@@ -191,8 +194,8 @@
     }
   }
 
-  function getLegalMoves() {
-    const moves = chessInstance.moves({ verbose: true });
+  function getLegalMoves(instance = chessInstance) {
+    const moves = instance.moves({ verbose: true });
     const dests = new Map();
     moves.forEach((move) => {
       if (!dests.has(move.from)) dests.set(move.from, []);
@@ -201,25 +204,25 @@
     return dests;
   }
 
-  function updateChessground() {
-    const legalMoves = getLegalMoves();
+  function updateChessground(instance = chessInstance) {
+    const legalMoves = getLegalMoves(instance);
     const history = chessInstance.history({ verbose: true });
     let lastMove = null;
     if (history && history[history.length - 1]) {
       lastMove = history[history.length - 1];
     }
     chessground.set({
-      check: chessInstance.inCheck(),
-      fen: chessInstance.fen(),
+      check: instance.inCheck(),
+      fen: instance.fen(),
       lastMove: lastMove ? [lastMove.from, lastMove.to] : null,
-      turnColor: chessInstance.turn() === "w" ? "white" : "black",
+      turnColor: instance.turn() === "w" ? "white" : "black",
       movable: {
         free: false,
         dests: legalMoves,
       },
     });
 
-    fen = chessInstance.fen();
+    fen = instance.fen();
   }
 
   function handleMove(from, to) {
@@ -292,6 +295,20 @@
 
   export function load(fen) {
     chessInstance.load(fen);
+    updateChessground();
+  }
+
+  export function loadAlternate(fen) {
+    showingAlt = true;
+    alternateChessInstance.load(fen);
+    updateChessground(alternateChessInstance);
+  }
+
+  export function restoreOriginal() {
+    if (!showingAlt) {
+      return;
+    }
+    showingAlt = false;
     updateChessground();
   }
 
