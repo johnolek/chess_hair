@@ -434,6 +434,7 @@
   let stockfish;
   let depth = 22;
   let numCores = 1;
+  let lines = 5;
   let topStockfishMoves = [];
   let continuous;
 
@@ -640,6 +641,7 @@
               {fen}
               {depth}
               {numCores}
+              {lines}
               on:topmoves={(event) => {
                 if (!continuous) {
                   return;
@@ -683,6 +685,28 @@
                       bind:value={numCores}
                       min="1"
                       max="12"
+                      on:change={() => {
+                        if (continuous) {
+                          topStockfishMoves = [];
+                          stockfish.analyzePosition();
+                        }
+                      }}
+                    />
+                  </div>
+                </label>
+              </div>
+              <div class="field is-inline-block">
+                <label class="label"
+                  >Lines
+                  <div class="control">
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      bind:value={lines}
+                      min="1"
+                      max="15"
                       on:change={() => {
                         if (continuous) {
                           topStockfishMoves = [];

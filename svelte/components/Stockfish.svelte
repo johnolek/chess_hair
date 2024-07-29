@@ -11,6 +11,7 @@
   let analysisFen;
   export let depth = 20;
   export let numCores = 1;
+  export let lines = 5;
 
   $: if (fen && analysisFen && fen !== analysisFen) {
     stopAnalysis();
@@ -105,8 +106,8 @@
         topMoves = topMoves.sort(compareMoves);
 
         // Keep only the top 5 unique moves, including the absolute top move
-        if (topMoves.length > 5) {
-          topMoves = topMoves.slice(0, 5);
+        if (topMoves.length > lines) {
+          topMoves = topMoves.slice(0, lines);
         }
 
         topMoves = topMoves.map((moveData) => {
@@ -198,8 +199,8 @@
       clearData();
       analysisFen = fen;
       uciMessage(`position fen ${fen}`);
-      uciMessage("setoption name MultiPV value 5");
-      uciMessage(`setoption name Threads value ${numCores}`); // Set number of cores
+      uciMessage(`setoption name MultiPV value ${lines}`);
+      uciMessage(`setoption name Threads value ${numCores}`);
       uciMessage(`go depth ${depth}`);
     }
   }

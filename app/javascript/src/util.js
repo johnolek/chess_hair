@@ -71,7 +71,6 @@ class Util {
   }
 
   static isDev() {
-    // Check if is client side
     return (
       typeof window !== "undefined" &&
       window.document !== undefined &&
