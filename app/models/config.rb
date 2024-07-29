@@ -43,6 +43,7 @@ class Config < ApplicationRecord
       "puzzles.timeGoal" => 15,
       "puzzles.consecutiveSolves" => 2,
       "puzzles.oddsOfRandomCompleted" => 0.1,
+      "puzzles.minimumTimeBetween" => 5.minutes.to_i,
       "puzzles.minRating" => 1,
       "puzzles.maxRating" => 3500,
     }

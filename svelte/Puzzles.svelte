@@ -65,6 +65,7 @@
   let completedFilteredPuzzlesCount;
   let randomCompletedPuzzle;
   let minimumPuzzlesBetweenReviews;
+  let minimumTimeBetweenReviews;
   let settingUpdating = false;
 
   let activePuzzleIds = [];
@@ -404,6 +405,7 @@
     maximumRating = getSetting("puzzles.maxRating");
     requiredConsecutiveSolves = getSetting("puzzles.consecutiveSolves", 2);
     oddsOfRandomCompleted = getSetting("puzzles.oddsOfRandomCompleted", 0.1);
+    minimumTimeBetweenReviews = getSetting("puzzles.minimumTimeBetween", 0);
     await updateRandomCompletedPuzzle();
     await initializePuzzles();
     minimumPuzzlesBetweenReviews = getSetting(
@@ -894,6 +896,20 @@
           onChange={async (value) => {
             settingUpdating = true;
             await updateSetting("puzzles.minimumPuzzlesBetweenReviews", value);
+            settingUpdating = false;
+          }}
+        />
+        <NumberInput
+          label="Minimum Time Between Reviews"
+          helpText="The minimum time in seconds between reviewing the same puzzle."
+          min={0}
+          max={60 * 60 * 24 * 7}
+          step={1}
+          isLoading={settingUpdating}
+          bind:value={minimumTimeBetweenReviews}
+          onChange={async (value) => {
+            settingUpdating = true;
+            await updateSetting("puzzles.minimumTimeBetween", value);
             settingUpdating = false;
           }}
         />
