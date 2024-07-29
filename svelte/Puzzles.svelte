@@ -94,6 +94,7 @@
 
   // Current puzzle state
   let madeMistake = false;
+  let mistakes = [];
   let puzzleComplete = false;
   let elapsedTime = 0;
 
@@ -186,6 +187,7 @@
     chessboard.enableShowLastMove();
     puzzleComplete = false;
     madeMistake = false;
+    mistakes = [];
     isViewingHistory = false;
 
     currentPuzzle = getNextPuzzle();
@@ -259,6 +261,7 @@
       setTimeout(() => {
         chessboard.enableShowLastMove();
         chessboard.undo();
+        mistakes = [...mistakes, move];
       }, 300);
     }
   }
