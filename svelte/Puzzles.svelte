@@ -559,6 +559,7 @@
                     on:click={() => {
                       continuous = false;
                       topStockfishMoves = [];
+                      stockfish.stopAnalysis();
                     }}
                     >Stop Analysis
                   </button>
@@ -682,6 +683,7 @@
                   on:click={() => {
                     continuous = false;
                     topStockfishMoves = [];
+                    stockfish.stopAnalysis();
                   }}
                   >Stop Analysis
                 </button>
