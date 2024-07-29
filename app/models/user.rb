@@ -1,5 +1,6 @@
 class User < ApplicationRecord
   after_initialize :init_active_puzzle_ids
+  after_commit :maybe_fetch_more_puzzles, on: :update
 
   # Include default devise modules. Others available are:
   # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
@@ -99,5 +100,15 @@ class User < ApplicationRecord
 
   def puzzle_import_in_progress?
     get_data('puzzle_import_running', false)
+  end
+
+  def maybe_fetch_more_puzzles
+    return unless lichess_api_token
+    return if puzzle_import_in_progress?
+    last_fetched = get_data('puzzles_imported_at', Time.current.to_i)
+    difference = Time.current.to_i - last_fetched
+    return unless difference > 60 * 60 * 12
+    Rails.logger.info("Scheduling puzzle history fetch for user #{id} since it has been #{difference} seconds since last fetch")
+    FetchPuzzleHistoryJob.perform_later(user: self)
   end
 end
