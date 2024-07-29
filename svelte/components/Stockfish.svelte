@@ -22,39 +22,56 @@
   const dispatch = createEventDispatcher();
 
   function parseStockfishInfo(infoLine) {
-    const regex =
-      /info depth (\d+)(?: seldepth (\d+))?(?: multipv (\d+))? score cp (-?\d+)(?: nodes (\d+))?(?: nps (\d+))?(?: hashfull (\d+))?(?: tbhits (\d+))?(?: time (\d+))? pv (.+)/;
-    const match = infoLine.match(regex);
+    const parts = infoLine.split(" ");
 
-    if (!match) {
-      return null;
+    const depth = parseInt(parts[2], 10);
+    const selDepth = parts.includes("seldepth") ? parseInt(parts[4], 10) : null;
+    const multiPV = parts.includes("multipv") ? parseInt(parts[6], 10) : null;
+
+    let scoreType, scoreValue;
+    if (parts.includes("score")) {
+      const scoreIndex = parts.indexOf("score");
+      scoreType = parts[scoreIndex + 1];
+      scoreValue = parseInt(parts[scoreIndex + 2], 10);
     }
 
-    const [
-      ,
-      depth,
-      selDepth = null,
-      multiPV = null,
-      score,
-      nodes = null,
-      nps = null,
-      hashfull = null,
-      tbHits = null,
-      time = null,
-      pv,
-    ] = match;
+    const nodes = parts.includes("nodes")
+      ? parseInt(parts[parts.indexOf("nodes") + 1], 10)
+      : null;
+    const nps = parts.includes("nps")
+      ? parseInt(parts[parts.indexOf("nps") + 1], 10)
+      : null;
+    const hashfull = parts.includes("hashfull")
+      ? parseInt(parts[parts.indexOf("hashfull") + 1], 10)
+      : null;
+    const tbHits = parts.includes("tbhits")
+      ? parseInt(parts[parts.indexOf("tbhits") + 1], 10)
+      : null;
+    const time = parts.includes("time")
+      ? parseInt(parts[parts.indexOf("time") + 1], 10)
+      : null;
+    const pv = parts.slice(parts.indexOf("pv") + 1).join(" ");
 
+    const score = scoreType === "cp" ? scoreValue / 100 : `${scoreValue}`;
+    const scoreDisplay =
+      scoreType === "cp"
+        ? scoreValue > 0
+          ? `+${scoreValue / 100}`
+          : (scoreValue / 100).toString()
+        : `#${scoreValue}`;
     return {
-      depth: parseInt(depth, 10), // The search depth reached by Stockfish
-      selectiveDepth: selDepth ? parseInt(selDepth, 10) : null, // The selective search depth
-      multiPV: multiPV ? parseInt(multiPV, 10) : null, // The number of principal variations (PV) considered
-      score: parseFloat(score) / 100, // The evaluation score in centipawns
-      nodes: nodes ? parseInt(nodes, 10) : null, // The number of nodes searched
-      nps: nps ? parseInt(nps, 10) : null, // Nodes per second
-      hashfull: hashfull ? parseInt(hashfull, 10) : null, // The hash table usage percentage
-      tablebaseHits: tbHits ? parseInt(tbHits, 10) : null, // The number of tablebase hits
-      time: time ? parseInt(time, 10) : null, // The time taken for the search in milliseconds
-      principalVariation: pv.split(" "), // The principal variation moves
+      depth,
+      selectiveDepth: selDepth,
+      multiPV,
+      scoreType,
+      score,
+      scoreDisplay,
+      nodes,
+      nps,
+      hashfull,
+      tablebaseHits: tbHits,
+      time,
+      principalVariation: pv.split(" "),
     };
   }
 
@@ -84,7 +101,21 @@
         topMoves = topMoves.filter((move) => move.depth >= info.depth - 2); // Purge earlier depths
 
         // Sort topMoves by eval score in descending order
-        topMoves = topMoves.sort((a, b) => b.score - a.score);
+        topMoves = topMoves.sort((a, b) => {
+          if (a.scoreType === b.scoreType) {
+            if (a.scoreType === "mate") {
+              return a.value - b.value; // Ascending order for mates, fewer moves = better
+            }
+            return b.value - a.value;
+          }
+          if (a.type === "mate") {
+            return -1;
+          }
+          if (b.type === "mate") {
+            return 1;
+          }
+          return 0;
+        });
 
         // Keep only the top 5 unique moves, including the absolute top move
         if (topMoves.length > 5) {

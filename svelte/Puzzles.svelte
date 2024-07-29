@@ -458,7 +458,7 @@
         const analysisFen = move.fen;
         if (fullMove !== null && analysisFen === fen) {
           let arrowType = "drawMove";
-          if (move.score > 3) {
+          if (move.score > 3 || move.scoreType === "mate") {
             arrowType = "greatMove";
           } else if (move.score > 1.25) {
             arrowType = "goodMove";
@@ -699,7 +699,7 @@
                     {#each topStockfishMoves as move}
                       <tr>
                         <td>{move.fullMove.san}</td>
-                        <td>{move.score > 0 ? "+" : ""}{move.score}</td>
+                        <td>{move.scoreDisplay}</td>
                         <td>{move.depth}</td>
                       </tr>
                     {/each}
