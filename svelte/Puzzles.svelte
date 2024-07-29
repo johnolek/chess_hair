@@ -455,11 +455,8 @@
   function drawStockfishArrows() {
     chessboard.clearDrawings();
     if (topStockfishMoves.length > 0) {
-      // We want to draw the best move last so it appears on top of others
-      const sortedAscending = topStockfishMoves.sort(
-        (a, b) => b.score - a.score,
-      );
-      sortedAscending.forEach((move) => {
+      const reversed = topStockfishMoves.slice().reverse();
+      reversed.forEach((move) => {
         const fullMove = move.fullMove;
         const analysisFen = move.fen;
         if (fullMove !== null && analysisFen === fen) {
