@@ -374,9 +374,12 @@
 
   async function initializePuzzles() {
     await updateActivePuzzles();
+    await fetchAllPuzzles();
     if (!currentPuzzle) {
       currentPuzzle =
-        Util.getRandomElement(activePuzzles) || randomCompletedPuzzle;
+        Util.getRandomElement(activePuzzles) ||
+        randomCompletedPuzzle ||
+        Util.getRandomElement(allPuzzles);
     }
   }
 
@@ -479,7 +482,6 @@
     });
     loaded = true;
     await loadNextPuzzle();
-    void fetchAllPuzzles();
     void fetchAllFilteredPuzzles();
     setTimeout(async () => {
       // Fix to make sure the board updates on initial load
