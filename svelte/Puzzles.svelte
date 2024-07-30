@@ -8,6 +8,7 @@
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
   import NumberInput from "./components/forms/NumberInput.svelte";
+  import { triggerPuzzleImport, fetchActivePuzzles } from "./railsApi";
 
   import {
     initSettings,
@@ -369,11 +370,7 @@
   }
 
   async function updateActivePuzzles() {
-    const activePuzzlesRequest = await Util.fetch(
-      "/api/v1/user/active-puzzles",
-    );
-    const response = await activePuzzlesRequest.json();
-    activePuzzles = response.puzzles;
+    const response = await fetchActivePuzzles();
     if (puzzleHistory.length === 0) {
       puzzleHistory = response.most_recent_seen;
     }
@@ -452,18 +449,6 @@
     if (currentPuzzle.complete || (wasComplete && !currentPuzzle.complete)) {
       await updateActivePuzzles();
     }
-  }
-
-  async function addCurrentPuzzleToFavorites() {
-    Util.fetch(`/api/v1/user/add-favorite/${currentPuzzle.id}`, {
-      method: "POST",
-    });
-  }
-
-  async function removeCurrentPuzzleFromFavorites() {
-    Util.fetch(`/api/v1/user/remove-favorite/${currentPuzzle.id}`, {
-      method: "DELETE",
-    });
   }
 
   async function waitForImportComplete() {
@@ -929,9 +914,7 @@
           {:else}
             <button
               on:click={async () => {
-                await Util.fetch("/api/v1/user/import-new-puzzle-histories", {
-                  method: "POST",
-                });
+                await triggerPuzzleImport();
                 userInfo = { ...userInfo, import_in_progress: true };
                 await waitForImportComplete();
               }}
