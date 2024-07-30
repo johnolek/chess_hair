@@ -73,3 +73,13 @@ export async function removeCurrentPuzzleFromFavorites(currentPuzzle) {
 export async function triggerPuzzleImport() {
   return await postApiCall("/user/import-new-puzzle-histories", {});
 }
+
+export async function savePuzzleResult(result) {
+  return await postApiCall("/puzzle_results", {
+    puzzle_result: {
+      puzzle_id: result.puzzleId,
+      made_mistake: result.madeMistake,
+      duration: result.duration,
+    },
+  });
+}

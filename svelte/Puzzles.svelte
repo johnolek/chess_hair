@@ -424,17 +424,7 @@
   }
 
   async function savePuzzleResult(result) {
-    const response = await Util.fetch("api/v1/puzzle_results", {
-      method: "POST",
-      body: JSON.stringify({
-        puzzle_result: {
-          puzzle_id: result.puzzleId,
-          made_mistake: result.madeMistake,
-          duration: result.duration,
-        },
-      }),
-    });
-    const data = await response.json();
+    const data = await RailsAPI.savePuzzleResult(result);
     const updatedPuzzle = data.puzzle;
     const wasComplete = currentPuzzle.complete;
     currentPuzzle = updatedPuzzle;
