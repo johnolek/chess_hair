@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_07_30_024925) do
+ActiveRecord::Schema[7.1].define(version: 2024_07_30_025307) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -20,6 +20,13 @@ ActiveRecord::Schema[7.1].define(version: 2024_07_30_024925) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_collections_on_user_id"
+  end
+
+  create_table "collections_user_puzzles", id: false, force: :cascade do |t|
+    t.bigint "collection_id", null: false
+    t.bigint "user_puzzle_id", null: false
+    t.index ["collection_id"], name: "index_collections_user_puzzles_on_collection_id"
+    t.index ["user_puzzle_id"], name: "index_collections_user_puzzles_on_user_puzzle_id"
   end
 
   create_table "configs", force: :cascade do |t|
