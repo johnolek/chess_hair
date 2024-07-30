@@ -63,7 +63,9 @@
   $: {
     const currentTimestamp = new Date().getTime() / 1000;
     eligiblePuzzles = activePuzzles.filter((puzzle) => {
-      if (lastSeen.includes(puzzle.puzzle_id)) {
+      if (
+        puzzlesToExcludeBecauseOfPuzzleCountBetween.includes(puzzle.puzzle_id)
+      ) {
         return false;
       }
 
@@ -76,10 +78,13 @@
   }
 
   let puzzleHistory = [];
-  let lastSeen;
+  let puzzlesToExcludeBecauseOfPuzzleCountBetween;
 
   $: {
-    lastSeen = puzzleHistory.slice(0, minimumPuzzlesBetweenReviews);
+    puzzlesToExcludeBecauseOfPuzzleCountBetween = puzzleHistory.slice(
+      0,
+      minimumPuzzlesBetweenReviews,
+    );
   }
 
   let currentPuzzle;
@@ -181,7 +186,9 @@
     } else {
       if (
         randomCompletedPuzzle &&
-        !lastSeen.includes(randomCompletedPuzzle.puzzle_id)
+        !puzzlesToExcludeBecauseOfPuzzleCountBetween.includes(
+          randomCompletedPuzzle.puzzle_id,
+        )
       ) {
         setTimeout(() => {
           void updateRandomCompletedPuzzle();
