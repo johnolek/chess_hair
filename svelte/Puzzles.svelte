@@ -8,7 +8,7 @@
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
   import NumberInput from "./components/forms/NumberInput.svelte";
-  import { triggerPuzzleImport, fetchActivePuzzles } from "./railsApi";
+  import * as RailsAPI from "./railsApi";
 
   import {
     initSettings,
@@ -370,7 +370,7 @@
   }
 
   async function updateActivePuzzles() {
-    const response = await fetchActivePuzzles();
+    const response = await RailsAPI.fetchActivePuzzles();
     if (puzzleHistory.length === 0) {
       puzzleHistory = response.most_recent_seen;
     }
@@ -409,8 +409,7 @@
 
   let userInfo = {};
   async function initUserInfo() {
-    const userInfoRequest = await Util.fetch("/api/v1/user/info");
-    userInfo = await userInfoRequest.json();
+    userInfo = await RailsAPI.getUserInfo();
   }
 
   async function initializePuzzles() {
@@ -914,7 +913,7 @@
           {:else}
             <button
               on:click={async () => {
-                await triggerPuzzleImport();
+                await RailsAPI.triggerPuzzleImport();
                 userInfo = { ...userInfo, import_in_progress: true };
                 await waitForImportComplete();
               }}

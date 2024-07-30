@@ -58,6 +58,10 @@ export async function updateSetting(settingKey, value) {
   return await putApiCall(`/settings/${settingKey}`, { value });
 }
 
+export async function getUserInfo() {
+  return await getApiCall("/user/info");
+}
+
 export async function addCurrentPuzzleToFavorites(currentPuzzle) {
   return await postApiCall(`/user/add-favorite/${currentPuzzle.id}`, {});
 }
