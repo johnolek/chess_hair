@@ -5,6 +5,7 @@ namespace :user_puzzles do
     total = user_puzzles.count
     progress = 0
     start_time = Time.current
+    elapsed_time = 0
 
     user_puzzles.each do |user_puzzle|
       user_puzzle.recalculate_stats
