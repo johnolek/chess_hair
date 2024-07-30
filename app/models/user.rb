@@ -27,6 +27,16 @@ class User < ApplicationRecord
     collections.create!(name: 'favorites')
   end
 
+  def favorites
+    collections.find_by(name: 'favorites')&.user_puzzles || []
+  end
+
+  def add_favorite(user_puzzle)
+    collection = collections.find_by(name: 'favorites')
+    collection.user_puzzles << user_puzzle
+    collection.save!
+  end
+
   def grouped_puzzle_results
     @grouped_puzzle_results ||= puzzle_results.group_by(&:puzzle_id)
   end
