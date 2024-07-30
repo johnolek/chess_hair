@@ -1,24 +1,28 @@
 <script>
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, createEventDispatcher } from "svelte";
   import { writable } from "svelte/store";
   import * as RailsAPI from "./railsApi";
   import { Util } from "src/util";
-  import { getSetting, settings } from "./settingsManager.js";
+  import { initSettings, getSetting } from "./settingsManager.js";
+  import { settings } from "./stores.js";
 
   // State stores
-  export const puzzleHistory = writable([]);
-  export const randomCompletedPuzzle = writable(null);
-  export const activePuzzles = writable([]);
-  export const allPuzzles = writable([]);
-  export const allFilteredPuzzles = writable([]);
-  export const eligibleActivePuzzles = writable([]);
-  export const eligibleOtherPuzzles = writable([]);
-  export const eligibleFilteredPuzzles = writable([]);
-  export const currentPuzzle = writable(null);
-  export const totalIncorrectPuzzlesCount = writable(0);
-  export const totalFilteredPuzzlesCount = writable(0);
-  export const completedFilteredPuzzlesCount = writable(0);
+  import {
+    puzzleHistory,
+    randomCompletedPuzzle,
+    activePuzzles,
+    allPuzzles,
+    allFilteredPuzzles,
+    eligibleActivePuzzles,
+    eligibleOtherPuzzles,
+    eligibleFilteredPuzzles,
+    currentPuzzle,
+    totalIncorrectPuzzlesCount,
+    totalFilteredPuzzlesCount,
+    completedFilteredPuzzlesCount,
+  } from "./stores.js";
 
+  const dispatch = createEventDispatcher();
   const puzzlesToExcludeBecauseOfPuzzleCountBetween = writable([]);
 
   $: {
@@ -137,6 +141,17 @@
     return aTime - bTime;
   }
 
+  export async function savePuzzleResult(result) {
+    const data = await RailsAPI.savePuzzleResult(result);
+    const updatedPuzzle = data.puzzle;
+    const wasComplete = $currentPuzzle.complete;
+    currentPuzzle.set(updatedPuzzle);
+    if ($currentPuzzle.complete || (wasComplete && !$currentPuzzle.complete)) {
+      await updateActivePuzzles();
+    }
+    updatePuzzleStores(updatedPuzzle);
+  }
+
   export function updatePuzzleStores(updatedPuzzle) {
     const updateStore = (store) => {
       store.update((puzzles) =>
@@ -146,12 +161,9 @@
       );
     };
 
-    updateStore(activePuzzles);
     updateStore(allPuzzles);
+    updateStore(activePuzzles);
     updateStore(allFilteredPuzzles);
-    updateStore(eligibleActivePuzzles);
-    updateStore(eligibleOtherPuzzles);
-    updateStore(eligibleFilteredPuzzles);
 
     currentPuzzle.update((puzzle) =>
       puzzle && puzzle.puzzle_id === updatedPuzzle.puzzle_id
@@ -170,6 +182,7 @@
     minimumPuzzlesBetweenReviews = getSetting(
       "puzzles.minimumPuzzlesBetweenReviews",
     );
+    void updateActivePuzzles();
   }
 
   let unsubscribeSettings = () => {};
@@ -183,6 +196,7 @@
     await updateRandomCompletedPuzzle();
     await updateCurrentPuzzle();
     unsubscribeSettings = settings.subscribe(refreshSettings);
+    dispatch("ready");
   });
 
   onDestroy(() => {
