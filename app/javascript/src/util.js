@@ -33,6 +33,10 @@ class Util {
     return new Date().getTime();
   }
 
+  static getCurrentUnixTime() {
+    return Math.floor(new Date().getTime() / 1000);
+  }
+
   static sortRandomly(array) {
     for (let i = array.length - 1; i > 0; i--) {
       const randomIndex = Util.getRandomIntBetween(0, i);
