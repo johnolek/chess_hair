@@ -64,30 +64,85 @@
   let eligibleOtherPuzzles = [];
   let eligibleFilteredPuzzles = [];
 
-  $: {
+  function eligiblePuzzlesFilter(puzzle) {
     const currentTimestamp = new Date().getTime() / 1000;
+    if (
+      puzzlesToExcludeBecauseOfPuzzleCountBetween.includes(puzzle.puzzle_id)
+    ) {
+      Util.debug(`Excluding ${puzzle.puzzle_id} since it was recently seen`);
+      return false;
+    }
 
-    const eligiblePuzzlesFilter = (puzzle) => {
-      if (
-        puzzlesToExcludeBecauseOfPuzzleCountBetween.includes(puzzle.puzzle_id)
-      ) {
-        return false;
-      }
+    if (!puzzle.last_played_timestamp) {
+      Util.debug(
+        `Including ${puzzle.puzzle_id} since it has never been played`,
+      );
+      return true;
+    }
 
-      if (!puzzle.can_review_at) {
-        return true;
-      }
+    return (
+      puzzle.last_played_timestamp + minimumTimeBetweenReviews <
+      currentTimestamp
+    );
+  }
 
-      return puzzle.can_review_at < currentTimestamp;
-    };
+  function currentPuzzleUpdater(puzzle) {
+    if (currentPuzzle && puzzle.puzzle_id === currentPuzzle.puzzle_id) {
+      return currentPuzzle;
+    }
+    return puzzle;
+  }
 
+  $: {
+    if (currentPuzzle) {
+      allPuzzles = allPuzzles.map(currentPuzzleUpdater);
+      activePuzzles = activePuzzles.map(currentPuzzleUpdater);
+      allFilteredPuzzles = allFilteredPuzzles.map(currentPuzzleUpdater);
+      eligibleFilteredPuzzles =
+        eligibleFilteredPuzzles.map(currentPuzzleUpdater);
+      eligibleActivePuzzles = eligibleActivePuzzles.map(currentPuzzleUpdater);
+      eligibleOtherPuzzles = eligibleOtherPuzzles.map(currentPuzzleUpdater);
+      Util.log("Updated current puzzle in all puzzle collections");
+    }
+  }
+
+  $: {
+    minimumTimeBetweenReviews;
+    Util.log("about to filter eligible active puzzles");
     eligibleActivePuzzles = activePuzzles.filter(eligiblePuzzlesFilter);
-    eligibleOtherPuzzles = allPuzzles.filter(eligiblePuzzlesFilter);
+    Util.log("filtered eligible active puzzles");
+  }
+
+  $: {
+    minimumTimeBetweenReviews;
+    Util.log("about to filter eligible filtered puzzles");
     eligibleFilteredPuzzles = allFilteredPuzzles.filter(eligiblePuzzlesFilter);
+    Util.log("filtered eligible filtered puzzles");
+  }
+
+  $: {
+    minimumTimeBetweenReviews;
+    Util.log("about to filter eligible other puzzles");
+    eligibleOtherPuzzles = allPuzzles.filter(eligiblePuzzlesFilter);
+    Util.log("filtered eligible other puzzles");
+  }
+
+  $: {
+    Util.info({
+      currentPuzzle,
+      puzzlesToExcludeBecauseOfPuzzleCountBetween,
+      puzzleHistory,
+      allPuzzles,
+      eligibleActivePuzzles,
+      activePuzzles,
+      allFilteredPuzzles,
+      eligibleFilteredPuzzles,
+      eligibleOtherPuzzles,
+    });
   }
 
   let puzzleHistory = [];
-  let puzzlesToExcludeBecauseOfPuzzleCountBetween;
+  let puzzlesToExcludeBecauseOfPuzzleCountBetween = [];
 
   $: {
     puzzlesToExcludeBecauseOfPuzzleCountBetween = puzzleHistory.slice(
@@ -307,20 +362,9 @@
   let successMessage = null;
 
   function showSuccess(message, duration = 1500) {
-    failureMessage = null;
     successMessage = message;
     setTimeout(() => {
       successMessage = null;
-    }, duration);
-  }
-
-  let failureMessage = null;
-
-  function showFailure(message, duration = 1000) {
-    successMessage = null;
-    failureMessage = message;
-    setTimeout(() => {
-      failureMessage = null;
     }, duration);
   }
 
@@ -398,12 +442,6 @@
     const updatedPuzzle = data.puzzle;
     const wasComplete = currentPuzzle.complete;
     currentPuzzle = updatedPuzzle;
-    activePuzzles = activePuzzles.map((puzzle) =>
-      puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
-    );
-    allPuzzles = allPuzzles.map((puzzle) =>
-      puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
-    );
     if (
       randomCompletedPuzzle &&
       currentPuzzleId === randomCompletedPuzzle.puzzle_id
@@ -591,11 +629,6 @@
                   {#if successMessage}
                     <span transition:fade class="tag is-success is-size-4">
                       {successMessage}
-                    </span>
-                  {/if}
-                  {#if failureMessage}
-                    <span transition:fade class="tag is-danger is-size-4">
-                      {failureMessage}
                     </span>
                   {/if}
                 </div>
