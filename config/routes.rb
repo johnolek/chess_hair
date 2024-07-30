@@ -21,6 +21,7 @@ Rails.application.routes.draw do
       resource :user, only: [] do
         get 'settings'
         get 'active-puzzles'
+        get 'all-puzzles'
         get 'random-completed-puzzle'
         get 'info'
         post 'update_setting'

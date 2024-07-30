@@ -58,6 +58,7 @@
 
   // Puzzle Data
   let activePuzzles = [];
+  let allPuzzles = [];
   let eligiblePuzzles = [];
 
   $: {
@@ -337,6 +338,12 @@
     completedFilteredPuzzlesCount = response.completed_filtered_puzzles_count;
   }
 
+  async function fetchAllPuzzles() {
+    const response = await Util.fetch("/api/v1/user/all-puzzles");
+    const data = await response.json();
+    allPuzzles = data;
+  }
+
   async function updateRandomCompletedPuzzle() {
     const baseUrl = "/api/v1/user/random-completed-puzzle";
     const params = {};
@@ -385,7 +392,9 @@
     activePuzzles = activePuzzles.map((puzzle) =>
       puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
     );
-
+    allPuzzles = allPuzzles.map((puzzle) =>
+      puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
+    );
     if (
       randomCompletedPuzzle &&
       currentPuzzleId === randomCompletedPuzzle.puzzle_id
@@ -444,6 +453,7 @@
     minimumTimeBetweenReviews = getSetting("puzzles.minimumTimeBetween", 0);
     await updateRandomCompletedPuzzle();
     await initializePuzzles();
+    void fetchAllPuzzles();
     minimumPuzzlesBetweenReviews = getSetting(
       "puzzles.minimumPuzzlesBetweenReviews",
       Math.max(activePuzzles.length - 3, 0),
