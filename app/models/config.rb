@@ -25,6 +25,10 @@ class Config < ApplicationRecord
     self.get_setting('puzzles.timeGoal')
   end
 
+  def minimum_time_between_puzzles
+    self.get_setting('puzzles.minimumTimeBetween')
+  end
+
   def puzzle_consecutive_solves
     self.get_setting('puzzles.consecutiveSolves')
   end
