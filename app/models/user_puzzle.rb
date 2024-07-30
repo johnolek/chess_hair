@@ -70,6 +70,7 @@ class UserPuzzle < ApplicationRecord
         average_solve_time: average_solve_time || nil,
         moves: uci_moves.split(' '),
         streak: solve_streak,
+        can_review_at: next_review&.to_i
         )
   end
 end
