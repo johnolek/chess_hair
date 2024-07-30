@@ -380,31 +380,16 @@
   }
 
   async function fetchAllPuzzles() {
-    const response = await Util.fetch("/api/v1/user/all-puzzles");
-    const data = await response.json();
-    allPuzzles = data;
+    allPuzzles = await RailsAPI.fetchAllPuzzles();
   }
 
   async function fetchAllFilteredPuzzles() {
-    const response = await Util.fetch("/api/v1/user/all-filtered-puzzles");
-    const data = await response.json();
-    allFilteredPuzzles = data;
+    allFilteredPuzzles = await RailsAPI.fetchFilteredPuzzles();
   }
 
   async function updateRandomCompletedPuzzle() {
-    const baseUrl = "/api/v1/user/random-completed-puzzle";
-    const params = {};
-    if (randomCompletedPuzzle) {
-      params["exclude_puzzle_id"] = randomCompletedPuzzle.puzzle_id;
-    }
-    const queryString = new URLSearchParams(params).toString();
-    const urlWithParams = `${baseUrl}?${queryString}`;
-    const response = await Util.fetch(urlWithParams);
-    if (response.ok) {
-      randomCompletedPuzzle = await response.json();
-    } else {
-      randomCompletedPuzzle = null;
-    }
+    randomCompletedPuzzle =
+      await RailsAPI.fetchRandomCompletedPuzzle(currentPuzzleId);
   }
 
   let userInfo = {};

@@ -15,8 +15,10 @@ async function apiCall(endpoint, options = {}) {
   return await response.json();
 }
 
-async function getApiCall(endpoint, headers = {}) {
-  return await apiCall(endpoint, { headers });
+async function getApiCall(endpoint, queryParams = {}, headers = {}) {
+  const queryString = new URLSearchParams(queryParams).toString();
+  const urlWithParams = queryString ? `${endpoint}?${queryString}` : endpoint;
+  return await apiCall(urlWithParams, { headers });
 }
 
 async function postApiCall(endpoint, body, headers = {}) {
@@ -82,4 +84,12 @@ export async function savePuzzleResult(result) {
       duration: result.duration,
     },
   });
+}
+
+export async function fetchRandomCompletedPuzzle(excludeId = null) {
+  const params = {};
+  if (excludeId) {
+    params["exclude_puzzle_id"] = excludeId;
+  }
+  return await getApiCall("/user/random-completed-puzzle", params);
 }
