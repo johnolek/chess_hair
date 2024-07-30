@@ -70,7 +70,7 @@ class UserPuzzle < ApplicationRecord
         average_solve_time: average_solve_time || nil,
         moves: uci_moves.split(' '),
         streak: solve_streak,
-        can_review_at: (last_played&.to_i || 0) + user.config.minimum_time_between_puzzles, # calculate here to avoid having to recalculate the whole collection on config changes
+        last_played_timestamp: last_played&.to_i,
         )
   end
 end
