@@ -161,11 +161,6 @@
   let minimumTimeBetweenReviews;
   let settingUpdating = false;
 
-  let activePuzzleIds = [];
-  $: {
-    activePuzzleIds = activePuzzles.map((puzzle) => puzzle.puzzle_id);
-  }
-
   let currentPuzzleId;
   $: {
     if (currentPuzzle) {
