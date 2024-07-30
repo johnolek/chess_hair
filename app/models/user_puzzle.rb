@@ -54,6 +54,10 @@ class UserPuzzle < ApplicationRecord
     self.solve_streak = calculate_solve_streak
     self.complete = complete?
     self.last_played = puzzle_results.last&.created_at
+    most_recent_result = puzzle_results.order(created_at: :desc).first
+    if most_recent_result
+      self.next_review = most_recent_result.created_at + user.config.minimum_time_between_puzzles
+    end
     save!
   end
 
