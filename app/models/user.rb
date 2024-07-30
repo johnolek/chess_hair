@@ -1,6 +1,7 @@
 class User < ApplicationRecord
   after_initialize :init_active_puzzle_ids
   after_commit :maybe_fetch_more_puzzles, on: :update
+  after_create :create_default_collection
 
   # Include default devise modules. Others available are:
   # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
@@ -10,6 +11,7 @@ class User < ApplicationRecord
   has_many :puzzle_results
   has_one :config
   has_many :user_puzzle_histories
+  has_many :collections
 
   serialize :active_puzzle_ids, coder: YAML
 
@@ -19,6 +21,10 @@ class User < ApplicationRecord
 
   def config
     super || build_config
+  end
+
+  def create_default_collection
+    collections.create!(name: 'favorites')
   end
 
   def grouped_puzzle_results

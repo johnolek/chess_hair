@@ -1,5 +1,6 @@
 class UserPuzzle < ApplicationRecord
   belongs_to :user
+  has_and_belongs_to_many :collections
 
   has_many :puzzle_results, ->(user_puzzle) { where(puzzle_id: user_puzzle.lichess_puzzle_id) }, through: :user, source: :puzzle_results
 
