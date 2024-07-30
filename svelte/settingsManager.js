@@ -1,14 +1,16 @@
 import { writable } from "svelte/store";
 import { Util } from "src/util";
+import * as RailsAPI from "./railsApi";
 
 export const settings = writable({});
 let localSettings = {};
+let initialized = false;
 
 export async function initSettings() {
-  const settingsResponse = await Util.fetch("/api/v1/user/settings");
-  const settingsData = await settingsResponse.json();
+  const settingsData = await RailsAPI.fetchSettings();
   settings.set(settingsData);
   localSettings = settingsData;
+  initialized = true;
 }
 
 // Update a setting both locally and on the server
@@ -24,6 +26,9 @@ export async function updateSetting(key, value) {
 }
 
 // Get a setting value by key, with an optional default
-export function getSetting(key, defaultValue = null) {
+export async function getSetting(key, defaultValue = null) {
+  if (!initialized) {
+    await initSettings();
+  }
   return localSettings[key] ?? defaultValue;
 }

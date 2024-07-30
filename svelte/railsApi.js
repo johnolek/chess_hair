@@ -60,6 +60,10 @@ export async function updateSetting(settingKey, value) {
   return await putApiCall(`/settings/${settingKey}`, { value });
 }
 
+export async function fetchSettings() {
+  return await getApiCall("/user/settings");
+}
+
 export async function getUserInfo() {
   return await getApiCall("/user/info");
 }
