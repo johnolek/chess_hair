@@ -154,6 +154,9 @@
   }
 
   export function stopAnalysis() {
+    if (!analyzing) {
+      return;
+    }
     uciMessage("stop");
     uciMessage("uci");
     analyzing = false;
