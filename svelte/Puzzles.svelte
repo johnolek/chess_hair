@@ -58,7 +58,30 @@
 
   // Puzzle Data
   let activePuzzles = [];
+  let eligiblePuzzles = [];
+
+  $: {
+    const currentTimestamp = new Date().getTime() / 1000;
+    eligiblePuzzles = activePuzzles.filter((puzzle) => {
+      if (lastSeen.includes(puzzle.puzzle_id)) {
+        return false;
+      }
+
+      if (!puzzle.can_review_at) {
+        return true;
+      }
+
+      return puzzle.can_review_at < currentTimestamp;
+    });
+  }
+
   let puzzleHistory = [];
+  let lastSeen;
+
+  $: {
+    lastSeen = puzzleHistory.slice(0, minimumPuzzlesBetweenReviews);
+  }
+
   let currentPuzzle;
   let totalIncorrectPuzzlesCount;
   let totalFilteredPuzzlesCount;
@@ -152,21 +175,6 @@
       }, 100);
       return randomCompletedPuzzle;
     }
-
-    const lastSeen = puzzleHistory.slice(0, minimumPuzzlesBetweenReviews);
-
-    const currentTimestamp = new Date().getTime() / 1000;
-    const eligiblePuzzles = activePuzzles.filter((puzzle) => {
-      if (lastSeen.includes(puzzle.puzzle_id)) {
-        return false;
-      }
-
-      if (!puzzle.can_review_at) {
-        return true;
-      }
-
-      return puzzle.can_review_at < currentTimestamp;
-    });
 
     if (eligiblePuzzles.length >= 1) {
       return Util.getRandomElement(eligiblePuzzles);
