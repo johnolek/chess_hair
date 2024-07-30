@@ -3,7 +3,7 @@
   import { writable } from "svelte/store";
   import * as RailsAPI from "./railsApi";
   import { Util } from "src/util";
-  import { initSettings, getSetting } from "./settingsManager.js";
+  import { getSetting, initSettings } from "./settingsManager.js";
   import { settings } from "./stores.js";
 
   // State stores
@@ -23,25 +23,25 @@
   } from "./stores.js";
 
   const dispatch = createEventDispatcher();
+
+  let minimumTimeBetweenReviews = 0;
+  let oddsOfRandomCompleted = 0.1;
+  let minimumPuzzlesBetweenReviews = 10;
+
   const puzzlesToExcludeBecauseOfPuzzleCountBetween = writable([]);
 
-  $: {
-    if ($puzzleHistory.length > 0 && minimumPuzzlesBetweenReviews > 0) {
-      puzzlesToExcludeBecauseOfPuzzleCountBetween.set(
-        $puzzleHistory.slice(0, minimumPuzzlesBetweenReviews),
-      );
-    } else {
-      puzzlesToExcludeBecauseOfPuzzleCountBetween.set([]);
-    }
-  }
+  puzzleHistory.subscribe((history) => {
+    puzzlesToExcludeBecauseOfPuzzleCountBetween.set(
+      history.slice(0, minimumPuzzlesBetweenReviews),
+    );
+  });
 
   activePuzzles.subscribe((puzzles) => {
     eligibleActivePuzzles.set(puzzles.filter(eligiblePuzzlesFilter));
   });
 
   allPuzzles.subscribe((puzzles) => {
-    eligibleActivePuzzles.set(puzzles.filter(eligiblePuzzlesFilter));
-    eligibleOtherPuzzles.set(puzzles.filter((p) => !p.active));
+    eligibleOtherPuzzles.set(puzzles.filter(eligiblePuzzlesFilter));
   });
 
   allFilteredPuzzles.subscribe((puzzles) => {
@@ -95,14 +95,14 @@
     );
   }
 
-  function updateCurrentPuzzle() {
+  export async function updateCurrentPuzzle() {
     if (
       $randomCompletedPuzzle &&
       (Math.random() < oddsOfRandomCompleted ||
         $eligibleActivePuzzles.length < 1)
     ) {
       void updateRandomCompletedPuzzle($randomCompletedPuzzle.puzzle_id);
-      return $randomCompletedPuzzle;
+      return currentPuzzle.set($randomCompletedPuzzle);
     }
 
     if ($eligibleActivePuzzles.length >= 1) {
@@ -149,6 +149,7 @@
     if ($currentPuzzle.complete || (wasComplete && !$currentPuzzle.complete)) {
       await updateActivePuzzles();
     }
+    addPuzzleToHistory(updatedPuzzle.puzzle_id);
     updatePuzzleStores(updatedPuzzle);
   }
 
@@ -172,14 +173,16 @@
     );
   }
 
-  let minimumTimeBetweenReviews = 0;
-  let oddsOfRandomCompleted = 0.1;
-  let minimumPuzzlesBetweenReviews = 10;
-
   async function refreshSettings() {
-    minimumTimeBetweenReviews = getSetting("puzzles.minimumTimeBetween", 0);
-    oddsOfRandomCompleted = getSetting("puzzles.oddsOfRandomCompleted", 0.1);
-    minimumPuzzlesBetweenReviews = getSetting(
+    minimumTimeBetweenReviews = await getSetting(
+      "puzzles.minimumTimeBetween",
+      0,
+    );
+    oddsOfRandomCompleted = await getSetting(
+      "puzzles.oddsOfRandomCompleted",
+      0.1,
+    );
+    minimumPuzzlesBetweenReviews = await getSetting(
       "puzzles.minimumPuzzlesBetweenReviews",
     );
     void updateActivePuzzles();
@@ -189,8 +192,8 @@
 
   // Initialize puzzles on mount
   onMount(async () => {
+    await initSettings();
     await refreshSettings();
-    await updateActivePuzzles();
     await fetchAllPuzzles();
     await fetchAllFilteredPuzzles();
     await updateRandomCompletedPuzzle();

@@ -31,6 +31,7 @@
     }
   }
 
+  /** @type {PuzzleManager} */
   let puzzleManager;
   let loaded = false;
   let fen;
@@ -63,19 +64,19 @@
   };
 
   let moves = [];
-  $: {
-    if ($currentPuzzle) {
-      moves = [];
-      const chessInstance = new Chess();
-      chessInstance.load($currentPuzzle.fen);
-      $currentPuzzle.moves.forEach((uciMove) => {
-        const move = chessInstance.move(uciMove);
-        moves.push(move);
-      });
-    }
-  }
 
-  // Current puzzle state
+  currentPuzzle.subscribe((puzzle) => {
+    if (!puzzle) {
+      return;
+    }
+    moves = [];
+    const chessInstance = new Chess();
+    chessInstance.load(puzzle.fen);
+    puzzle.moves.forEach((uciMove) => {
+      const move = chessInstance.move(uciMove);
+      moves.push(move);
+    });
+  });
 
   let madeMistake = false;
   let mistakes = [];
@@ -115,7 +116,7 @@
   // DOM elements
   let nextButton;
 
-  async function loadNextPuzzle() {
+  async function loadCurrentPuzzle() {
     if (!chessboard) {
       return;
     }
@@ -130,7 +131,7 @@
 
     const chessInstance = new Chess();
     chessInstance.load($currentPuzzle.fen);
-    // It gets loaded 1 move before th current move
+    // It gets loaded 1 move before the user's move
     orientation = chessInstance.turn() === "w" ? "black" : "white";
     chessboard.load($currentPuzzle.fen);
 
@@ -161,15 +162,11 @@
     chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
-    if (
-      move.lan === currentPuzzle.moves[moveIndex] ||
-      isCheckmate ||
-      puzzleComplete
-    ) {
+    if (move.lan === moves[moveIndex].lan || isCheckmate || puzzleComplete) {
       moveIndex = moveIndex + 1;
       maxMoveIndex = maxMoveIndex + 1;
       chessboard.highlightSquare(move.to, "correct-move", 700);
-      const computerMove = currentPuzzle.moves[moveIndex];
+      const computerMove = moves[moveIndex] ? moves[moveIndex].lan : null;
       if (computerMove) {
         setTimeout(() => {
           maxMoveIndex = maxMoveIndex + 1;
@@ -192,13 +189,13 @@
 
   async function handlePuzzleComplete() {
     const result = new Result(
-      currentPuzzle.puzzle_id,
+      $currentPuzzle.puzzle_id,
       elapsedTime,
       madeMistake,
     );
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
-    await savePuzzleResult(result);
+    await puzzleManager.savePuzzleResult(result);
     puzzleComplete = true;
   }
 
@@ -310,7 +307,7 @@
   bind:this={puzzleManager}
   on:ready={async () => {
     loaded = true;
-    await loadNextPuzzle();
+    await loadCurrentPuzzle();
   }}
 />
 <div class="columns is-centered">
@@ -428,7 +425,7 @@
                   class="button is-primary history-button"
                   bind:this={historyForwardButton}
                   on:click={() => {
-                    makeMove(moves[moveIndex]);
+                    makeMove(moves[moveIndex].lan);
                   }}>&#x276F;</button
                 >
               </div>
@@ -455,7 +452,8 @@
                   class="button is-primary next-button ml-2"
                   bind:this={nextButton}
                   on:click={async () => {
-                    await loadNextPuzzle();
+                    await puzzleManager.updateCurrentPuzzle();
+                    await loadCurrentPuzzle();
                   }}
                   >Next
                 </button>
