@@ -374,6 +374,18 @@
     }
   }
 
+  async function addCurrentPuzzleToFavorites() {
+    Util.fetch(`/api/v1/user/add-favorite/${currentPuzzle.id}`, {
+      method: "POST",
+    });
+  }
+
+  async function removeCurrentPuzzleFromFavorites() {
+    Util.fetch(`/api/v1/user/remove-favorite/${currentPuzzle.id}`, {
+      method: "DELETE",
+    });
+  }
+
   async function waitForImportComplete() {
     const userInfoInterval = setInterval(async () => {
       if (userInfo.import_in_progress) {

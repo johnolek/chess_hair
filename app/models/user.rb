@@ -37,6 +37,12 @@ class User < ApplicationRecord
     collection.save!
   end
 
+  def remove_favorite(user_puzzle)
+    collection = collections.find_by(name: 'favorites')
+    collection.user_puzzles.delete(user_puzzle)
+    collection.save!
+  end
+
   def grouped_puzzle_results
     @grouped_puzzle_results ||= puzzle_results.group_by(&:puzzle_id)
   end

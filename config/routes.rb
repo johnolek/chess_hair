@@ -26,6 +26,8 @@ Rails.application.routes.draw do
         post 'update_setting'
         get 'get_setting/:key', action: :get_setting
         post 'import-new-puzzle-histories'
+        post 'add-favorite/:user_puzzle_id', action: :add_favorite
+        delete 'remove-favorite/:user_puzzle_id', action: :remove_favorite
       end
     end
   end

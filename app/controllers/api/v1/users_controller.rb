@@ -1,6 +1,8 @@
 module Api
   module V1
     class UsersController < ApiController
+      before_action :find_user_puzzle, only: %i[add_favorite remove_favorite]
+
       def settings
         render json: @user.config.settings
       end
@@ -56,10 +58,28 @@ module Api
         render json: { message: "Importing new puzzle histories." }
       end
 
+      def add_favorite
+        @user.add_favorite(@user_puzzle)
+        render json: { message: "Puzzle added to favorites." }
+      end
+
+      def remove_favorite
+        @user.remove_favorite(@user_puzzle)
+        render json: { message: "Puzzle removed from favorites." }
+      end
+
       private
 
       def setting_params
         params.permit(:key, :value)
+      end
+
+      def user_puzzle_id
+        params.require(:user_puzzle_id)
+      end
+
+      def find_user_puzzle
+        @user_puzzle = @user.user_puzzles.find(user_puzzle_id)
       end
 
     end
