@@ -34,7 +34,9 @@
     if (!document.hidden) {
       const elapsed = performance.now() - lastVisibleTime;
       elapsedTime = storedElapsedTime + elapsed;
-      animationFrameId = requestAnimationFrame(updateElapsedTime);
+      setTimeout(() => {
+        requestAnimationFrame(updateElapsedTime);
+      }, 200);
     }
   }
 </script>
