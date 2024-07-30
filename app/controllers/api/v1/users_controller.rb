@@ -51,6 +51,10 @@ module Api
         render json: @user.user_puzzles.all
       end
 
+      def all_filtered_puzzles
+        render json: @user.filtered_user_puzzles.all
+      end
+
       def random_completed_puzzle
         query = @user.filtered_user_puzzles.completed.ordered_by_weighted_fail_ratio
         query = query.where.not(lichess_puzzle_id: params[:exclude_puzzle_id]) if params[:exclude_puzzle_id]

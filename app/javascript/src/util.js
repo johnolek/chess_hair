@@ -78,6 +78,36 @@ class Util {
         window.location.search.includes("debug=1"))
     );
   }
+
+  static log(...args) {
+    if (Util.isDev()) {
+      console.log(...args);
+    }
+  }
+
+  static info(...args) {
+    if (Util.isDev()) {
+      console.info(...args);
+    }
+  }
+
+  static warn(...args) {
+    if (Util.isDev()) {
+      console.warn(...args);
+    }
+  }
+
+  static error(...args) {
+    if (Util.isDev()) {
+      console.error(...args);
+    }
+  }
+
+  static debug(...args) {
+    if (Util.isDev()) {
+      console.debug(...args);
+    }
+  }
 }
 
 export { Util };

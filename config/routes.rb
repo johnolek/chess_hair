@@ -22,6 +22,7 @@ Rails.application.routes.draw do
         get 'settings'
         get 'active-puzzles'
         get 'all-puzzles'
+        get 'all-filtered-puzzles'
         get 'random-completed-puzzle'
         get 'info'
         post 'update_setting'

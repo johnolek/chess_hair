@@ -59,11 +59,15 @@
   // Puzzle Data
   let activePuzzles = [];
   let allPuzzles = [];
-  let eligiblePuzzles = [];
+  let allFilteredPuzzles = [];
+  let eligibleActivePuzzles = [];
+  let eligibleOtherPuzzles = [];
+  let eligibleFilteredPuzzles = [];
 
   $: {
     const currentTimestamp = new Date().getTime() / 1000;
-    eligiblePuzzles = activePuzzles.filter((puzzle) => {
+
+    const eligiblePuzzlesFilter = (puzzle) => {
       if (
         puzzlesToExcludeBecauseOfPuzzleCountBetween.includes(puzzle.puzzle_id)
       ) {
@@ -75,7 +79,11 @@
       }
 
       return puzzle.can_review_at < currentTimestamp;
-    });
+    };
+
+    eligibleActivePuzzles = activePuzzles.filter(eligiblePuzzlesFilter);
+    eligibleOtherPuzzles = allPuzzles.filter(eligiblePuzzlesFilter);
+    eligibleFilteredPuzzles = allFilteredPuzzles.filter(eligiblePuzzlesFilter);
   }
 
   let puzzleHistory = [];
@@ -182,23 +190,15 @@
       return randomCompletedPuzzle;
     }
 
-    if (eligiblePuzzles.length >= 1) {
-      return Util.getRandomElement(eligiblePuzzles);
-    } else {
-      if (
-        randomCompletedPuzzle &&
-        !puzzlesToExcludeBecauseOfPuzzleCountBetween.includes(
-          randomCompletedPuzzle.puzzle_id,
-        )
-      ) {
-        setTimeout(() => {
-          void updateRandomCompletedPuzzle();
-        }, 100);
-        return randomCompletedPuzzle;
-      }
+    if (eligibleActivePuzzles.length >= 1) {
+      return Util.getRandomElement(eligibleActivePuzzles);
+    } else if (eligibleFilteredPuzzles.length >= 1) {
+      return Util.getRandomElement(eligibleFilteredPuzzles);
+    } else if (eligibleOtherPuzzles.length >= 1) {
+      return Util.getRandomElement(eligibleOtherPuzzles);
     }
 
-    return Util.getRandomElement(activePuzzles);
+    return Util.getRandomElement(allPuzzles);
   }
 
   async function loadNextPuzzle() {
@@ -344,6 +344,12 @@
     allPuzzles = data;
   }
 
+  async function fetchAllFilteredPuzzles() {
+    const response = await Util.fetch("/api/v1/user/all-filtered-puzzles");
+    const data = await response.json();
+    allFilteredPuzzles = data;
+  }
+
   async function updateRandomCompletedPuzzle() {
     const baseUrl = "/api/v1/user/random-completed-puzzle";
     const params = {};
@@ -451,13 +457,12 @@
     requiredConsecutiveSolves = getSetting("puzzles.consecutiveSolves", 2);
     oddsOfRandomCompleted = getSetting("puzzles.oddsOfRandomCompleted", 0.1);
     minimumTimeBetweenReviews = getSetting("puzzles.minimumTimeBetween", 0);
-    await updateRandomCompletedPuzzle();
-    await initializePuzzles();
-    void fetchAllPuzzles();
     minimumPuzzlesBetweenReviews = getSetting(
       "puzzles.minimumPuzzlesBetweenReviews",
       Math.max(activePuzzles.length - 3, 0),
     );
+    await updateRandomCompletedPuzzle();
+    await initializePuzzles();
     document.addEventListener("keydown", function (event) {
       if (["Enter", " "].includes(event.key) && nextButton) {
         event.preventDefault();
@@ -474,6 +479,8 @@
     });
     loaded = true;
     await loadNextPuzzle();
+    void fetchAllPuzzles();
+    void fetchAllFilteredPuzzles();
     setTimeout(async () => {
       // Fix to make sure the board updates on initial load
       await loadNextPuzzle();
