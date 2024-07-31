@@ -49,7 +49,7 @@
   });
 
   // Fetch and update functions
-  async function updateActivePuzzles() {
+  export async function updateActivePuzzles() {
     const response = await RailsAPI.fetchActivePuzzles();
     puzzleHistory.set(response.most_recent_seen);
     activePuzzles.set(response.puzzles);
