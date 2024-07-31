@@ -466,7 +466,7 @@
     {#if $currentPuzzle}
       <div class="box">
         <DevOnly>
-          {elapsedTime.toFixed(2)}s
+          {(elapsedTime / 1000).toFixed(2)}s
         </DevOnly>
         {#if fen}
           <h3 class="is-size-4">Analysis</h3>
