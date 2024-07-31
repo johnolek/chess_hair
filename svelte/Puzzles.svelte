@@ -209,14 +209,14 @@
   }
 
   let userInfo = {};
-  async function initUserInfo() {
+  async function updateUserInfo() {
     userInfo = await RailsAPI.getUserInfo();
   }
 
   async function waitForImportComplete() {
     const userInfoInterval = setInterval(async () => {
       if (userInfo.import_in_progress) {
-        await initUserInfo();
+        await updateUserInfo();
         await puzzleManager.updateActivePuzzles();
       } else {
         clearInterval(userInfoInterval);
@@ -247,7 +247,7 @@
 
   onMount(async () => {
     await initSettings();
-    await initUserInfo();
+    await updateUserInfo();
     if (userInfo.import_in_progress) {
       void waitForImportComplete();
     }
