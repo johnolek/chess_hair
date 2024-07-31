@@ -57,6 +57,7 @@
   };
 
   let moves = [];
+  let displayMoves = [];
 
   currentPuzzle.subscribe((puzzle) => {
     if (!puzzle) {
@@ -65,10 +66,29 @@
     moves = [];
     const chessInstance = new Chess();
     chessInstance.load(puzzle.fen);
-    puzzle.moves.forEach((uciMove) => {
-      const move = chessInstance.move(uciMove);
+    puzzle.moves.forEach((uciMove, index) => {
+      const move = {
+        ...chessInstance.move(uciMove),
+        index: index,
+        fullMove: chessInstance.moveNumber(),
+      };
       moves.push(move);
     });
+    displayMoves = [];
+    let startIndex = 0;
+
+    // Handle the case where the first move is black's
+    if (moves.length > 0 && moves[0].color === "b") {
+      displayMoves.push([null, { ...moves[0], index: 0 }]);
+      startIndex = 1;
+    }
+
+    // Iterate over the moves array starting from the appropriate index
+    for (let i = startIndex; i < moves.length; i += 2) {
+      const whiteMove = moves[i];
+      const blackMove = moves[i + 1] ? moves[i + 1] : null;
+      displayMoves.push([whiteMove, blackMove]);
+    }
   });
 
   let madeMistake = false;
@@ -97,9 +117,12 @@
   // History browsing
   let isViewingHistory = false;
   let moveIndex = 0;
+  let lastMoveIndex = 0;
   let maxMoveIndex = 0;
   let historyBackButton;
   let historyForwardButton;
+
+  $: lastMoveIndex = Math.max(moveIndex - 1, 0);
 
   $: {
     if (loaded && chessboard) {
@@ -474,11 +497,66 @@
               navigator.clipboard.writeText(fen);
             }}>Copy fen</button
           >
+          <button
+            class="button is-primary"
+            on:click={() => {
+              const chessInstance = new Chess();
+              chessInstance.load(fen);
+              navigator.clipboard.writeText(chessInstance.ascii());
+            }}>Copy ASCII</button
+          >
+        </div>
+        <div>
+          {#each moves as move, i}
+            <div class:has-text-weight-bold={moveIndex === i}>{move.san}</div>
+          {/each}
         </div>
       </div>
     </DevOnly>
     {#if $currentPuzzle}
       <div class="box">
+        {#if displayMoves.length > 0}
+          <table class="table is-striped is-bordered is-fullwidth">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>White</th>
+                <th>Black</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each displayMoves as [whiteMove, blackMove]}
+                {#if (whiteMove && whiteMove.index <= maxMoveIndex - 1) || (blackMove && blackMove.index <= maxMoveIndex - 1)}
+                  <tr in:fade>
+                    <td>
+                      {whiteMove ? whiteMove.fullMove : blackMove.fullMove}
+                    </td>
+                    <td
+                      class:is-info={whiteMove &&
+                        whiteMove.index === lastMoveIndex}
+                    >
+                      {#if whiteMove && whiteMove.index < maxMoveIndex}
+                        <span in:fade>
+                          {whiteMove.san}
+                        </span>
+                      {/if}
+                    </td>
+                    <td
+                      class:is-info={blackMove &&
+                        blackMove.index === lastMoveIndex}
+                    >
+                      {#if blackMove && blackMove.index < maxMoveIndex}
+                        <span in:fade>
+                          {blackMove.san}
+                        </span>
+                      {/if}
+                    </td>
+                  </tr>
+                {/if}
+              {/each}
+            </tbody>
+          </table>
+        {/if}
         {#if fen}
           <h3 class="is-size-4">Analysis</h3>
           <Stockfish
