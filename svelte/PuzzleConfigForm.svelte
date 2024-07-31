@@ -15,6 +15,7 @@
   let settingUpdating = false;
 
   onMount(async () => {
+    await initSettings();
     batchSize = await getSetting("puzzles.batchSize", 10);
     minimumTimeBetweenReviews = await getSetting(
       "puzzles.minimumTimeBetween",
