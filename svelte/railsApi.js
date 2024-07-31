@@ -82,11 +82,7 @@ export async function triggerPuzzleImport() {
 
 export async function savePuzzleResult(result) {
   return await postApiCall("/puzzle_results", {
-    puzzle_result: {
-      puzzle_id: result.puzzleId,
-      made_mistake: result.madeMistake,
-      duration: result.duration,
-    },
+    puzzle_result: result,
   });
 }
 

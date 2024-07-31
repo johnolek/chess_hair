@@ -23,14 +23,6 @@
   } from "./stores.js";
   import PuzzleConfigForm from "./PuzzleConfigForm.svelte";
 
-  class Result {
-    constructor(puzzleId, duration, madeMistake = false) {
-      this.puzzleId = puzzleId;
-      this.madeMistake = madeMistake;
-      this.duration = duration;
-    }
-  }
-
   /** @type {PuzzleManager} */
   let puzzleManager;
   let loaded = false;
@@ -188,11 +180,11 @@
   }
 
   async function handlePuzzleComplete() {
-    const result = new Result(
-      $currentPuzzle.puzzle_id,
-      elapsedTime,
-      madeMistake,
-    );
+    const result = {
+      puzzle_id: $currentPuzzle.puzzle_id,
+      made_mistake: madeMistake,
+      duration: elapsedTime,
+    };
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
     await puzzleManager.savePuzzleResult(result);
