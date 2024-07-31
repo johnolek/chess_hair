@@ -1,44 +1,35 @@
 <script>
   import { onMount, onDestroy } from "svelte";
+  import { Util } from "src/util";
 
-  let mountTime;
   let lastVisibleTime;
   export let elapsedTime = 0;
   let storedElapsedTime = 0;
-  let animationFrameId;
+  let elapsedSinceLastVisible = 0;
+
+  let interval;
 
   onMount(() => {
-    mountTime = performance.now();
-    lastVisibleTime = mountTime;
+    lastVisibleTime = Util.currentMicrotime();
+    interval = setInterval(() => {
+      elapsedSinceLastVisible = Util.currentMicrotime() - lastVisibleTime;
+      elapsedTime = storedElapsedTime + elapsedSinceLastVisible;
+    }, 100);
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    updateElapsedTime();
   });
 
   onDestroy(() => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
-    cancelAnimationFrame(animationFrameId);
-    clearTimeout(timeoutId);
+    clearInterval(interval);
   });
 
   function handleVisibilityChange() {
     if (document.hidden) {
-      storedElapsedTime = elapsedTime;
-      cancelAnimationFrame(animationFrameId);
+      storedElapsedTime = storedElapsedTime + elapsedSinceLastVisible;
     } else {
-      lastVisibleTime = performance.now();
-      updateElapsedTime();
-    }
-  }
-
-  let timeoutId;
-  function updateElapsedTime() {
-    if (!document.hidden) {
-      const elapsed = performance.now() - lastVisibleTime;
-      elapsedTime = storedElapsedTime + elapsed;
-      timeoutId = setTimeout(() => {
-        requestAnimationFrame(updateElapsedTime);
-      }, 200);
+      lastVisibleTime = Util.currentMicrotime();
+      elapsedSinceLastVisible = 0;
     }
   }
 </script>
