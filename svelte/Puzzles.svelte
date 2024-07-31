@@ -22,6 +22,7 @@
     completedFilteredPuzzlesCount,
   } from "./stores.js";
   import PuzzleConfigForm from "./PuzzleConfigForm.svelte";
+  import DevOnly from "./components/DevOnly.svelte";
 
   /** @type {PuzzleManager} */
   let puzzleManager;
@@ -464,6 +465,9 @@
   <div class="column is-4">
     {#if $currentPuzzle}
       <div class="box">
+        <DevOnly>
+          {elapsedTime.toFixed(2)}s
+        </DevOnly>
         {#if fen}
           <h3 class="is-size-4">Analysis</h3>
           <Stockfish
