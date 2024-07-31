@@ -63,14 +63,12 @@ class UserPuzzle < ApplicationRecord
   end
 
   def as_json(options = nil)
-    super
-      .merge(
-        puzzle_id: lichess_puzzle_id,
-        rating: lichess_rating,
-        average_solve_time: average_solve_time || nil,
-        moves: uci_moves.split(' '),
-        streak: solve_streak,
-        last_played_timestamp: last_played&.to_i,
-        )
+    super.except('user_id', 'created_at', 'updated_at', 'last_played', 'lichess_puzzle_id', 'lichess_rating', 'uci_moves', 'next_review').merge(
+      puzzle_id: lichess_puzzle_id,
+      rating: lichess_rating,
+      moves: uci_moves.split(' '),
+      streak: solve_streak,
+      last_played_timestamp: last_played&.to_i,
+      )
   end
 end
