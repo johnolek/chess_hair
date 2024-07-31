@@ -375,6 +375,23 @@
         </div>
 
         <div class="block mb-1">
+          <div
+            class="is-hidden-tablet mb-1 scrollable"
+            style="min-height: 25px"
+          >
+            {#each moves.slice(0, moveIndex) as move, i}
+              <span
+                in:fade
+                class="tag is-small"
+                class:is-white={move.color === "w"}
+                class:is-black={move.color === "b"}
+                class:has-text-weight-bold={moveIndex === i}
+                >{move.fullMove}{move.color === "b"
+                  ? "... "
+                  : ". "}{move.san}</span
+              >
+            {/each}
+          </div>
           <div class="board-container">
             {#if $currentPuzzle}
               {#key $currentPuzzle.puzzle_id}
@@ -801,5 +818,14 @@
   }
   .board-container {
     position: relative;
+  }
+  .scrollable {
+    overflow-x: auto;
+    white-space: nowrap;
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollable::-webkit-scrollbar {
+    display: none; /* Safari and Chrome */
   }
 </style>
