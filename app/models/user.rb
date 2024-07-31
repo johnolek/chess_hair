@@ -8,6 +8,7 @@ class User < ApplicationRecord
   devise :database_authenticatable, :registerable,
          :recoverable, :rememberable, :validatable
   has_many :user_puzzles
+  has_many :mistakes
   has_many :puzzle_results
   has_one :config
   has_many :user_puzzle_histories
