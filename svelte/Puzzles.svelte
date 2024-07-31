@@ -184,6 +184,7 @@
       puzzle_id: $currentPuzzle.puzzle_id,
       made_mistake: madeMistake,
       duration: elapsedTime,
+      mistakes: mistakes,
     };
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);

@@ -25,7 +25,7 @@ module Api
       private
 
       def puzzle_result_params
-        params.require(:puzzle_result).permit(:puzzle_id, :duration, :made_mistake, :id)
+        params.require(:puzzle_result).permit(:puzzle_id, :duration, :made_mistake, :id, mistakes: [])
       end
     end
   end
