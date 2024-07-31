@@ -217,8 +217,10 @@
     const userInfoInterval = setInterval(async () => {
       if (userInfo.import_in_progress) {
         await initUserInfo();
+        await puzzleManager.updateActivePuzzles();
       } else {
         clearInterval(userInfoInterval);
+        await puzzleManager.updateActivePuzzles();
       }
     }, 2000);
   }
