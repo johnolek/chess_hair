@@ -18,6 +18,7 @@
   onDestroy(() => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     cancelAnimationFrame(animationFrameId);
+    clearTimeout(timeoutId);
   });
 
   function handleVisibilityChange() {
@@ -30,11 +31,12 @@
     }
   }
 
+  let timeoutId;
   function updateElapsedTime() {
     if (!document.hidden) {
       const elapsed = performance.now() - lastVisibleTime;
       elapsedTime = storedElapsedTime + elapsed;
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         requestAnimationFrame(updateElapsedTime);
       }, 200);
     }
