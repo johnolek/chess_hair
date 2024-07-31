@@ -463,11 +463,22 @@
     </div>
   </div>
   <div class="column is-4">
+    <DevOnly>
+      <div class="box">
+        Timer: {(elapsedTime / 1000).toFixed(2)}s
+        <div>
+          <button
+            class="button is-primary"
+            on:click={() => {
+              // copy fen to clipboard
+              navigator.clipboard.writeText(fen);
+            }}>Copy fen</button
+          >
+        </div>
+      </div>
+    </DevOnly>
     {#if $currentPuzzle}
       <div class="box">
-        <DevOnly>
-          {(elapsedTime / 1000).toFixed(2)}s
-        </DevOnly>
         {#if fen}
           <h3 class="is-size-4">Analysis</h3>
           <Stockfish
