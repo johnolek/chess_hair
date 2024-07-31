@@ -90,8 +90,14 @@
     elapsedTime = 0;
     moveIndex = 0;
     maxMoveIndex = 0;
+    isViewingHistory = false;
     if (chessboard) {
       chessboard.enableShowLastMove();
+    }
+    if (analysisRunning) {
+      analysisRunning = false;
+      topStockfishMoves = [];
+      stockfish.stopAnalysis();
     }
   }
 
@@ -122,12 +128,6 @@
     }
 
     resetPuzzleState();
-
-    if (analysisRunning) {
-      analysisRunning = false;
-      topStockfishMoves = [];
-      stockfish.stopAnalysis();
-    }
 
     const chessInstance = new Chess();
     chessInstance.load($currentPuzzle.fen);
