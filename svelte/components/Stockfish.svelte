@@ -12,6 +12,11 @@
   export let depth = 20;
   export let numCores = 1;
   export let lines = 5;
+  export let ready = false;
+
+  let analysisFileLoaded = false;
+
+  $: ready = analysisFileLoaded;
 
   $: if (fen && analysisFen && fen !== analysisFen) {
     stopAnalysis();
@@ -79,6 +84,9 @@
 
   stockfish.onmessage = (event) => {
     const message = event.data;
+
+    checkForEvalFileLoaded(event);
+
     if (Util.isDev()) {
       console.debug(message);
     }
@@ -93,6 +101,14 @@
       }
     }
   };
+
+  function checkForEvalFileLoaded(event) {
+    const message = event.data;
+    if (message.startsWith("Load eval file success: 1")) {
+      analysisFileLoaded = true;
+    }
+  }
+
   function getFullMove(uciMove) {
     if (!analysisFen) {
       return null;

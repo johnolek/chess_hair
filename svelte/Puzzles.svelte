@@ -282,6 +282,7 @@
   // Stockfish
   /** @type {Stockfish} */
   let stockfish;
+  let stockfishReady = false;
   let depth = 22;
   let numCores = 1;
   let lines = 5;
@@ -434,6 +435,7 @@
                 <button
                   class="button is-primary is-small"
                   class:is-danger={!puzzleComplete}
+                  disabled={!stockfishReady}
                   on:click={() => {
                     analysisRunning = true;
                     madeMistake = true;
@@ -589,6 +591,7 @@
           <h3 class="is-size-4">Analysis</h3>
           <Stockfish
             bind:this={stockfish}
+            bind:ready={stockfishReady}
             {fen}
             {depth}
             {numCores}
@@ -673,6 +676,7 @@
               <button
                 class="button is-primary is-small"
                 class:is-danger={!puzzleComplete}
+                disabled={!stockfishReady}
                 on:click={() => {
                   analysisRunning = true;
                   madeMistake = true;
