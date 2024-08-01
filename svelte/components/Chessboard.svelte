@@ -106,6 +106,9 @@
 
   export let fen;
   export let chessground;
+  export let moveIndex = 0;
+  export let maxMoveIndex = 0;
+
   let size;
   let minSize = 200;
 
@@ -246,6 +249,8 @@
     } else {
       const move = chessInstance.move({ from, to });
       if (move) {
+        moveIndex += 1;
+        maxMoveIndex += 1;
         updateChessground();
         dispatch("move", { move, isCheckmate: chessInstance.isCheckmate() });
       }
@@ -266,8 +271,18 @@
   }
 
   export function undo() {
+    moveIndex = moveIndex - 1;
+    maxMoveIndex = maxMoveIndex - 1;
     chessInstance.undo();
     updateChessground();
+  }
+
+  export function historyBack() {
+    if (moveIndex > 0) {
+      moveIndex = moveIndex - 1;
+      chessInstance.undo();
+      updateChessground();
+    }
   }
 
   export function enableViewOnly() {
@@ -289,11 +304,18 @@
   }
 
   export function move(move) {
+    moveIndex += 1;
+    // This allows for making moves when viewing history
+    if (moveIndex > maxMoveIndex) {
+      maxMoveIndex = moveIndex;
+    }
     chessInstance.move(move);
     updateChessground();
   }
 
   export function load(fen) {
+    moveIndex = 0;
+    maxMoveIndex = 0;
     chessInstance.load(fen);
     updateChessground();
   }

@@ -104,8 +104,6 @@
     mistakes = [];
     puzzleComplete = false;
     elapsedTime = 0;
-    moveIndex = 0;
-    maxMoveIndex = 1; // we start by seeing the computer move
     isViewingHistory = false;
     if (chessboard) {
       chessboard.enableShowLastMove();
@@ -119,13 +117,13 @@
 
   // History browsing
   let isViewingHistory = false;
-  let moveIndex = 0;
-  let lastMoveIndex = 0;
-  let maxMoveIndex = 1;
+  let moveIndex;
+  let lastMoveIndex;
+  let maxMoveIndex;
   let historyBackButton;
   let historyForwardButton;
 
-  $: lastMoveIndex = Math.max(moveIndex - 1, 0);
+  $: lastMoveIndex = Math.max((moveIndex || 0) - 1, 0);
 
   $: {
     if (loaded && chessboard) {
@@ -158,15 +156,12 @@
 
     setTimeout(() => {
       chessboard.move(computerMove);
-      moveIndex = 1;
-      maxMoveIndex = 1;
     }, 700);
   }
 
   function makeMove(move) {
     if (chessboard) {
       chessboard.move(move);
-      moveIndex = moveIndex + 1;
       if (moveIndex === maxMoveIndex) {
         isViewingHistory = false;
       }
@@ -181,14 +176,15 @@
     chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
-    if (move.lan === moves[moveIndex].lan || isCheckmate || puzzleComplete) {
-      moveIndex = moveIndex + 1;
-      maxMoveIndex = maxMoveIndex + 1;
+    if (
+      move.lan === moves[moveIndex - 1].lan ||
+      isCheckmate ||
+      puzzleComplete
+    ) {
       chessboard.highlightSquare(move.to, "correct-move", 700);
       const computerMove = moves[moveIndex] ? moves[moveIndex].lan : null;
       if (computerMove) {
         setTimeout(() => {
-          maxMoveIndex = maxMoveIndex + 1;
           makeMove(computerMove);
           chessboard.enableShowLastMove();
         }, 300);
@@ -412,6 +408,8 @@
             {/if}
             <Chessboard
               bind:fen
+              bind:moveIndex
+              bind:maxMoveIndex
               {chessgroundConfig}
               {orientation}
               bind:this={chessboard}
@@ -461,8 +459,7 @@
                   bind:this={historyBackButton}
                   on:click={() => {
                     isViewingHistory = true;
-                    moveIndex -= 1;
-                    chessboard.undo();
+                    chessboard.historyBack();
                     if (analysisRunning) {
                       topStockfishMoves = [];
                       stockfish.analyzePosition();
