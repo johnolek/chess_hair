@@ -104,7 +104,7 @@
     mistakes = [];
     puzzleComplete = false;
     elapsedTime = 0;
-    isViewingHistory = false;
+
     if (chessboard) {
       chessboard.enableShowLastMove();
     }
@@ -116,25 +116,14 @@
   }
 
   // History browsing
-  let isViewingHistory = false;
   let moveIndex;
   let lastMoveIndex;
   let maxMoveIndex;
+  let isViewingHistory;
   let historyBackButton;
   let historyForwardButton;
 
   $: lastMoveIndex = Math.max((moveIndex || 0) - 1, 0);
-
-  $: {
-    if (loaded && chessboard) {
-      if (isViewingHistory) {
-        chessboard.enableViewOnly();
-        chessboard.enableShowLastMove();
-      } else {
-        chessboard.disableViewOnly();
-      }
-    }
-  }
 
   // DOM elements
   let nextButton;
@@ -162,9 +151,6 @@
   function makeMove(move) {
     if (chessboard) {
       chessboard.move(move);
-      if (moveIndex === maxMoveIndex) {
-        isViewingHistory = false;
-      }
       if (analysisRunning) {
         topStockfishMoves = [];
         stockfish.analyzePosition();
@@ -173,6 +159,9 @@
   }
 
   async function handleUserMove(moveEvent) {
+    if (isViewingHistory || puzzleComplete) {
+      return;
+    }
     chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
@@ -410,6 +399,7 @@
               bind:fen
               bind:moveIndex
               bind:maxMoveIndex
+              bind:isViewingHistory
               {chessgroundConfig}
               {orientation}
               bind:this={chessboard}
@@ -458,7 +448,6 @@
                   class="button is-primary history-button"
                   bind:this={historyBackButton}
                   on:click={() => {
-                    isViewingHistory = true;
                     chessboard.historyBack();
                     if (analysisRunning) {
                       topStockfishMoves = [];

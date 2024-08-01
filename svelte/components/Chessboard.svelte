@@ -108,9 +108,21 @@
   export let chessground;
   export let moveIndex = 0;
   export let maxMoveIndex = 0;
+  export let isViewingHistory = false;
 
   let size;
   let minSize = 200;
+
+  $: {
+    if (chessground) {
+      if (isViewingHistory) {
+        enableViewOnly();
+        enableShowLastMove();
+      } else {
+        disableViewOnly();
+      }
+    }
+  }
 
   let isResizing = false;
   let resized = false;
@@ -278,6 +290,7 @@
   }
 
   export function historyBack() {
+    isViewingHistory = true;
     if (moveIndex > 0) {
       moveIndex = moveIndex - 1;
       chessInstance.undo();
@@ -306,8 +319,11 @@
   export function move(move) {
     moveIndex += 1;
     // This allows for making moves when viewing history
-    if (moveIndex > maxMoveIndex) {
+    if (!isViewingHistory) {
       maxMoveIndex = moveIndex;
+    }
+    if (moveIndex === maxMoveIndex) {
+      isViewingHistory = false;
     }
     chessInstance.move(move);
     updateChessground();
