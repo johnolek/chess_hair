@@ -67,10 +67,11 @@
     const chessInstance = new Chess();
     chessInstance.load(puzzle.fen);
     puzzle.moves.forEach((uciMove, index) => {
+      const fullMove = chessInstance.moveNumber();
       const move = {
         ...chessInstance.move(uciMove),
         index: index,
-        fullMove: chessInstance.moveNumber(),
+        fullMove: fullMove,
       };
       moves.push(move);
     });
@@ -379,18 +380,19 @@
             class="is-hidden-tablet mb-1 scrollable"
             style="min-height: 25px"
           >
-            {#each moves.slice(0, moveIndex) as move, i}
-              <span
-                in:fade
-                class="tag is-small"
-                class:is-white={move.color === "w"}
-                class:is-black={move.color === "b"}
-                class:has-text-weight-bold={moveIndex === i}
-                >{move.fullMove}{move.color === "b"
-                  ? "... "
-                  : ". "}{move.san}</span
-              >
-            {/each}
+            {#key $currentPuzzle.puzzle_id}
+              {#each moves.slice(0, moveIndex) as move, i}
+                <span
+                  in:fade
+                  class="tag is-small"
+                  class:is-white={move.color === "w"}
+                  class:is-black={move.color === "b"}
+                >
+                  {move.fullMove}
+                  {move.color === "b" ? "... " : ". "}{move.san}</span
+                >
+              {/each}
+            {/key}
           </div>
           <div class="board-container">
             {#if $currentPuzzle}
