@@ -5,13 +5,15 @@
   import Stockfish from "./components/Stockfish.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
   import { onMount } from "svelte";
-  import { fade } from "svelte/transition";
+  import { fade, crossfade } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { Chess } from "chess.js";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
   import { getSetting, initSettings } from "./settingsManager.js";
   import * as RailsAPI from "./railsApi";
+
+  const [send, receive] = crossfade({ duration: 300 });
 
   // State stores
   import {
@@ -103,7 +105,7 @@
     puzzleComplete = false;
     elapsedTime = 0;
     moveIndex = 0;
-    maxMoveIndex = 0;
+    maxMoveIndex = 1; // we start by seeing the computer move
     isViewingHistory = false;
     if (chessboard) {
       chessboard.enableShowLastMove();
@@ -119,7 +121,7 @@
   let isViewingHistory = false;
   let moveIndex = 0;
   let lastMoveIndex = 0;
-  let maxMoveIndex = 0;
+  let maxMoveIndex = 1;
   let historyBackButton;
   let historyForwardButton;
 
@@ -377,20 +379,27 @@
 
         <div class="block mb-1">
           <div
-            class="is-hidden-tablet mb-1 scrollable"
-            style="min-height: 25px"
+            class="mb-1 scrollable is-hidden-tablet"
+            style="min-height: 28px"
           >
             {#key $currentPuzzle.puzzle_id}
-              {#each moves.slice(0, moveIndex) as move, i}
+              {#each moves.slice(0, maxMoveIndex) as move, i (move.san)}
                 <span
                   in:fade
-                  class="tag is-small"
+                  class="tag is-small mobile-move"
                   class:is-white={move.color === "w"}
                   class:is-black={move.color === "b"}
                 >
                   {move.fullMove}
-                  {move.color === "b" ? "... " : ". "}{move.san}</span
-                >
+                  {move.color === "b" ? "... " : ". "}{move.san}
+                  {#if i === moveIndex - 1}
+                    <span
+                      in:receive={{ key: "current-move-highlight" }}
+                      out:send={{ key: "current-move-highlight" }}
+                      class="active-mobile-move"
+                    ></span>
+                  {/if}
+                </span>
               {/each}
             {/key}
           </div>
@@ -829,5 +838,17 @@
   }
   .scrollable::-webkit-scrollbar {
     display: none; /* Safari and Chrome */
+  }
+  .mobile-move {
+    position: relative;
+  }
+  .active-mobile-move {
+    background-color: var(--brand-color-5);
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 3px;
+    width: 90%;
   }
 </style>
