@@ -306,6 +306,23 @@
     }
   }
 
+  export function goToNode(nodeGuid) {
+    if (currentNode().getGuid() === nodeGuid) {
+      return;
+    }
+    if (!isViewingHistory) {
+      isViewingHistory = true;
+      mainLineNodeId = currentNode().getGuid();
+    }
+    moveTree.goToNode(nodeGuid);
+    updateChessground();
+  }
+
+  export function goToFen(fen) {
+    const matchingNode = moveTree.findNodeByFen(fen);
+    goToNode(matchingNode.getGuid());
+  }
+
   export function backToMainLine() {
     if (isViewingHistory) {
       isViewingHistory = false;

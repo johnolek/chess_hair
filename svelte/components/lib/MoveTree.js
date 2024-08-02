@@ -15,6 +15,10 @@ class MoveTree {
     Util.info({ moveTree: this });
   }
 
+  findNodeByFen(fen) {
+    return Object.values(this.moveMap).find((node) => node.getFen() === fen);
+  }
+
   goToNode(nodeGuid) {
     this.currentNode = this.moveMap[nodeGuid];
   }

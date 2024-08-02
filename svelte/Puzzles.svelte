@@ -420,6 +420,9 @@
             {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
                 <span
                   in:fade
+                  on:click={() => {
+                    chessboard.goToFen(move.after);
+                  }}
                   class="tag is-small move-tag"
                   class:is-white={move.color === "w"}
                   class:is-black={move.color === "b"}
@@ -814,6 +817,7 @@
   }
   .move-tag {
     position: relative;
+    cursor: pointer;
   }
   .active-move-tag {
     background-color: var(--brand-color-5);
