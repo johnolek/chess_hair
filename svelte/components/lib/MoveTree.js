@@ -4,19 +4,28 @@ import { RootNode } from "./RootNode";
 class MoveTree {
   constructor(fen) {
     this.rootNode = new RootNode(fen);
-    /** @type {MoveNode} */
+    /** @type {MoveNode|RootNode} */
     this.currentNode = this.rootNode;
     this.moveMap = { [this.rootNode.getGuid()]: this.rootNode };
   }
 
-  addMove(chessJsCompatibleMove) {
+  addMove(chessJsCompatibleMove, isMainLine = true) {
     this.currentNode = this.currentNode.addChild(chessJsCompatibleMove);
+    this.currentNode.isMainLine = isMainLine;
     this.moveMap[this.currentNode.getGuid()] = this.currentNode;
     Util.info({ moveTree: this });
   }
 
   findNodeByFen(fen) {
     return Object.values(this.moveMap).find((node) => node.getFen() === fen);
+  }
+
+  getNodeByGuid(guid) {
+    return this.moveMap[guid] || null;
+  }
+
+  goToRoot() {
+    this.currentNode = this.rootNode;
   }
 
   goToNode(nodeGuid) {

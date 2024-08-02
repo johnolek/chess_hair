@@ -6,14 +6,7 @@ class MoveNode extends BaseNode {
     this.move = move;
     this.children = {};
     this.parent = parent;
-  }
-
-  addChild(chessJsCompatibleMove) {
-    const move = this.getFullMove(chessJsCompatibleMove);
-    if (!this.children[move.lan]) {
-      this.children[move.lan] = new MoveNode(move, this);
-    }
-    return this.children[chessJsCompatibleMove];
+    this.isMainLine = true;
   }
 
   getLastMove() {
@@ -22,6 +15,10 @@ class MoveNode extends BaseNode {
 
   getFen() {
     return this.move.after;
+  }
+
+  createChild(move) {
+    return new MoveNode(move, this);
   }
 }
 

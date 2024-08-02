@@ -17,6 +17,24 @@ class BaseNode {
     throw new Error("Not implemented");
   }
 
+  /** @return {MoveNode} */
+  createChild(move) {
+    throw new Error("Not implemented");
+  }
+
+  /** @return {MoveNode} */
+  addChild(chessJsCompatibleMove) {
+    const move = this.getFullMove(chessJsCompatibleMove);
+    if (!this.children[move.lan]) {
+      this.children[move.lan] = this.createChild(move);
+    }
+    return this.children[move.lan];
+  }
+
+  getFirstChild() {
+    return Object.values(this.children)[0];
+  }
+
   getFullMove(chessJsCompatibleMove) {
     const chess = this.chessInstance();
     const move = chess.move(chessJsCompatibleMove);

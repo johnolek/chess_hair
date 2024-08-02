@@ -129,7 +129,7 @@
     chessInstance.load($currentPuzzle.fen);
     // It gets loaded 1 move before the user's move
     orientation = chessInstance.turn() === "w" ? "black" : "white";
-    chessboard.load($currentPuzzle.fen);
+    chessboard.load($currentPuzzle.fen, $currentPuzzle.moves);
 
     const computerMove = $currentPuzzle.moves[0];
 

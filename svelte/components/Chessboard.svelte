@@ -228,8 +228,7 @@
     });
 
     fen = currentNode().getFen();
-
-    hasHistoryBack = !!currentNode().parent;
+    updateHistoryState();
     dispatch("currentNode", currentNode());
   }
 
@@ -278,17 +277,14 @@
   }
 
   let mainLineNodeId;
+  let mainLineFen;
   let history = [];
 
   export function historyBack() {
     if (currentNode().parent) {
-      if (!isViewingHistory) {
-        isViewingHistory = true;
-        mainLineNodeId = currentNode().getGuid();
-      }
       history.unshift(currentNode().getGuid());
       history = history;
-      moveTree.goToParent();
+      goToFen(currentNode().parent.getFen());
       updateChessground();
     }
   }
@@ -298,11 +294,25 @@
       const nextNodeGuid = history.shift();
       history = history;
       moveTree.goToNode(nextNodeGuid);
-      if (currentNode().getGuid() === mainLineNodeId) {
+      updateChessground();
+    }
+  }
+
+  function updateHistoryState() {
+    if (!currentNode()) {
+      return;
+    }
+    hasHistoryBack = !!currentNode().parent;
+    if (isViewingHistory) {
+      if (
+        currentNode().getGuid() === mainLineNodeId ||
+        currentNode().getFen() === mainLineFen
+      ) {
         isViewingHistory = false;
         mainLineNodeId = null;
+        mainLineFen = null;
+        history = [];
       }
-      updateChessground();
     }
   }
 
@@ -310,11 +320,22 @@
     if (currentNode().getGuid() === nodeGuid) {
       return;
     }
+
     if (!isViewingHistory) {
       isViewingHistory = true;
       mainLineNodeId = currentNode().getGuid();
+      mainLineFen = currentNode().getFen();
     }
+
     moveTree.goToNode(nodeGuid);
+    let node = currentNode();
+    const newHistory = [];
+    while (node.getFirstChild()) {
+      node = node.getFirstChild();
+      newHistory.push(node.getGuid());
+    }
+    history = newHistory;
+
     updateChessground();
   }
 
@@ -324,11 +345,8 @@
   }
 
   export function backToMainLine() {
-    if (isViewingHistory) {
-      isViewingHistory = false;
-      moveTree.goToNode(mainLineNodeId);
-      updateChessground();
-    }
+    moveTree.goToNode(mainLineNodeId);
+    updateChessground();
   }
 
   function currentNode() {
@@ -348,9 +366,10 @@
     updateChessground();
   }
 
-  export function load(fen) {
-    isViewingHistory = false;
+  export function load(fen, moves = []) {
     moveTree = new MoveTree(fen);
+    moves.forEach((move) => moveTree.addMove(move));
+    moveTree.goToRoot();
     updateChessground();
   }
 

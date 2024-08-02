@@ -12,12 +12,8 @@ class RootNode extends BaseNode {
     return this.fen;
   }
 
-  addChild(chessJsCompatibleMove) {
-    const move = this.getFullMove(chessJsCompatibleMove);
-    if (!this.children[move.lan]) {
-      this.children[move.lan] = new MoveNode(move, this);
-    }
-    return this.children[chessJsCompatibleMove];
+  createChild(move) {
+    return new MoveNode(move, this);
   }
 }
 
