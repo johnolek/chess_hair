@@ -1,7 +1,6 @@
 <script>
   import { onMount } from "svelte";
   import { Chessground } from "chessground";
-  import { Chess } from "chess.js";
   import {
     pieceSet,
     boardStyle,
