@@ -120,6 +120,8 @@
 
   // History browsing
   let moveIndex;
+  let hasHistoryForward;
+  let hasHistoryBack;
   let lastMoveIndex;
   let maxMoveIndex;
   let isViewingHistory;
@@ -414,6 +416,8 @@
               bind:fen
               bind:moveIndex
               bind:maxMoveIndex
+              bind:hasHistoryForward
+              bind:hasHistoryBack
               bind:isViewingHistory
               {chessgroundConfig}
               {orientation}
@@ -458,7 +462,7 @@
             </div>
             <div class="column has-text-left">
               <button
-                disabled={moveIndex === 0}
+                disabled={!hasHistoryBack}
                 class="button is-primary history-button is-normal is-responsive"
                 bind:this={historyBackButton}
                 on:click={() => {
@@ -470,7 +474,7 @@
                 }}>&#x276E;</button
               >
               <button
-                disabled={moveIndex === maxMoveIndex}
+                disabled={!hasHistoryForward}
                 class="button is-primary history-button is-normal is-responsive"
                 bind:this={historyForwardButton}
                 on:click={() => {

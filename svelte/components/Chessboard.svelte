@@ -109,6 +109,8 @@
   export let moveIndex = 0;
   export let maxMoveIndex = 0;
   export let isViewingHistory = false;
+  export let hasHistoryBack = false;
+  export let hasHistoryForward = false;
 
   let size;
   let minSize = 200;
@@ -120,6 +122,14 @@
       } else {
         disableViewOnly();
       }
+    }
+  }
+
+  $: {
+    if (isViewingHistory) {
+      hasHistoryForward = history.length > 0;
+    } else {
+      hasHistoryForward = false;
     }
   }
 
@@ -220,6 +230,8 @@
     });
 
     fen = currentNode().getFen();
+
+    hasHistoryBack = !!currentNode().parent;
   }
 
   function handleMove(from, to) {
