@@ -460,7 +460,7 @@
             <div class="column has-text-left">
               <button
                 disabled={moveIndex === 0}
-                class="button is-primary history-button"
+                class="button is-primary history-button is-normal is-responsive"
                 bind:this={historyBackButton}
                 on:click={() => {
                   chessboard.historyBack();
@@ -472,7 +472,7 @@
               >
               <button
                 disabled={moveIndex === maxMoveIndex}
-                class="button is-primary history-button"
+                class="button is-primary history-button is-normal is-responsive"
                 bind:this={historyForwardButton}
                 on:click={() => {
                   makeMove(moves[moveIndex].lan);
@@ -480,7 +480,7 @@
               >
               {#if isViewingHistory}
                 <button
-                  class="button is-primary"
+                  class="button is-primary history-button is-normal is-responsive"
                   on:click={() => {
                     chessboard.backToMainLine();
                   }}
