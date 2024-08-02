@@ -4,6 +4,8 @@
   import FocusTimer from "./components/FocusTimer.svelte";
   import Stockfish from "./components/Stockfish.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
+  import { Util } from 'src/util';
+  import { MoveTree } from "./components/lib/MoveTree";
   import { onMount } from "svelte";
   import { fade, crossfade } from "svelte/transition";
   import { flip } from "svelte/animate";
@@ -60,42 +62,9 @@
     orientation: orientation,
   };
 
+  let correctMoveTree;
   let moves = [];
   let displayMoves = [];
-
-  currentPuzzle.subscribe((puzzle) => {
-    if (!puzzle) {
-      return;
-    }
-    moves = [];
-    displayMoves = [];
-    const chessInstance = new Chess();
-    chessInstance.load(puzzle.fen);
-    puzzle.moves.forEach((uciMove, index) => {
-      const fullMove = chessInstance.moveNumber();
-      const move = {
-        ...chessInstance.move(uciMove),
-        index: index,
-        fullMove: fullMove,
-      };
-      moves.push(move);
-    });
-    displayMoves = [];
-    let startIndex = 0;
-
-    // Handle the case where the first move is black's
-    if (moves.length > 0 && moves[0].color === "b") {
-      displayMoves.push([null, { ...moves[0], index: 0 }]);
-      startIndex = 1;
-    }
-
-    // Iterate over the moves array starting from the appropriate index
-    for (let i = startIndex; i < moves.length; i += 2) {
-      const whiteMove = moves[i];
-      const blackMove = moves[i + 1] ? moves[i + 1] : null;
-      displayMoves.push([whiteMove, blackMove]);
-    }
-  });
 
   let madeMistake = false;
   let mistakes = [];
@@ -111,11 +80,47 @@
     if (chessboard) {
       chessboard.enableShowLastMove();
     }
+
+    recalculateMoves()
+
     if (analysisRunning) {
       analysisRunning = false;
       topStockfishMoves = [];
       stockfish.stopAnalysis();
     }
+  }
+
+  function recalculateMoves() {
+    moves = [];
+    displayMoves = [];
+
+    if (!$currentPuzzle) {
+      return;
+    }
+    correctMoveTree = new MoveTree($currentPuzzle.fen);
+    $currentPuzzle.moves.forEach((uciMove) => {
+      correctMoveTree.addMove(uciMove);
+      moves.push(correctMoveTree.currentNode.move);
+    });
+
+
+    displayMoves = [];
+    let startIndex = 0;
+
+    // Handle the case where the first move is black's
+    if (moves.length > 0 && moves[0].color === "b") {
+      displayMoves.push([null, moves[0]]);
+      startIndex = 1;
+    }
+
+    // Iterate over the moves array starting from the appropriate index
+    for (let i = startIndex; i < moves.length; i += 2) {
+      const whiteMove = moves[i] ? moves[i] : null;
+      const blackMove = moves[i + 1] ? moves[i + 1] : null;
+      displayMoves.push([whiteMove, blackMove]);
+    }
+
+    displayMoves = displayMoves; // reactivity
   }
 
   // History browsing
@@ -383,11 +388,11 @@
 
         <div class="block mb-1">
           <div
-            class="mb-1 scrollable is-hidden-tablet"
+            class="mb-1 scrollable "
             style="min-height: 28px"
           >
             {#key $currentPuzzle.puzzle_id}
-              {#each moves.slice(0, maxMoveIndex) as move, i (move.san)}
+              {#each moves.slice(0, maxMoveIndex) as move, i (move.GUID)}
                 <span
                   in:fade
                   class="tag is-small mobile-move"
@@ -563,16 +568,16 @@
             </thead>
             <tbody>
               {#each displayMoves as [whiteMove, blackMove]}
-                {#if (whiteMove && whiteMove.index <= maxMoveIndex - 1) || (blackMove && blackMove.index <= maxMoveIndex - 1)}
+                {#if (whiteMove && whiteMove.moveIndex <= maxMoveIndex - 1) || (blackMove && blackMove.moveIndex <= maxMoveIndex - 1)}
                   <tr in:fade>
                     <td>
                       {whiteMove ? whiteMove.fullMove : blackMove.fullMove}
                     </td>
                     <td
                       class:is-info={whiteMove &&
-                        whiteMove.index === lastMoveIndex}
+                        whiteMove.moveIndex === lastMoveIndex}
                     >
-                      {#if whiteMove && whiteMove.index < maxMoveIndex}
+                      {#if whiteMove && whiteMove.moveIndex < maxMoveIndex}
                         <span in:fade>
                           {whiteMove.san}
                         </span>
@@ -580,9 +585,9 @@
                     </td>
                     <td
                       class:is-info={blackMove &&
-                        blackMove.index === lastMoveIndex}
+                        blackMove.moveIndex === lastMoveIndex}
                     >
-                      {#if blackMove && blackMove.index < maxMoveIndex}
+                      {#if blackMove && blackMove.moveIndex < maxMoveIndex}
                         <span in:fade>
                           {blackMove.san}
                         </span>
