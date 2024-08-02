@@ -20,7 +20,8 @@
 		"dev": "rollup -c -w & pnpm run build-bulma",
 		"build": "rollup -c",
 		"build-bulma": "sass --load-path=node_modules --watch chess_hair.scss app/assets/stylesheets/chess_hair.css",
-		"prod-styles": "sass --load-path=node_modules --style=compressed chess_hair.scss app/assets/stylesheets/chess_hair.css"
+		"prod-styles": "sass --load-path=node_modules --style=compressed chess_hair.scss app/assets/stylesheets/chess_hair.css",
+		"postinstall": "node scripts/install-platform-specific-deps.js"
 	},
 	"devDependencies": {
 		"@rollup/plugin-node-resolve": "^15.2.3",
@@ -29,5 +30,10 @@
 		"rollup": "^4.18.0",
 		"rollup-plugin-svelte": "^7.2.2",
 		"svelte": "^4.2.18"
+	},
+	"optionalDependencies": {
+		"@rollup/rollup-darwin-x64": "^4.19.2",
+		"@rollup/rollup-linux-x64-gnu": "latest",
+		"@rollup/rollup-win32-x64": "latest"
 	}
 }
