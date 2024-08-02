@@ -38,6 +38,7 @@
 db/production.sqlite3
 
 node_modules/
+package-lock.json
 
 app/javascript/dist/app.js
 app/javascript/dist/app.js.map
