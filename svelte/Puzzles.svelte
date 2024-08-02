@@ -76,6 +76,7 @@
     mistakes = [];
     puzzleComplete = false;
     elapsedTime = 0;
+    lastMoveIndexToShow = 0;
 
     if (chessboard) {
       chessboard.enableShowLastMove();
@@ -124,16 +125,12 @@
   }
 
   // History browsing
-  let moveIndex;
   let hasHistoryForward;
   let hasHistoryBack;
-  let lastMoveIndex;
-  let maxMoveIndex;
+  let lastMoveIndexToShow = 0;
   let isViewingHistory;
   let historyBackButton;
   let historyForwardButton;
-
-  $: lastMoveIndex = Math.max((moveIndex || 0) - 1, 0);
 
   // DOM elements
   let nextButton;
@@ -154,13 +151,14 @@
     const computerMove = $currentPuzzle.moves[0];
 
     setTimeout(() => {
-      chessboard.move(computerMove);
+      makeMove(computerMove);
     }, 700);
   }
 
   function makeMove(move) {
     if (chessboard) {
       chessboard.move(move);
+      lastMoveIndexToShow = lastMoveIndexToShow + 1;
       if (analysisRunning) {
         topStockfishMoves = [];
         stockfish.analyzePosition();
@@ -172,16 +170,21 @@
     if (isViewingHistory || puzzleComplete) {
       return;
     }
+
+    // User moves get their own special highlighting
     chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
     const isCheckmate = moveEvent.detail.isCheckmate;
+    const correctMoveIndex = move.moveIndex;
     if (
-      move.lan === moves[moveIndex - 1].lan ||
+      move.lan === moves[correctMoveIndex].lan ||
       isCheckmate ||
       puzzleComplete
     ) {
       chessboard.highlightSquare(move.to, "correct-move", 700);
-      const computerMove = moves[moveIndex] ? moves[moveIndex].lan : null;
+      // Show the user move if it's correct
+      lastMoveIndexToShow = lastMoveIndexToShow + 1;
+      const computerMove = moves[correctMoveIndex + 1] ? moves[correctMoveIndex + 1].lan : null;
       if (computerMove) {
         setTimeout(() => {
           makeMove(computerMove);
@@ -199,6 +202,11 @@
         mistakes = [...mistakes, move];
       }, 300);
     }
+  }
+
+  let currentNode;
+  function handleCurrentNode(event) {
+    currentNode = event.detail;
   }
 
   async function handlePuzzleComplete() {
@@ -392,7 +400,7 @@
             style="min-height: 28px"
           >
             {#key $currentPuzzle.puzzle_id}
-              {#each moves.slice(0, maxMoveIndex) as move, i (move.GUID)}
+              {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
                 <span
                   in:fade
                   class="tag is-small mobile-move"
@@ -400,7 +408,7 @@
                   class:is-black={move.color === "b"}
                 >
                   {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
-                  {#if i === moveIndex - 1}
+                  {#if fen === move.after}
                     <span
                       in:receive={{ key: "current-move-highlight" }}
                       out:send={{ key: "current-move-highlight" }}
@@ -419,8 +427,6 @@
             {/if}
             <Chessboard
               bind:fen
-              bind:moveIndex
-              bind:maxMoveIndex
               bind:hasHistoryForward
               bind:hasHistoryBack
               bind:isViewingHistory
@@ -428,6 +434,7 @@
               {orientation}
               bind:this={chessboard}
               on:move={handleUserMove}
+              on:currentNode={handleCurrentNode}
             >
               <div slot="centered-content">
                 {#if successMessage}
@@ -549,8 +556,10 @@
           >
         </div>
         <div>
-          {#each moves as move, i}
-            <div class:has-text-weight-bold={moveIndex === i}>{move.san}</div>
+          {#each moves as move (move.after)}
+            <div class:has-text-weight-bold={fen === move.after}>
+              {move.san}
+            </div>
           {/each}
         </div>
       </div>
@@ -567,27 +576,25 @@
               </tr>
             </thead>
             <tbody>
-              {#each displayMoves as [whiteMove, blackMove]}
-                {#if (whiteMove && whiteMove.moveIndex <= maxMoveIndex - 1) || (blackMove && blackMove.moveIndex <= maxMoveIndex - 1)}
+              {#each displayMoves.slice(0, Math.ceil(lastMoveIndexToShow / 2)) as [whiteMove, blackMove]}
+                {#if lastMoveIndexToShow > 0}
                   <tr in:fade>
                     <td>
                       {whiteMove ? whiteMove.fullMove : blackMove.fullMove}
                     </td>
                     <td
-                      class:is-info={whiteMove &&
-                        whiteMove.moveIndex === lastMoveIndex}
+                      class:is-info={whiteMove && whiteMove.after === fen}
                     >
-                      {#if whiteMove && whiteMove.moveIndex < maxMoveIndex}
+                      {#if whiteMove && whiteMove.moveIndex < lastMoveIndexToShow}
                         <span in:fade>
                           {whiteMove.san}
                         </span>
                       {/if}
                     </td>
                     <td
-                      class:is-info={blackMove &&
-                        blackMove.moveIndex === lastMoveIndex}
+                      class:is-info={blackMove && blackMove.after === fen}
                     >
-                      {#if blackMove && blackMove.moveIndex < maxMoveIndex}
+                      {#if blackMove && blackMove.moveIndex < lastMoveIndexToShow}
                         <span in:fade>
                           {blackMove.san}
                         </span>

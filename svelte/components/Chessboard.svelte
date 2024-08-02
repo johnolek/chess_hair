@@ -106,8 +106,6 @@
 
   export let fen;
   export let chessground;
-  export let moveIndex = 0;
-  export let maxMoveIndex = 0;
   export let isViewingHistory = false;
   export let hasHistoryBack = false;
   export let hasHistoryForward = false;
@@ -232,6 +230,7 @@
     fen = currentNode().getFen();
 
     hasHistoryBack = !!currentNode().parent;
+    dispatch('currentNode', currentNode());
   }
 
   function handleMove(from, to) {
@@ -254,8 +253,6 @@
       return;
     } else {
       moveTree.addMove(`${from}${to}`);
-      moveIndex += 1;
-      maxMoveIndex += 1;
       updateChessground();
       dispatch("move", { move: currentNode().move });
     }
@@ -269,8 +266,6 @@
     });
     if (move) {
       moveTree.addMove(move.lan);
-      moveIndex += 1;
-      maxMoveIndex += 1;
       updateChessground();
       dispatch("move", { move });
     }
@@ -278,8 +273,6 @@
   }
 
   export function undo() {
-    moveIndex = moveIndex - 1;
-    maxMoveIndex = maxMoveIndex - 1;
     moveTree.goToParent();
     updateChessground();
   }
@@ -288,12 +281,11 @@
   let history = [];
 
   export function historyBack() {
-    if (moveIndex > 0) {
+    if (currentNode().parent) {
       if (!isViewingHistory) {
         isViewingHistory = true;
         mainLineNodeId = currentNode().getGuid();
       }
-      moveIndex = moveIndex - 1;
       history.unshift(currentNode().getGuid());
       history = history;
       moveTree.goToParent();
@@ -306,7 +298,6 @@
       const nextNodeGuid = history.shift();
       history = history;
       moveTree.goToNode(nextNodeGuid);
-      moveIndex = currentNode().moveIndex();
       if (currentNode().getGuid() === mainLineNodeId) {
         isViewingHistory = false;
         mainLineNodeId = null;
@@ -319,7 +310,6 @@
     if (isViewingHistory) {
       isViewingHistory = false;
       moveTree.goToNode(mainLineNodeId);
-      moveIndex = currentNode().moveIndex();
       updateChessground();
     }
   }
@@ -337,15 +327,11 @@
   }
 
   export function move(uciMove) {
-    moveIndex += 1;
-    maxMoveIndex = moveIndex;
     moveTree.addMove(uciMove);
     updateChessground();
   }
 
   export function load(fen) {
-    moveIndex = 0;
-    maxMoveIndex = 0;
     isViewingHistory = false;
     moveTree = new MoveTree(fen);
     updateChessground();
