@@ -1,33 +1,33 @@
 {
-	"dependencies": {
-		"@fortawesome/free-regular-svg-icons": "^6.6.0",
-		"@fortawesome/free-solid-svg-icons": "^6.6.0",
-		"@rollup/plugin-commonjs": "^26.0.1",
-		"bulma": "^1.0.2",
-		"bulma-extensions": "^6.2.7",
-		"chess.js": "1.0.0-beta.8",
-		"chessground": "^9.1.1",
-		"chessops": "^0.14.1",
-		"install": "^0.13.0",
-		"lichess-pgn-viewer": "^2.1.0",
-		"npm": "^10.8.2",
-		"sass": "^1.77.5",
-		"stockfish": "^16.0.0",
-		"svelte-fa": "^4.0.2",
-		"svelte-persisted-store": "^0.11.0"
-	},
-	"scripts": {
-		"dev": "rollup -c -w & pnpm run build-bulma",
-		"build": "rollup -c",
-		"build-bulma": "sass --load-path=node_modules --watch chess_hair.scss app/assets/stylesheets/chess_hair.css",
-		"prod-styles": "sass --load-path=node_modules --style=compressed chess_hair.scss app/assets/stylesheets/chess_hair.css"
-	},
-	"devDependencies": {
-		"@rollup/plugin-node-resolve": "^15.2.3",
-		"prettier": "^3.3.2",
-		"prettier-plugin-svelte": "^3.2.5",
-		"rollup": "^4.18.0",
-		"rollup-plugin-svelte": "^7.2.2",
-		"svelte": "^4.2.18"
-	}
+  "dependencies": {
+    "@fortawesome/free-regular-svg-icons": "^6.6.0",
+    "@fortawesome/free-solid-svg-icons": "^6.6.0",
+    "@rollup/plugin-commonjs": "^26.0.1",
+    "bulma": "^1.0.2",
+    "bulma-extensions": "^6.2.7",
+    "chess.js": "1.0.0-beta.8",
+    "chessground": "^9.1.1",
+    "chessops": "^0.14.1",
+    "install": "^0.13.0",
+    "lichess-pgn-viewer": "^2.1.0",
+    "npm": "^10.8.2",
+    "sass": "^1.77.5",
+    "stockfish": "^16.0.0",
+    "svelte-fa": "^4.0.2",
+    "svelte-persisted-store": "^0.11.0"
+  },
+  "scripts": {
+    "dev": "rollup -c -w & pnpm run build-bulma",
+    "build": "rollup -c",
+    "build-bulma": "sass --load-path=node_modules --watch chess_hair.scss app/assets/stylesheets/chess_hair.css",
+    "prod-styles": "sass --load-path=node_modules --style=compressed chess_hair.scss app/assets/stylesheets/chess_hair.css"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "prettier": "^3.3.2",
+    "prettier-plugin-svelte": "^3.2.5",
+    "rollup": "^4.18.0",
+    "rollup-plugin-svelte": "^7.2.2",
+    "svelte": "^4.2.18"
+  }
 }
