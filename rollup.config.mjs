@@ -1,5 +1,7 @@
 import svelte from 'rollup-plugin-svelte';
 import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
+
 const isProduction = process.env.RAILS_ENV === 'production';
 
 export default {
@@ -8,13 +10,14 @@ export default {
       compilerOptions: {
         dev: !isProduction,
       },
-      include: './svelte/**/*.svelte',
       emitCss: false
     }),
     resolve({
       browser: true,
-      dedupe: ['svelte'],
-    })
+      dedupe: ['svelte', 'svelte-fa'],
+      extensions: ['.svelte', '.mjs', '.js', '.json', '.node']
+    }),
+    commonjs()
   ],
   external: id => id.startsWith('src/'),
   input: './svelte/App.svelte',
