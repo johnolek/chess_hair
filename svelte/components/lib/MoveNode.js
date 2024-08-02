@@ -4,17 +4,24 @@ class MoveNode extends BaseNode {
   constructor(move, parent = null) {
     super();
     this.move = move;
-    this.lastMove = [move.from, move.to];
     this.children = {};
     this.parent = parent;
   }
 
-  addChild(move) {
-    const uciMove = move.lan;
-    if (!this.children[uciMove]) {
-      this.children[uciMove] = new MoveNode(move, this);
+  addChild(chessJsCompatibleMove) {
+    const move = this.getFullMove(chessJsCompatibleMove);
+    if (!this.children[move.lan]) {
+      this.children[move.lan] = new MoveNode(move, this);
     }
-    return this.children[uciMove];
+    return this.children[chessJsCompatibleMove];
+  }
+
+  getLastMove() {
+    return [this.move.from, this.move.to];
+  }
+
+  getFen() {
+    return this.move.after;
   }
 }
 

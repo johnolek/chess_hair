@@ -1,16 +1,18 @@
+import { Util } from "src/util";
 import { RootNode } from "./RootNode";
 
 class MoveTree {
-  constructor(rootNode) {
-    this.rootNode = new RootNode(rootNode);
+  constructor(fen) {
+    this.rootNode = new RootNode(fen);
     /** @type {MoveNode} */
     this.currentNode = this.rootNode;
     this.moveMap = { [this.rootNode.getGuid()]: this.rootNode };
   }
 
-  addMove(move) {
-    this.currentNode = this.currentNode.addChild(move);
+  addMove(chessJsCompatibleMove) {
+    this.currentNode = this.currentNode.addChild(chessJsCompatibleMove);
     this.moveMap[this.currentNode.getGuid()] = this.currentNode;
+    Util.info({ moveTree: this });
   }
 
   goToNode(nodeGuid) {

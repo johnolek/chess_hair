@@ -166,7 +166,7 @@
     document.removeEventListener("touchend", stopResizing);
   }
 
-  let chessInstance = new Chess();
+  /** @type {MoveTree} */
   let moveTree;
 
   export let pieceSetOverride = null;
@@ -209,43 +209,27 @@
     }
   }
 
-  function getLegalMoves(instance = chessInstance) {
-    const moves = instance.moves({ verbose: true });
-    const dests = new Map();
-    moves.forEach((move) => {
-      if (!dests.has(move.from)) dests.set(move.from, []);
-      dests.get(move.from).push(move.to);
-    });
-    return dests;
-  }
-
-  function updateChessground(instance = chessInstance) {
-    const legalMoves = getLegalMoves(instance);
-    const history = chessInstance.history({ verbose: true });
-    let lastMove = null;
-    if (history && history[history.length - 1]) {
-      lastMove = history[history.length - 1];
-    }
+  function updateChessground() {
     chessground.set({
-      check: instance.inCheck(),
-      fen: instance.fen(),
-      lastMove: lastMove ? [lastMove.from, lastMove.to] : null,
-      turnColor: instance.turn() === "w" ? "white" : "black",
+      check: currentNode().inCheck(),
+      fen: currentNode().getFen(),
+      lastMove: currentNode().getLastMove(),
+      turnColor: currentNode().turnColor(),
       movable: {
         free: false,
-        dests: legalMoves,
+        dests: currentNode().legalMoves(),
       },
     });
 
-    fen = instance.fen();
+    fen = currentNode().getFen();
   }
 
   function handleMove(from, to) {
     const isPromotion = (from, to) => {
       const fromRank = from[1];
       const toRank = to[1];
-      const piece = chessInstance.get(from).type;
-      promotionColor = chessInstance.turn() === "w" ? "white" : "black";
+      const piece = currentNode().pieceAtSquare(from);
+      promotionColor = currentNode().turnColor();
       return (
         piece === "p" &&
         ((fromRank === "7" && toRank === "8") ||
@@ -259,19 +243,16 @@
       promotionTo = to;
       return;
     } else {
-      const move = chessInstance.move({ from, to });
-      if (move) {
-        moveTree.addMove(move);
-        moveIndex += 1;
-        maxMoveIndex += 1;
-        updateChessground();
-        dispatch("move", { move, isCheckmate: chessInstance.isCheckmate() });
-      }
+      moveTree.addMove(`${from}${to}`);
+      moveIndex += 1;
+      maxMoveIndex += 1;
+      updateChessground();
+      dispatch("move", { move: currentNode().move });
     }
   }
 
   function selectPromotionPiece(piece) {
-    const move = chessInstance.move({
+    const move = currentNode().move({
       from: promotionFrom,
       to: promotionTo,
       promotion: piece,
@@ -279,7 +260,7 @@
     if (move) {
       moveTree.addMove(move);
       updateChessground();
-      dispatch("move", { move, isCheckmate: chessInstance.isCheckmate() });
+      dispatch("move", { move });
     }
     showPromotion = false;
   }
@@ -287,7 +268,6 @@
   export function undo() {
     moveIndex = moveIndex - 1;
     maxMoveIndex = maxMoveIndex - 1;
-    chessInstance.undo();
     moveTree.goToParent();
     updateChessground();
   }
@@ -296,10 +276,13 @@
     isViewingHistory = true;
     if (moveIndex > 0) {
       moveIndex = moveIndex - 1;
-      chessInstance.undo();
       moveTree.goToParent();
       updateChessground();
     }
+  }
+
+  function currentNode() {
+    return moveTree.currentNode;
   }
 
   export function enableViewOnly() {
@@ -311,16 +294,15 @@
   }
 
   export function reset() {
-    chessInstance.reset();
+    moveTree = new MoveTree();
     updateChessground();
   }
 
   export function clear() {
-    chessInstance.clear();
     updateChessground();
   }
 
-  export function move(move) {
+  export function move(uciMove) {
     moveIndex += 1;
     // This allows for making moves when viewing history
     if (!isViewingHistory) {
@@ -329,15 +311,13 @@
     if (moveIndex === maxMoveIndex) {
       isViewingHistory = false;
     }
-    const fullMove = chessInstance.move(move);
-    moveTree.addMove(fullMove);
+    moveTree.addMove(uciMove);
     updateChessground();
   }
 
   export function load(fen) {
     moveIndex = 0;
     maxMoveIndex = 0;
-    chessInstance.load(fen);
     moveTree = new MoveTree(fen);
     updateChessground();
   }
@@ -380,7 +360,6 @@
   onMount(() => {
     chessground = Chessground(boardContainer, {
       ...chessgroundConfig,
-      fen: chessInstance.fen(),
       movable: {
         events: {
           after: handleMove,

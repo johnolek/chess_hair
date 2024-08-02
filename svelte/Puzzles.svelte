@@ -66,6 +66,7 @@
       return;
     }
     moves = [];
+    displayMoves = [];
     const chessInstance = new Chess();
     chessInstance.load(puzzle.fen);
     puzzle.moves.forEach((uciMove, index) => {
