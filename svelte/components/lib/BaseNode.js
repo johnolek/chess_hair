@@ -23,6 +23,7 @@ class BaseNode {
     move.isCheckmate = chess.isCheckmate();
     move.fullMove = chess.moveNumber();
     move.moveIndex = this.moveIndex();
+    move.GUID = this.getGuid();
     return move;
   }
 
