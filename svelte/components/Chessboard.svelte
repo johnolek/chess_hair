@@ -165,9 +165,7 @@
     document.removeEventListener("touchend", stopResizing);
   }
 
-  let showingAlt = false;
   let chessInstance = new Chess();
-  let alternateChessInstance = new Chess();
 
   export let pieceSetOverride = null;
   export let boardStyleOverride = null;
@@ -336,30 +334,12 @@
     updateChessground();
   }
 
-  export function loadAlternate(fen) {
-    showingAlt = true;
-    alternateChessInstance.load(fen);
-    updateChessground(alternateChessInstance);
-  }
-
-  export function restoreOriginal() {
-    if (!showingAlt) {
-      return;
-    }
-    showingAlt = false;
-    updateChessground();
-  }
-
   export function enableShowLastMove() {
     chessground.set({ highlight: { lastMove: true } });
   }
 
   export function disableShowLastMove() {
     chessground.set({ highlight: { lastMove: false } });
-  }
-
-  export function setLastMove(lastMove) {
-    chessground.set({ lastMove });
   }
 
   let shapes = [];
