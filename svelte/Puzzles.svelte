@@ -4,7 +4,7 @@
   import FocusTimer from "./components/FocusTimer.svelte";
   import Stockfish from "./components/Stockfish.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
-  import { Util } from 'src/util';
+  import { Util } from "src/util";
   import { MoveTree } from "./components/lib/MoveTree";
   import { onMount } from "svelte";
   import { fade, crossfade } from "svelte/transition";
@@ -84,7 +84,7 @@
       chessboard.enableShowLastMove();
     }
 
-    recalculateMoves()
+    recalculateMoves();
 
     if (analysisRunning) {
       analysisRunning = false;
@@ -167,7 +167,9 @@
       chessboard.highlightSquare(move.to, "correct-move", 700);
       // Show the user move if it's correct
       lastMoveIndexToShow = lastMoveIndexToShow + 1;
-      const computerMove = moves[correctMoveIndex + 1] ? moves[correctMoveIndex + 1].lan : null;
+      const computerMove = moves[correctMoveIndex + 1]
+        ? moves[correctMoveIndex + 1].lan
+        : null;
       if (computerMove) {
         setTimeout(() => {
           makeMove(computerMove);
@@ -198,10 +200,10 @@
 
     if (lastMove) {
       fenToHighlight = lastMove.after;
-      colorToPlay = lastMove.color === 'w' ? 'black' : 'white';
+      colorToPlay = lastMove.color === "w" ? "black" : "white";
     } else {
       fenToHighlight = fen;
-      colorToPlay = orientation
+      colorToPlay = orientation;
     }
   }
 
@@ -391,7 +393,6 @@
         </div>
 
         <div class="block mb-1">
-
           <div class="board-container">
             {#if $currentPuzzle}
               {#key $currentPuzzle.puzzle_id}
@@ -419,30 +420,27 @@
             </Chessboard>
           </div>
         </div>
-        <div
-          class="mb-3 scrollable "
-          style="min-height: 31px"
-        >
+        <div class="mb-3 scrollable" style="min-height: 31px">
           {#key $currentPuzzle.puzzle_id}
             {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
-                <button
-                  in:fade
-                  on:click={() => {
-                    chessboard.goToFen(move.after);
-                  }}
-                  class="tag is-small move-tag"
-                  class:is-white={move.color === "w"}
-                  class:is-black={move.color === "b"}
-                >
-                  {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
-                  {#if move.after === fenToHighlight}
-                    <span
-                      in:receive={{ key: "current-move-highlight" }}
-                      out:send={{ key: "current-move-highlight" }}
-                      class="active-move-tag"
-                    ></span>
-                  {/if}
-                </button>
+              <button
+                in:fade
+                on:click={() => {
+                  chessboard.goToFen(move.after);
+                }}
+                class="tag is-small move-tag"
+                class:is-white={move.color === "w"}
+                class:is-black={move.color === "b"}
+              >
+                {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
+                {#if move.after === fenToHighlight}
+                  <span
+                    in:receive={{ key: "current-move-highlight" }}
+                    out:send={{ key: "current-move-highlight" }}
+                    class="active-move-tag"
+                  ></span>
+                {/if}
+              </button>
             {/each}
           {/key}
         </div>
@@ -469,7 +467,7 @@
                     analysisRunning = false;
                     topStockfishMoves = [];
                   }}
-                  >Stop &nbsp;<Fa icon={faFishFins}/>
+                  >Stop &nbsp;<Fa icon={faFishFins} />
                 </button>
               {/if}
             </div>
@@ -659,19 +657,19 @@
                 class:is-danger={!puzzleComplete}
                 disabled={!stockfishReady}
                 on:click={() => {
-                    analysisRunning = true;
-                    madeMistake = true;
-                  }}
-              >Enable &nbsp;<Fa icon={faFishFins} />
+                  analysisRunning = true;
+                  madeMistake = true;
+                }}
+                >Enable &nbsp;<Fa icon={faFishFins} />
               </button>
             {:else}
               <button
                 class="button is-dark is-small is-inline-block"
                 on:click={() => {
-                    analysisRunning = false;
-                    topStockfishMoves = [];
-                  }}
-              >Stop &nbsp;<Fa icon={faFishFins}/>
+                  analysisRunning = false;
+                  topStockfishMoves = [];
+                }}
+                >Stop &nbsp;<Fa icon={faFishFins} />
               </button>
             {/if}
             {#if topStockfishMoves.length > 0}
@@ -689,11 +687,12 @@
                       <td>
                         <button
                           class="button is-small"
-                          class:is-white={colorToPlay === 'white'}
-                          class:is-black={colorToPlay === 'black'}
-                        on:click|preventDefault={() => {
-                          makeMove(move.fullMove.lan);
-                        }}>
+                          class:is-white={colorToPlay === "white"}
+                          class:is-black={colorToPlay === "black"}
+                          on:click|preventDefault={() => {
+                            makeMove(move.fullMove.lan);
+                          }}
+                        >
                           {move.fullMove.san}
                         </button>
                       </td>

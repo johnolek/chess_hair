@@ -230,7 +230,7 @@
     fen = currentNode().getFen();
 
     hasHistoryBack = !!currentNode().parent;
-    dispatch('currentNode', currentNode());
+    dispatch("currentNode", currentNode());
   }
 
   function handleMove(from, to) {
