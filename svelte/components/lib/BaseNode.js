@@ -6,6 +6,7 @@ class BaseNode {
   constructor() {
     this.children = {};
     this.guid = Util.GUID();
+    this.parent = null;
   }
 
   getGuid() {
@@ -21,7 +22,15 @@ class BaseNode {
     const move = chess.move(chessJsCompatibleMove);
     move.isCheckmate = chess.isCheckmate();
     move.fullMove = chess.moveNumber();
+    move.moveIndex = this.moveIndex();
     return move;
+  }
+
+  moveIndex() {
+    if (!this.parent) {
+      return 0;
+    }
+    return this.parent.moveIndex() + 1;
   }
 
   getLastMove() {
