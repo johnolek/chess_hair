@@ -275,9 +275,11 @@
   let mainLineNodeId;
   export function historyBack() {
     if (moveIndex > 0) {
+      if (!isViewingHistory) {
+        isViewingHistory = true;
+        mainLineNodeId = currentNode().getGuid();
+      }
       moveIndex = moveIndex - 1;
-      isViewingHistory = true;
-      mainLineNodeId = currentNode().getGuid();
       moveTree.goToParent();
       updateChessground();
     }

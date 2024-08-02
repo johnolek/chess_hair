@@ -1,6 +1,7 @@
 <script>
   export let isShown = false;
   export let minWidth;
+  export let title = "";
 
   function toggleShown() {
     isShown = !isShown;
@@ -23,7 +24,7 @@
   on:click={toggleShown}
   on:keydown={handleKeydown}
 >
-  <div class="content" class:hiddenContent={!isShown}>
+  <div class="content" {title} class:hiddenContent={!isShown}>
     <slot></slot>
   </div>
 </div>

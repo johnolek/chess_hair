@@ -12,6 +12,8 @@
   import Spoiler from "./components/Spoiler.svelte";
   import { getSetting, initSettings } from "./settingsManager.js";
   import * as RailsAPI from "./railsApi";
+  import Fa from "svelte-fa";
+  import { faRotateLeft } from "@fortawesome/free-solid-svg-icons";
 
   const [send, receive] = crossfade({ duration: 300 });
 
@@ -329,38 +331,51 @@
     {/if}
     <div class="block">
       {#if $currentPuzzle}
-        <div class="block">
-          <div class="columns is-mobile">
-            <div class="column">
-              <a
-                href={`https://lichess.org/training/${$currentPuzzle.puzzle_id}`}
-                class="puzzle-id"
-                target="_blank"
-                title="View on lichess.org">{$currentPuzzle.puzzle_id}</a
-              >
-            </div>
-            <div class="column">
-              {#if $currentPuzzle.average_solve_time}
-                <span
-                  class:has-text-warning={$currentPuzzle.average_solve_time >
-                    timeGoal}
-                  class:has-text-success={$currentPuzzle.average_solve_time <=
-                    timeGoal && $currentPuzzle.average_solve_time > 0}
-                  >{$currentPuzzle.average_solve_time.toFixed(2)}s</span
-                >
-              {/if}
-            </div>
-            <div class="column is-two-thirds">
+        <div class="columns is-mobile is-vcentered mb-1">
+          <div class="column is-narrow">
+            <a
+              href={`https://lichess.org/training/${$currentPuzzle.puzzle_id}`}
+              class="puzzle-id"
+              target="_blank"
+              title="View on lichess.org">{$currentPuzzle.puzzle_id}</a
+            >
+          </div>
+          <div class="column is-narrow">
+            <div class="has-text-centered is-inline-block">
               {#key $currentPuzzle.puzzle_id}
-                <ProgressBar
-                  max={requiredConsecutiveSolves}
-                  bind:current={$currentPuzzle.streak}
-                  className={$currentPuzzle.streak >= requiredConsecutiveSolves
-                    ? "is-success"
-                    : "is-warning"}
-                ></ProgressBar>
+                <Spoiler
+                  title="Puzzle Rating"
+                  minWidth="60"
+                  isShown={puzzleComplete}
+                >
+                  <div>
+                    {$currentPuzzle.rating}
+                  </div>
+                </Spoiler>
               {/key}
             </div>
+          </div>
+          <div class="column is-narrow">
+            {#if $currentPuzzle.average_solve_time}
+              <span
+                class:has-text-warning={$currentPuzzle.average_solve_time >
+                  timeGoal}
+                class:has-text-success={$currentPuzzle.average_solve_time <=
+                  timeGoal && $currentPuzzle.average_solve_time > 0}
+                >{$currentPuzzle.average_solve_time.toFixed(2)}s</span
+              >
+            {/if}
+          </div>
+          <div class="column">
+            {#key $currentPuzzle.puzzle_id}
+              <ProgressBar
+                max={requiredConsecutiveSolves}
+                bind:current={$currentPuzzle.streak}
+                className={$currentPuzzle.streak >= requiredConsecutiveSolves
+                  ? "is-success"
+                  : "is-warning"}
+              ></ProgressBar>
+            {/key}
           </div>
         </div>
 
@@ -442,48 +457,37 @@
                 </button>
               {/if}
             </div>
-            <div class="column has-text-centered">
-              <div>
+            <div class="column has-text-left">
+              <button
+                disabled={moveIndex === 0}
+                class="button is-primary history-button"
+                bind:this={historyBackButton}
+                on:click={() => {
+                  chessboard.historyBack();
+                  if (analysisRunning) {
+                    topStockfishMoves = [];
+                    stockfish.analyzePosition();
+                  }
+                }}>&#x276E;</button
+              >
+              <button
+                disabled={moveIndex === maxMoveIndex}
+                class="button is-primary history-button"
+                bind:this={historyForwardButton}
+                on:click={() => {
+                  makeMove(moves[moveIndex].lan);
+                }}>&#x276F;</button
+              >
+              {#if isViewingHistory}
                 <button
-                  disabled={moveIndex === 0}
-                  class="button is-primary history-button"
-                  bind:this={historyBackButton}
+                  class="button is-primary"
                   on:click={() => {
-                    chessboard.historyBack();
-                    if (analysisRunning) {
-                      topStockfishMoves = [];
-                      stockfish.analyzePosition();
-                    }
-                  }}>&#x276E;</button
+                    chessboard.backToMainLine();
+                  }}
                 >
-                <button
-                  disabled={moveIndex === maxMoveIndex}
-                  class="button is-primary history-button"
-                  bind:this={historyForwardButton}
-                  on:click={() => {
-                    makeMove(moves[moveIndex].lan);
-                  }}>&#x276F;</button
-                >
-                {#if isViewingHistory}
-                  <button
-                    class="button is-primary"
-                    on:click={() => {
-                      chessboard.backToMainLine();
-                    }}
-                    >Back
-                  </button>
-                {/if}
-              </div>
-              <div class="has-text-centered">
-                <div>Rating</div>
-                {#key $currentPuzzle.puzzle_id}
-                  <Spoiler minWidth="70" isShown={puzzleComplete}>
-                    <div>
-                      {$currentPuzzle.rating}
-                    </div>
-                  </Spoiler>
-                {/key}
-              </div>
+                  &nbsp;<Fa icon={faRotateLeft} />
+                </button>
+              {/if}
             </div>
 
             <div class="column has-text-right">
