@@ -18,7 +18,7 @@
   import { faRotateLeft } from "@fortawesome/free-solid-svg-icons";
   import { faFishFins } from "@fortawesome/free-solid-svg-icons";
 
-  const [send, receive] = crossfade({ duration: 300 });
+  const [send, receive] = crossfade({ fallback: fade, duration: 300 });
 
   // State stores
   import {
@@ -35,6 +35,7 @@
   let puzzleManager;
   let loaded = false;
   let fen;
+  let moveTree;
   // When we're going to undo a move we don't want the highlight to flash
   let fenToHighlight;
 
@@ -65,7 +66,6 @@
     orientation: orientation,
   };
 
-  let correctMoveTree;
   let moves = [];
 
   let madeMistake = false;
@@ -84,27 +84,11 @@
       chessboard.enableShowLastMove();
     }
 
-    recalculateMoves();
-
     if (analysisRunning) {
       analysisRunning = false;
       topStockfishMoves = [];
       stockfish.stopAnalysis();
     }
-  }
-
-  function recalculateMoves() {
-    moves = [];
-
-    if (!$currentPuzzle) {
-      return;
-    }
-
-    correctMoveTree = new MoveTree($currentPuzzle.fen);
-    $currentPuzzle.moves.forEach((uciMove) => {
-      correctMoveTree.addMove(uciMove);
-      moves.push(correctMoveTree.currentNode.move);
-    });
   }
 
   // History browsing
@@ -118,6 +102,9 @@
   // DOM elements
   let nextButton;
 
+  /**
+   * This gets triggered after the puzzle manager has a currentPuzzle for us
+   */
   async function loadCurrentPuzzle() {
     if (!chessboard) {
       return;
@@ -125,11 +112,10 @@
 
     resetPuzzleState();
 
-    const chessInstance = new Chess();
-    chessInstance.load($currentPuzzle.fen);
-    // It gets loaded 1 move before the user's move
-    orientation = chessInstance.turn() === "w" ? "black" : "white";
-    chessboard.load($currentPuzzle.fen, $currentPuzzle.moves);
+    moves = chessboard.load($currentPuzzle.fen, $currentPuzzle.moves);
+    // Puzzles start with the opponent's pre-move
+    const firstUserMove = moves[1];
+    orientation = firstUserMove.fullColor;
 
     const computerMove = $currentPuzzle.moves[0];
 
@@ -401,6 +387,7 @@
             {/if}
             <Chessboard
               bind:fen
+              bind:moveTree
               bind:hasHistoryForward
               bind:hasHistoryBack
               bind:isViewingHistory
@@ -428,7 +415,7 @@
                 on:click={() => {
                   chessboard.goToFen(move.after);
                 }}
-                class="tag is-small move-tag"
+                class="tag is-small move-tag button"
                 class:is-white={move.color === "w"}
                 class:is-black={move.color === "b"}
               >
@@ -833,17 +820,28 @@
   .scrollable::-webkit-scrollbar {
     display: none; /* Safari and Chrome */
   }
+
   .move-tag {
     position: relative;
     cursor: pointer;
   }
+
+  .move-tag:focus,
+  .move-tag:hover {
+    transform: scale(1.03);
+    transition: transform 200ms ease-in-out;
+    z-index: 5;
+  }
+
   .active-move-tag {
     background-color: var(--brand-color-5);
     position: absolute;
-    bottom: -4px;
+    bottom: -3px;
     left: 50%;
     transform: translateX(-50%);
     height: 3px;
-    width: 90%;
+    width: 75%;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
   }
 </style>

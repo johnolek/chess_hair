@@ -173,7 +173,7 @@
   }
 
   /** @type {MoveTree} */
-  let moveTree;
+  export let moveTree;
 
   export let pieceSetOverride = null;
   export let boardStyleOverride = null;
@@ -368,9 +368,18 @@
 
   export function load(fen, moves = []) {
     moveTree = new MoveTree(fen);
-    moves.forEach((move) => moveTree.addMove(move));
+    isViewingHistory = false;
+    mainLineNodeId = null;
+    mainLineFen = null;
+
+    const fullMoves = [];
+    moves.forEach((move) => {
+      moveTree.addMove(move);
+      fullMoves.push(moveTree.currentNode.move);
+    });
     moveTree.goToRoot();
     updateChessground();
+    return fullMoves;
   }
 
   export function enableShowLastMove() {

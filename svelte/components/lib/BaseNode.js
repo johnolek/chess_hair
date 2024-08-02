@@ -41,6 +41,7 @@ class BaseNode {
     move.isCheckmate = chess.isCheckmate();
     move.fullMove = chess.moveNumber();
     move.moveIndex = this.moveIndex();
+    move.fullColor = move.color === "w" ? "white" : "black";
     move.GUID = this.getGuid();
     return move;
   }
