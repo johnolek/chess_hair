@@ -1,0 +1,24 @@
+import { BaseNode } from "./BaseNode";
+import { MoveNode } from "./MoveNode";
+
+class RootNode extends BaseNode {
+  constructor(fen) {
+    super();
+    this.fen = fen;
+    this.children = {};
+  }
+
+  getFen() {
+    return this.fen;
+  }
+
+  addChild(move) {
+    const uciMove = move.lan;
+    if (!this.children[uciMove]) {
+      this.children[uciMove] = new MoveNode(move, this);
+    }
+    return this.children[uciMove];
+  }
+}
+
+export { RootNode };

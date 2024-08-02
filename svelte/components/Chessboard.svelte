@@ -13,6 +13,7 @@
   import { createEventDispatcher } from "svelte";
   import PromotionModal from "./PromotionModal.svelte";
   import { Util } from "src/util";
+  import { MoveTree } from "./lib/MoveTree";
 
   const customBrushes = {
     brand1: {
@@ -166,6 +167,7 @@
   }
 
   let chessInstance = new Chess();
+  let moveTree;
 
   export let pieceSetOverride = null;
   export let boardStyleOverride = null;
@@ -259,6 +261,7 @@
     } else {
       const move = chessInstance.move({ from, to });
       if (move) {
+        moveTree.addMove(move);
         moveIndex += 1;
         maxMoveIndex += 1;
         updateChessground();
@@ -274,6 +277,7 @@
       promotion: piece,
     });
     if (move) {
+      moveTree.addMove(move);
       updateChessground();
       dispatch("move", { move, isCheckmate: chessInstance.isCheckmate() });
     }
@@ -284,6 +288,7 @@
     moveIndex = moveIndex - 1;
     maxMoveIndex = maxMoveIndex - 1;
     chessInstance.undo();
+    moveTree.goToParent();
     updateChessground();
   }
 
@@ -292,6 +297,7 @@
     if (moveIndex > 0) {
       moveIndex = moveIndex - 1;
       chessInstance.undo();
+      moveTree.goToParent();
       updateChessground();
     }
   }
@@ -323,7 +329,8 @@
     if (moveIndex === maxMoveIndex) {
       isViewingHistory = false;
     }
-    chessInstance.move(move);
+    const fullMove = chessInstance.move(move);
+    moveTree.addMove(fullMove);
     updateChessground();
   }
 
@@ -331,6 +338,7 @@
     moveIndex = 0;
     maxMoveIndex = 0;
     chessInstance.load(fen);
+    moveTree = new MoveTree(fen);
     updateChessground();
   }
 
