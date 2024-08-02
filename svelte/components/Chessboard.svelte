@@ -273,6 +273,8 @@
   }
 
   let mainLineNodeId;
+  let history = [];
+
   export function historyBack() {
     if (moveIndex > 0) {
       if (!isViewingHistory) {
@@ -280,7 +282,23 @@
         mainLineNodeId = currentNode().getGuid();
       }
       moveIndex = moveIndex - 1;
+      history.unshift(currentNode().getGuid());
+      history = history;
       moveTree.goToParent();
+      updateChessground();
+    }
+  }
+
+  export function historyForward() {
+    if (history.length > 0) {
+      const nextNodeGuid = history.shift();
+      history = history;
+      moveTree.goToNode(nextNodeGuid);
+      moveIndex = currentNode().moveIndex();
+      if (currentNode().getGuid() === mainLineNodeId) {
+        isViewingHistory = false;
+        mainLineNodeId = null;
+      }
       updateChessground();
     }
   }
@@ -306,24 +324,9 @@
     chessground.set({ viewOnly: false });
   }
 
-  export function reset() {
-    moveTree = new MoveTree();
-    updateChessground();
-  }
-
-  export function clear() {
-    updateChessground();
-  }
-
   export function move(uciMove) {
     moveIndex += 1;
-    // This allows for making moves when viewing history
-    if (!isViewingHistory) {
-      maxMoveIndex = moveIndex;
-    }
-    if (moveIndex === maxMoveIndex) {
-      isViewingHistory = false;
-    }
+    maxMoveIndex = moveIndex;
     moveTree.addMove(uciMove);
     updateChessground();
   }
@@ -331,6 +334,7 @@
   export function load(fen) {
     moveIndex = 0;
     maxMoveIndex = 0;
+    isViewingHistory = false;
     moveTree = new MoveTree(fen);
     updateChessground();
   }

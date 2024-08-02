@@ -392,8 +392,7 @@
                   class:is-white={move.color === "w"}
                   class:is-black={move.color === "b"}
                 >
-                  {move.fullMove}
-                  {move.color === "b" ? "... " : ". "}{move.san}
+                  {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
                   {#if i === moveIndex - 1}
                     <span
                       in:receive={{ key: "current-move-highlight" }}
@@ -475,7 +474,11 @@
                 class="button is-primary history-button is-normal is-responsive"
                 bind:this={historyForwardButton}
                 on:click={() => {
-                  makeMove(moves[moveIndex].lan);
+                  chessboard.historyForward();
+                  if (analysisRunning) {
+                    topStockfishMoves = [];
+                    stockfish.analyzePosition();
+                  }
                 }}>&#x276F;</button
               >
               {#if isViewingHistory}
