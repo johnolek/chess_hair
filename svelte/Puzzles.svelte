@@ -9,6 +9,7 @@
   import { onMount } from "svelte";
   import { fade, crossfade } from "svelte/transition";
   import { flip } from "svelte/animate";
+  import { scrollIntoView } from "./actions/scrollIntoView";
   import { Chess } from "chess.js";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
@@ -422,6 +423,7 @@
                 {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
                 {#if move.after === fenToHighlight}
                   <span
+                    use:scrollIntoView
                     in:receive={{ key: "current-move-highlight" }}
                     out:send={{ key: "current-move-highlight" }}
                     class="active-move-tag"
