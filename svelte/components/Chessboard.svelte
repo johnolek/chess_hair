@@ -272,11 +272,22 @@
     updateChessground();
   }
 
+  let mainLineNodeId;
   export function historyBack() {
-    isViewingHistory = true;
     if (moveIndex > 0) {
       moveIndex = moveIndex - 1;
+      isViewingHistory = true;
+      mainLineNodeId = currentNode().getGuid();
       moveTree.goToParent();
+      updateChessground();
+    }
+  }
+
+  export function backToMainLine() {
+    if (isViewingHistory) {
+      isViewingHistory = false;
+      moveTree.goToNode(mainLineNodeId);
+      moveIndex = currentNode().moveIndex();
       updateChessground();
     }
   }

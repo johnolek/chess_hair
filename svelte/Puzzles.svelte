@@ -464,6 +464,15 @@
                     makeMove(moves[moveIndex].lan);
                   }}>&#x276F;</button
                 >
+                {#if isViewingHistory}
+                  <button
+                    class="button is-primary"
+                    on:click={() => {
+                      chessboard.backToMainLine();
+                    }}
+                    >Back
+                  </button>
+                {/if}
               </div>
               <div class="has-text-centered">
                 <div>Rating</div>
