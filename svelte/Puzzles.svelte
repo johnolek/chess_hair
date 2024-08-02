@@ -7,7 +7,7 @@
   import { Util } from "src/util";
   import { MoveTree } from "./components/lib/MoveTree";
   import { onMount } from "svelte";
-  import { fade, crossfade } from "svelte/transition";
+  import { fade, crossfade, fly } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { scrollIntoView } from "./actions/scrollIntoView";
   import { Chess } from "chess.js";
@@ -17,7 +17,11 @@
   import * as RailsAPI from "./railsApi";
   import Fa from "svelte-fa";
   import { faRotateLeft } from "@fortawesome/free-solid-svg-icons";
-  import { faFishFins } from "@fortawesome/free-solid-svg-icons";
+  import {
+    faFishFins,
+    faArrowLeft,
+    faArrowRight,
+  } from "@fortawesome/free-solid-svg-icons";
 
   const [send, receive] = crossfade({ fallback: fade, duration: 300 });
 
@@ -434,9 +438,9 @@
           {/key}
         </div>
 
-        <div class="block">
-          <div class="columns is-mobile has-text-centered is-vcentered">
-            <div class="column has-text-left">
+        <div class="block ml-1 mr-1">
+          <div class="columns is-mobile is-vcentered">
+            <div class="column has-text-left is-narrow">
               {#if !analysisRunning}
                 <button
                   class="button is-primary is-small"
@@ -463,7 +467,7 @@
             <div class="column has-text-left">
               <button
                 disabled={!hasHistoryBack}
-                class="button is-primary history-button is-normal is-responsive"
+                class="button is-primary history-button is-normal"
                 bind:this={historyBackButton}
                 on:click={() => {
                   chessboard.historyBack();
@@ -471,11 +475,13 @@
                     topStockfishMoves = [];
                     stockfish.analyzePosition();
                   }
-                }}>&#x276E;</button
+                }}
               >
+                <Fa icon={faArrowLeft} />
+              </button>
               <button
                 disabled={!hasHistoryForward}
-                class="button is-primary history-button is-normal is-responsive"
+                class="button is-primary history-button is-normal"
                 bind:this={historyForwardButton}
                 on:click={() => {
                   chessboard.historyForward();
@@ -483,24 +489,28 @@
                     topStockfishMoves = [];
                     stockfish.analyzePosition();
                   }
-                }}>&#x276F;</button
+                }}
               >
+                <Fa icon={faArrowRight} />
+              </button>
               {#if isViewingHistory}
                 <button
-                  class="button is-primary history-button is-normal is-responsive"
+                  in:fly={{ x: -30, duration: 300 }}
+                  out:fade
+                  class="button is-primary history-button is-normal"
                   on:click={() => {
                     chessboard.backToMainLine();
                   }}
                 >
-                  &nbsp;<Fa icon={faRotateLeft} />
+                  <Fa icon={faRotateLeft} />
                 </button>
               {/if}
             </div>
 
-            <div class="column has-text-right">
+            <div class="column has-text-right is-narrow">
               <div class="is-inline-block"></div>
               {#if !puzzleComplete}
-                <span class="tag is-{orientation} is-size-4 ml-2">
+                <span class="tag is-{orientation} is-size-5">
                   {orientation}
                 </span>
               {:else}
