@@ -66,7 +66,6 @@
 
   let correctMoveTree;
   let moves = [];
-  let displayMoves = [];
 
   let madeMistake = false;
   let mistakes = [];
@@ -95,35 +94,16 @@
 
   function recalculateMoves() {
     moves = [];
-    displayMoves = [];
 
     if (!$currentPuzzle) {
       return;
     }
+
     correctMoveTree = new MoveTree($currentPuzzle.fen);
     $currentPuzzle.moves.forEach((uciMove) => {
       correctMoveTree.addMove(uciMove);
       moves.push(correctMoveTree.currentNode.move);
     });
-
-
-    displayMoves = [];
-    let startIndex = 0;
-
-    // Handle the case where the first move is black's
-    if (moves.length > 0 && moves[0].color === "b") {
-      displayMoves.push([null, moves[0]]);
-      startIndex = 1;
-    }
-
-    // Iterate over the moves array starting from the appropriate index
-    for (let i = startIndex; i < moves.length; i += 2) {
-      const whiteMove = moves[i] ? moves[i] : null;
-      const blackMove = moves[i + 1] ? moves[i + 1] : null;
-      displayMoves.push([whiteMove, blackMove]);
-    }
-
-    displayMoves = displayMoves; // reactivity
   }
 
   // History browsing
@@ -404,30 +384,7 @@
         </div>
 
         <div class="block mb-1">
-          <div
-            class="mb-1 scrollable "
-            style="min-height: 28px"
-          >
-            {#key $currentPuzzle.puzzle_id}
-              {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
-                <span
-                  in:fade
-                  class="tag is-small mobile-move"
-                  class:is-white={move.color === "w"}
-                  class:is-black={move.color === "b"}
-                >
-                  {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
-                  {#if move.after === fenToHighlight}
-                    <span
-                      in:receive={{ key: "current-move-highlight" }}
-                      out:send={{ key: "current-move-highlight" }}
-                      class="active-mobile-move"
-                    ></span>
-                  {/if}
-                </span>
-              {/each}
-            {/key}
-          </div>
+
           <div class="board-container">
             {#if $currentPuzzle}
               {#key $currentPuzzle.puzzle_id}
@@ -454,6 +411,30 @@
               </div>
             </Chessboard>
           </div>
+        </div>
+        <div
+          class="mb-3 scrollable "
+          style="min-height: 31px"
+        >
+          {#key $currentPuzzle.puzzle_id}
+            {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
+                <span
+                  in:fade
+                  class="tag is-small move-tag"
+                  class:is-white={move.color === "w"}
+                  class:is-black={move.color === "b"}
+                >
+                  {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
+                  {#if move.after === fenToHighlight}
+                    <span
+                      in:receive={{ key: "current-move-highlight" }}
+                      out:send={{ key: "current-move-highlight" }}
+                      class="active-move-tag"
+                    ></span>
+                  {/if}
+                </span>
+            {/each}
+          {/key}
         </div>
 
         <div class="block">
@@ -575,46 +556,6 @@
     </DevOnly>
     {#if $currentPuzzle}
       <div class="box">
-        {#if displayMoves.length > 0}
-          <table class="table is-striped is-bordered is-fullwidth">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>White</th>
-                <th>Black</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each displayMoves.slice(0, Math.ceil(lastMoveIndexToShow / 2)) as [whiteMove, blackMove]}
-                {#if lastMoveIndexToShow > 0}
-                  <tr in:fade>
-                    <td>
-                      {whiteMove ? whiteMove.fullMove : blackMove.fullMove}
-                    </td>
-                    <td
-                      class:is-info={whiteMove && whiteMove.after === fenToHighlight}
-                    >
-                      {#if whiteMove && whiteMove.moveIndex < lastMoveIndexToShow}
-                        <span in:fade>
-                          {whiteMove.san}
-                        </span>
-                      {/if}
-                    </td>
-                    <td
-                      class:is-info={blackMove && blackMove.after === fenToHighlight}
-                    >
-                      {#if blackMove && blackMove.moveIndex < lastMoveIndexToShow}
-                        <span in:fade>
-                          {blackMove.san}
-                        </span>
-                      {/if}
-                    </td>
-                  </tr>
-                {/if}
-              {/each}
-            </tbody>
-          </table>
-        {/if}
         {#if fen}
           <h3 class="is-size-4">Analysis</h3>
           <Stockfish
@@ -871,10 +812,10 @@
   .scrollable::-webkit-scrollbar {
     display: none; /* Safari and Chrome */
   }
-  .mobile-move {
+  .move-tag {
     position: relative;
   }
-  .active-mobile-move {
+  .active-move-tag {
     background-color: var(--brand-color-5);
     position: absolute;
     bottom: -4px;
