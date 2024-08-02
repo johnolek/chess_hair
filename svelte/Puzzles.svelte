@@ -34,6 +34,8 @@
   let puzzleManager;
   let loaded = false;
   let fen;
+  // When we're going to undo a move we don't want the highlight to flash
+  let fenToHighlight;
 
   // Chess board stuff
   /** @type {Chessboard} */
@@ -195,6 +197,8 @@
       }
     } else {
       madeMistake = true;
+      // Override temporarily so it move highlight doesn't flash when undoing
+      fenToHighlight = move.before;
       chessboard.highlightSquare(move.to, "incorrect-move", 400);
       setTimeout(() => {
         chessboard.enableShowLastMove();
@@ -207,6 +211,11 @@
   let currentNode;
   function handleCurrentNode(event) {
     currentNode = event.detail;
+    if (currentNode.move) {
+      fenToHighlight = currentNode.move.after;
+    } else {
+      fenToHighlight = fen;
+    }
   }
 
   async function handlePuzzleComplete() {
@@ -408,7 +417,7 @@
                   class:is-black={move.color === "b"}
                 >
                   {move.fullMove}{move.color === "b" ? "... " : ". "}{move.san}
-                  {#if fen === move.after}
+                  {#if move.after === fenToHighlight}
                     <span
                       in:receive={{ key: "current-move-highlight" }}
                       out:send={{ key: "current-move-highlight" }}
@@ -557,7 +566,7 @@
         </div>
         <div>
           {#each moves as move (move.after)}
-            <div class:has-text-weight-bold={fen === move.after}>
+            <div class:has-text-weight-bold={move.after === fenToHighlight}>
               {move.san}
             </div>
           {/each}
@@ -583,7 +592,7 @@
                       {whiteMove ? whiteMove.fullMove : blackMove.fullMove}
                     </td>
                     <td
-                      class:is-info={whiteMove && whiteMove.after === fen}
+                      class:is-info={whiteMove && whiteMove.after === fenToHighlight}
                     >
                       {#if whiteMove && whiteMove.moveIndex < lastMoveIndexToShow}
                         <span in:fade>
@@ -592,7 +601,7 @@
                       {/if}
                     </td>
                     <td
-                      class:is-info={blackMove && blackMove.after === fen}
+                      class:is-info={blackMove && blackMove.after === fenToHighlight}
                     >
                       {#if blackMove && blackMove.moveIndex < lastMoveIndexToShow}
                         <span in:fade>
