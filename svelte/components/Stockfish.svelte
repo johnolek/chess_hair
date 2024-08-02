@@ -1,5 +1,5 @@
 <script>
-  import { onMount, createEventDispatcher } from "svelte";
+  import { onMount, createEventDispatcher, onDestroy } from "svelte";
   import { Util } from "src/util";
   import { Chess } from "chess.js";
 
@@ -15,6 +15,7 @@
   export let ready = false;
 
   let analysisFileLoaded = false;
+  let readyok = false;
 
   $: ready = analysisFileLoaded;
 
@@ -22,9 +23,7 @@
     stopAnalysis();
   }
 
-  const stockfish = new Worker(
-    "/javascript/stockfish/src/stockfish-nnue-16.js", // served with rails public assets server thing
-  );
+  let stockfish;
 
   const dispatch = createEventDispatcher();
 
@@ -82,30 +81,20 @@
     };
   }
 
-  stockfish.onmessage = (event) => {
+  function checkForReady(event) {
     const message = event.data;
-
-    checkForEvalFileLoaded(event);
-
-    if (Util.isDev()) {
-      console.debug(message);
+    if (message === "readyok") {
+      readyok = true;
+      removeEventListener("message", checkForReady);
+      uciMessage("setoption name Use NNUE value true");
     }
-    if (message.startsWith("bestmove")) {
-      analyzing = false;
-    } else if (message.startsWith("info depth") && message.includes("pv")) {
-      const info = parseStockfishInfo(message);
-      if (info) {
-        topMoves[info.multiPV] = info;
-
-        dispatchTopMoves();
-      }
-    }
-  };
+  }
 
   function checkForEvalFileLoaded(event) {
     const message = event.data;
     if (message.startsWith("Load eval file success: 1")) {
       analysisFileLoaded = true;
+      stockfish.removeEventListener("message", checkForEvalFileLoaded);
     }
   }
 
@@ -185,7 +174,35 @@
     topMoves = {};
   }
 
+  function handleStockfishMessage(message) {
+    if (Util.isDev()) {
+      console.debug(message);
+    }
+    if (message.startsWith("bestmove")) {
+      analyzing = false;
+    } else if (message.startsWith("info depth") && message.includes("pv")) {
+      const info = parseStockfishInfo(message);
+      if (info) {
+        topMoves[info.multiPV] = info;
+
+        dispatchTopMoves();
+      }
+    }
+  }
+
   onMount(() => {
-    uciMessage("setoption name Use NNUE value true");
+    stockfish = new Worker(
+      "/javascript/stockfish/src/stockfish-nnue-16.js", // served with rails public assets server thing
+    );
+    Util.log({ stockfishWorker: stockfish });
+    stockfish.onerror = (event) => Util.error(event);
+    stockfish.onmessage = (event) => handleStockfishMessage(event.data);
+    stockfish.addEventListener("message", checkForEvalFileLoaded);
+    stockfish.addEventListener("message", checkForReady);
+    uciMessage("isready");
+  });
+
+  onDestroy(() => {
+    stockfish.terminate();
   });
 </script>
