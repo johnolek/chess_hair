@@ -116,7 +116,6 @@
   $: {
     if (chessground) {
       if (isViewingHistory) {
-        enableViewOnly();
         enableShowLastMove();
       } else {
         disableViewOnly();
