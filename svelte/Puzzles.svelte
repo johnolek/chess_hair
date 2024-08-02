@@ -16,6 +16,7 @@
   import * as RailsAPI from "./railsApi";
   import Fa from "svelte-fa";
   import { faRotateLeft } from "@fortawesome/free-solid-svg-icons";
+  import { faFishFins } from "@fortawesome/free-solid-svg-icons";
 
   const [send, receive] = crossfade({ duration: 300 });
 
@@ -452,13 +453,14 @@
               {#if !analysisRunning}
                 <button
                   class="button is-primary is-small"
+                  title="Enable stockfish analysis"
                   class:is-danger={!puzzleComplete}
                   disabled={!stockfishReady}
                   on:click={() => {
                     analysisRunning = true;
                     madeMistake = true;
                   }}
-                  >Enable Analysis
+                  >Enable &nbsp;<Fa icon={faFishFins} />
                 </button>
               {:else}
                 <button
@@ -467,7 +469,7 @@
                     analysisRunning = false;
                     topStockfishMoves = [];
                   }}
-                  >Stop Analysis
+                  >Stop &nbsp;<Fa icon={faFishFins}/>
                 </button>
               {/if}
             </div>
@@ -653,22 +655,23 @@
             {#if !analysisRunning}
               <button
                 class="button is-primary is-small"
+                title="Enable stockfish analysis"
                 class:is-danger={!puzzleComplete}
                 disabled={!stockfishReady}
                 on:click={() => {
-                  analysisRunning = true;
-                  madeMistake = true;
-                }}
-                >Enable Analysis
+                    analysisRunning = true;
+                    madeMistake = true;
+                  }}
+              >Enable &nbsp;<Fa icon={faFishFins} />
               </button>
             {:else}
               <button
-                class="button is-dark is-small"
+                class="button is-dark is-small is-inline-block"
                 on:click={() => {
-                  analysisRunning = false;
-                  topStockfishMoves = [];
-                }}
-                >Stop Analysis
+                    analysisRunning = false;
+                    topStockfishMoves = [];
+                  }}
+              >Stop &nbsp;<Fa icon={faFishFins}/>
               </button>
             {/if}
             {#if topStockfishMoves.length > 0}
