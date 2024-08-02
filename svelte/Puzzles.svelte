@@ -189,12 +189,18 @@
   }
 
   let currentNode;
+  let lastMove;
+  let colorToPlay;
   function handleCurrentNode(event) {
     currentNode = event.detail;
-    if (currentNode.move) {
-      fenToHighlight = currentNode.move.after;
+    lastMove = currentNode.move;
+
+    if (lastMove) {
+      fenToHighlight = lastMove.after;
+      colorToPlay = lastMove.color === 'w' ? 'black' : 'white';
     } else {
       fenToHighlight = fen;
+      colorToPlay = orientation
     }
   }
 
@@ -418,7 +424,7 @@
         >
           {#key $currentPuzzle.puzzle_id}
             {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
-                <span
+                <button
                   in:fade
                   on:click={() => {
                     chessboard.goToFen(move.after);
@@ -435,7 +441,7 @@
                       class="active-move-tag"
                     ></span>
                   {/if}
-                </span>
+                </button>
             {/each}
           {/key}
         </div>
@@ -677,7 +683,17 @@
                 <tbody>
                   {#each topStockfishMoves as move}
                     <tr>
-                      <td>{move.fullMove.san}</td>
+                      <td>
+                        <button
+                          class="button is-small"
+                          class:is-white={colorToPlay === 'white'}
+                          class:is-black={colorToPlay === 'black'}
+                        on:click|preventDefault={() => {
+                          makeMove(move.fullMove.lan);
+                        }}>
+                          {move.fullMove.san}
+                        </button>
+                      </td>
                       <td>{move.scoreDisplay}</td>
                       <td>{move.depth}</td>
                     </tr>
