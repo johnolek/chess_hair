@@ -252,13 +252,15 @@
   }
 
   function selectPromotionPiece(piece) {
-    const move = currentNode().move({
+    const move = currentNode().getFullMove({
       from: promotionFrom,
       to: promotionTo,
       promotion: piece,
     });
     if (move) {
-      moveTree.addMove(move);
+      moveTree.addMove(move.lan);
+      moveIndex += 1;
+      maxMoveIndex += 1;
       updateChessground();
       dispatch("move", { move });
     }
