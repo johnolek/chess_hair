@@ -415,7 +415,7 @@
               </Chessboard>
             </div>
           </div>
-          <div class="block ml-4 mr-4">
+          <div class="block mt-1 ml-4 mr-4">
             <div class="mb-3 scrollable" style="min-height: 31px">
               {#key $currentPuzzle.puzzle_id}
                 {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
