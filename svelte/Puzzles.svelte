@@ -886,6 +886,11 @@
     padding-left: 2px;
     padding-right: 2px;
     margin-right: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+  }
+
+  .move-tag.is-black {
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .move-tag:focus,
