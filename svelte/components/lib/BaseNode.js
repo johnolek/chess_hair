@@ -37,9 +37,11 @@ class BaseNode {
 
   getFullMove(chessJsCompatibleMove) {
     const chess = this.chessInstance();
+    // Need to grab this before making the move
+    const fullMove = chess.moveNumber();
     const move = chess.move(chessJsCompatibleMove);
     move.isCheckmate = chess.isCheckmate();
-    move.fullMove = chess.moveNumber();
+    move.fullMove = fullMove;
     move.moveIndex = this.moveIndex();
     move.fullColor = move.color === "w" ? "white" : "black";
     move.GUID = this.getGuid();
