@@ -22,6 +22,7 @@
     faArrowLeft,
     faArrowRight,
   } from "@fortawesome/free-solid-svg-icons";
+  import { getMaterialCounts } from "./components/lib/chess_functions";
 
   const [send, receive] = crossfade({ fallback: fade, duration: 300 });
 
@@ -40,6 +41,13 @@
   let puzzleManager;
   let loaded = false;
   let fen;
+
+  $: {
+    if (fen) {
+      Util.debug(getMaterialCounts(fen));
+    }
+  }
+
   let moveTree;
   // When we're going to undo a move we don't want the highlight to flash
   let fenToHighlight;
