@@ -719,8 +719,8 @@
                   <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
                   <th><abbr title="Average solve time">Avg</abbr></th>
                   <th><abbr title="Correct solves in a row">Streak</abbr></th>
-                  <th><abbr title="Total correct solves">Solves</abbr></th>
-                  <th><abbr title="Failure Count">Fails</abbr></th>
+                  <th><abbr title="Total correct solves">S</abbr></th>
+                  <th><abbr title="Failure Count">F</abbr></th>
                 </tr>
               </thead>
               <tbody>
