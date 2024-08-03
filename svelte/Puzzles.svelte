@@ -418,9 +418,9 @@
           <div class="block mt-1 ml-4 mr-4">
             <div class="mb-3 scrollable" style="min-height: 31px">
               {#key $currentPuzzle.puzzle_id}
-                {#each moves.slice(0, lastMoveIndexToShow) as move (move.after)}
+                {#each moves.slice(0, lastMoveIndexToShow) as move, i (move.after)}
                   <button
-                    in:fade
+                    in:fly={{ x: -30, duration: 300 }}
                     on:click={() => {
                       chessboard.goToFen(move.after);
                     }}
@@ -428,9 +428,13 @@
                     class:is-white={move.color === "w"}
                     class:is-black={move.color === "b"}
                   >
-                    {move.fullMove}{move.color === "b"
+                    {move.color === "w" || i === 0
+                      ? move.fullMove
+                      : ""}{move.color === "b" && i === 0
                       ? "... "
-                      : ". "}{move.san}
+                      : move.color === "w"
+                        ? ". "
+                        : ""}{move.san}
                     {#if move.after === fenToHighlight}
                       <span
                         use:scrollIntoView
@@ -849,6 +853,9 @@
   .move-tag {
     position: relative;
     cursor: pointer;
+    padding-left: 2px;
+    padding-right: 2px;
+    margin-right: 6px;
   }
 
   .move-tag:focus,
