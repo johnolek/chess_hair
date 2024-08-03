@@ -346,7 +346,7 @@
       {/if}
       <div class="block">
         {#if $currentPuzzle}
-          <div class="columns is-mobile is-vcentered mb-1 ml-0 mr-0">
+          <div class="columns is-mobile is-vcentered ml-0 mr-0 mb-1">
             <div class="column is-narrow">
               <a
                 href={`https://lichess.org/training/${$currentPuzzle.puzzle_id}`}
@@ -370,8 +370,10 @@
                 {/key}
               </div>
             </div>
-            <div class="column is-narrow">
-              {#if $currentPuzzle.average_solve_time}
+          </div>
+          <div class="columns is-mobile is-vcentered mb-1 ml-0 mr-0">
+            {#if $currentPuzzle.average_solve_time}
+              <div class="column is-narrow">
                 <span
                   class:has-text-warning={$currentPuzzle.average_solve_time >
                     timeGoal}
@@ -379,8 +381,8 @@
                     timeGoal && $currentPuzzle.average_solve_time > 0}
                   >{$currentPuzzle.average_solve_time.toFixed(2)}s</span
                 >
-              {/if}
-            </div>
+              </div>
+            {/if}
             <div class="column">
               {#key $currentPuzzle.puzzle_id}
                 <ProgressBar
