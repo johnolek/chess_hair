@@ -111,6 +111,13 @@
     }
   }
 
+  /**
+   * Send a message to the Stockfish worker
+   *
+   *
+   *
+   * @param message
+   */
   export function uciMessage(message) {
     stockfish.postMessage(message);
   }
@@ -199,6 +206,7 @@
     stockfish.onmessage = (event) => handleStockfishMessage(event.data);
     stockfish.addEventListener("message", checkForEvalFileLoaded);
     stockfish.addEventListener("message", checkForReady);
+    uciMessage("uci");
     uciMessage("isready");
   });
 
