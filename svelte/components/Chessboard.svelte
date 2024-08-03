@@ -460,7 +460,7 @@
 {/if}
 
 <div
-  class="board-wrapper"
+  class="board-wrapper ml-2 mr-2"
   bind:clientWidth={wrapperWidth}
   data-board={currentBoardStyle}
 >
@@ -495,7 +495,6 @@
 <style>
   .board-wrapper {
     position: relative;
-    width: 99%; /* TODO: Figure out proper centering */
   }
 
   .centered-content {

@@ -62,4 +62,6 @@ square {
 html, body {
   overscroll-behavior: contain;
   touch-action: pan-y;
+  overflow-x: hidden;
 }
+
