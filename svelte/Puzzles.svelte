@@ -156,7 +156,7 @@
     // User moves get their own special highlighting
     chessboard.disableShowLastMove();
     const move = moveEvent.detail.move;
-    const isCheckmate = moveEvent.detail.isCheckmate;
+    const isCheckmate = move.isCheckmate;
     const correctMoveIndex = move.moveIndex;
     if (
       move.lan === moves[correctMoveIndex].lan ||
@@ -599,6 +599,18 @@
                 {move.san}
               </div>
             {/each}
+            <button
+              disabled={!moves[lastMoveIndexToShow]}
+              on:click={() => {
+                const move = moves[lastMoveIndexToShow];
+                if (move) {
+                  makeMove(move);
+                }
+              }}
+              class="button is-rust"
+            >
+              Play next
+            </button>
           </div>
         </div>
       </DevOnly>
