@@ -1,0 +1,33 @@
+// generate-map.scss
+@import "node_modules/bulma/sass/utilities/functions";
+
+// Define colors
+$rich-black: hsla(197, 100%, 5%, 1);
+$midnight-green: hsla(190, 100%, 23%, 1);
+$dark-cyan: hsla(181, 88%, 31%, 1);
+$tiffany-blue: hsla(160, 41%, 70%, 1);
+$vanilla: hsla(45, 60%, 78%, 1);
+$gamboge: hsla(39, 100%, 47%, 1);
+$alloy-orange: hsla(30, 98%, 40%, 1);
+$rust: hsla(19, 97%, 37%, 1);
+$rufous: hsla(5, 81%, 38%, 1);
+$auburn: hsla(358, 64%, 37%, 1);
+$forest-green: hsl(142, 66%, 38%);
+
+// Generate custom colors map with inverted colors
+$custom-colors: (
+  "rich-black": ($rich-black, bulmaFindColorInvert($rich-black)),
+  "midnight-green": ($midnight-green, bulmaFindColorInvert($midnight-green)),
+  "dark-cyan": ($dark-cyan, bulmaFindColorInvert($dark-cyan)),
+  "tiffany-blue": ($tiffany-blue, bulmaFindColorInvert($tiffany-blue)),
+  "vanilla": ($vanilla, bulmaFindColorInvert($vanilla)),
+  "gamboge": ($gamboge, bulmaFindColorInvert($gamboge)),
+  "alloy-orange": ($alloy-orange, bulmaFindColorInvert($alloy-orange)),
+  "rust": ($rust, bulmaFindColorInvert($rust)),
+  "rufous": ($rufous, bulmaFindColorInvert($rufous)),
+  "auburn": ($auburn, bulmaFindColorInvert($auburn)),
+  "forest-green": ($forest-green, bulmaFindColorInvert($forest-green))
+);
+
+// Print the custom colors map
+@debug $custom-colors;
