@@ -11,7 +11,6 @@
     // Check if the key is Enter or Space
     if (event.key === "Enter" || event.key === " ") {
       toggleShown();
-      event.preventDefault(); // Prevent the default action to avoid scrolling on Space press
     }
   }
 </script>
@@ -22,7 +21,7 @@
   tabindex="0"
   style={minWidth ? `min-width: ${minWidth}px` : ""}
   on:click={toggleShown}
-  on:keydown={handleKeydown}
+  on:keydown|preventDefault={handleKeydown}
 >
   <div class="content" {title} class:hiddenContent={!isShown}>
     <slot></slot>
@@ -36,6 +35,8 @@
   }
   .content {
     border-radius: 3px;
+  }
+  .content:not(.hiddenContent) {
     transition:
       background-color 0.5s ease,
       color 0.5s ease;
