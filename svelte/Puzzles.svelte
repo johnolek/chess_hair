@@ -861,12 +861,11 @@
   .active-move-tag {
     background-color: var(--brand-color-5);
     position: absolute;
-    bottom: -3px;
+    bottom: -5px;
     left: 50%;
     transform: translateX(-50%);
     height: 3px;
     width: 75%;
-    border-bottom-left-radius: 10px;
-    border-bottom-right-radius: 10px;
+    border-radius: 10px;
   }
 </style>
