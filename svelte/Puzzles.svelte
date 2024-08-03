@@ -530,6 +530,31 @@
                 {/if}
               </div>
             </div>
+            {#if analysisRunning && topStockfishMoves.length > 0}
+              <div class="block">
+                <div class="buttons">
+                  {#each topStockfishMoves as move}
+                    <button
+                      class="button is-small stockfish-move"
+                      class:is-white={colorToPlay === "white"}
+                      class:is-black={colorToPlay === "black"}
+                      on:click|preventDefault={() => {
+                        makeMove(move.fullMove.lan);
+                      }}
+                    >
+                      <div class="has-text-centered">
+                        <div>
+                          {move.fullMove.san}
+                        </div>
+                        <div>
+                          {move.scoreDisplay}
+                        </div>
+                      </div>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/if}
           </div>
         {:else}
           <p>There are no current puzzles to play.</p>
@@ -870,5 +895,9 @@
     height: 3px;
     width: 75%;
     border-radius: 10px;
+  }
+
+  .stockfish-move {
+    min-width: 75px;
   }
 </style>
