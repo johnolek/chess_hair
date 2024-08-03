@@ -16,11 +16,19 @@
 
   let analysisFileLoaded = false;
   let readyok = false;
+  let nnueInitialized = false;
 
   $: ready = analysisFileLoaded;
 
   $: if (fen && analysisFen && fen !== analysisFen) {
     stopAnalysis();
+  }
+
+  $: {
+    if (readyok && !nnueInitialized) {
+      uciMessage("setoption name Use NNUE value true");
+      nnueInitialized = true;
+    }
   }
 
   let stockfish;
@@ -85,8 +93,6 @@
     const message = event.data;
     if (message === "readyok") {
       readyok = true;
-      removeEventListener("message", checkForReady);
-      uciMessage("setoption name Use NNUE value true");
     }
   }
 
@@ -149,13 +155,14 @@
   }
 
   export function analyzePosition() {
-    if (analyzing) {
+    if (analyzing || !readyok) {
       stopAnalysis();
-      setTimeout(analyzePosition, 500);
+      setTimeout(analyzePosition, 200);
       return;
     }
     if (fen) {
       analyzing = true;
+      readyok = false;
       clearData();
       analysisFen = fen;
       uciMessage(`position fen ${fen}`);
@@ -166,12 +173,11 @@
   }
 
   export function stopAnalysis() {
-    if (!analyzing) {
+    if (!analyzing && readyok) {
       return;
     }
     uciMessage("stop");
-    uciMessage("uci");
-    analyzing = false;
+    uciMessage("isready");
     clearData();
     dispatchTopMoves();
   }
