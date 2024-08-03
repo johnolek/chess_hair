@@ -517,11 +517,7 @@
 
               <div class="column has-text-right is-narrow">
                 <div class="is-inline-block"></div>
-                {#if !puzzleComplete}
-                  <span class="tag is-{orientation} is-size-5">
-                    {orientation}
-                  </span>
-                {:else}
+                {#if puzzleComplete}
                   <button
                     class="button is-primary next-button ml-2"
                     bind:this={nextButton}
