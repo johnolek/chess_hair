@@ -24,7 +24,12 @@
   on:keydown|preventDefault={handleKeydown}
 >
   <div class="content" {title} class:hiddenContent={!isShown}>
-    <slot></slot>
+    {#if !isShown}
+      {title}
+    {/if}
+    {#if isShown}
+      <slot></slot>
+    {/if}
   </div>
 </div>
 
@@ -35,6 +40,7 @@
   }
   .content {
     border-radius: 3px;
+    padding: 2px 3px;
   }
   .content:not(.hiddenContent) {
     transition:
@@ -43,6 +49,6 @@
   }
   .hiddenContent {
     background-color: var(--bulma-grey);
-    color: transparent;
+    color: white;
   }
 </style>

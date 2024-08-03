@@ -359,7 +359,7 @@
               <div class="has-text-centered is-inline-block">
                 {#key $currentPuzzle.puzzle_id}
                   <Spoiler
-                    title="Puzzle Rating"
+                    title="Rating"
                     minWidth="60"
                     isShown={puzzleComplete}
                   >
@@ -563,6 +563,7 @@
                 </div>
               </div>
             {/if}
+            <div class="block"></div>
           </div>
         {:else}
           <p>There are no current puzzles to play.</p>
