@@ -14,7 +14,5 @@
   $: tweenedProgress.set(current);
 </script>
 
-<div class="div">
-  <progress class="progress {className}" value={$tweenedProgress} {max}
-  ></progress>
-</div>
+<progress class="progress {className}" value={$tweenedProgress} {max}
+></progress>
