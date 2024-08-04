@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { Chessground } from "chessground";
   import {
     pieceSet,
@@ -375,6 +375,13 @@
     }, duration);
   }
 
+  function updateSize() {
+    const boundingClientRect = boardWrapper.parentNode.getBoundingClientRect();
+    size = boundingClientRect.width;
+  }
+
+  let resizeObserver;
+
   onMount(() => {
     chessground = Chessground(boardContainer, {
       ...chessgroundConfig,
@@ -390,8 +397,19 @@
     if (fen) {
       this.load(fen);
     }
-    // get size from parent
-    size = boardWrapper.parentNode.getBoundingClientRect().width;
+
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    resizeObserver.observe(boardWrapper.parentNode);
+  });
+
+  onDestroy(() => {
+    chessground.destroy();
+    resizeObserver.disconnect();
   });
 </script>
 
