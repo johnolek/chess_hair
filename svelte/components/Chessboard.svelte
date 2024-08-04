@@ -377,7 +377,7 @@
 
   function updateSize() {
     const boundingClientRect = boardWrapper.parentNode.getBoundingClientRect();
-    size = Math.min(boundingClientRect.width, window.innerHeight * 0.6);
+    size = Math.min(boundingClientRect.width, window.innerHeight * 0.73);
   }
 
   let resizeObserver;
