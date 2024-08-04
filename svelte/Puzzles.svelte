@@ -36,15 +36,18 @@
   } from "./stores.js";
   import PuzzleConfigForm from "./PuzzleConfigForm.svelte";
   import DevOnly from "./components/DevOnly.svelte";
+  import MaterialCounter from "./components/MaterialCounter.svelte";
 
   /** @type {PuzzleManager} */
   let puzzleManager;
   let loaded = false;
   let fen;
+  let material;
 
   $: {
     if (fen) {
-      Util.debug(getMaterialCounts(fen));
+      material = getMaterialCounts(fen);
+      Util.debug(material);
     }
   }
 
@@ -366,6 +369,19 @@
                     <div>
                       {$currentPuzzle.rating}
                     </div>
+                  </Spoiler>
+                {/key}
+              </div>
+            </div>
+            <div class="column is-narrow">
+              <div class="has-text-centered is-inline-block">
+                {#key $currentPuzzle.puzzle_id}
+                  <Spoiler
+                    title="Material"
+                    minWidth="70"
+                    isShown={puzzleComplete}
+                  >
+                    <MaterialCounter bind:fen />
                   </Spoiler>
                 {/key}
               </div>
