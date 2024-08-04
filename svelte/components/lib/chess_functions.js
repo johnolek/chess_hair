@@ -30,6 +30,10 @@ export function getMaterialCounts(fen) {
   const materialCounts = {
     w: { p: 0, n: 0, b: 0, r: 0, q: 0 },
     b: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+    whiteWinning: false,
+    blackWinning: false,
+    equal: false,
+    difference: 0,
   };
 
   const board = chess.board();
@@ -58,6 +62,9 @@ export function getMaterialCounts(fen) {
   };
   materialCounts.w.total = totalMaterial.w;
   materialCounts.b.total = totalMaterial.b;
+  materialCounts.difference = totalMaterial.w - totalMaterial.b;
+  materialCounts.whiteWinning = totalMaterial.w > totalMaterial.b;
+  materialCounts.blackWinning = totalMaterial.b > totalMaterial.w;
 
   return { materialCounts };
 }
