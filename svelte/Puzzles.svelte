@@ -350,7 +350,7 @@
       <div class="block">
         {#if $currentPuzzle}
           <div class="columns is-mobile is-vcentered ml-0 mr-0 mb-1">
-            <div class="column is-narrow">
+            <div class="column is-narrow pb-0">
               <a
                 href={`https://lichess.org/training/${$currentPuzzle.puzzle_id}`}
                 class="puzzle-id"
@@ -358,7 +358,7 @@
                 title="View on lichess.org">{$currentPuzzle.puzzle_id}</a
               >
             </div>
-            <div class="column is-narrow">
+            <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
                 {#key $currentPuzzle.puzzle_id}
                   <Spoiler
@@ -373,7 +373,7 @@
                 {/key}
               </div>
             </div>
-            <div class="column is-narrow">
+            <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
                 {#key $currentPuzzle.puzzle_id}
                   <Spoiler
