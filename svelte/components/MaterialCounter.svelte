@@ -27,7 +27,7 @@
     class:is-grey={$difference === 0}
   >
     {#if $difference !== 0}
-      {$difference > 0 ? "+" : ""}{$difference.toFixed(1)}
+      +{Math.abs($difference).toFixed(1)}
     {:else}
       ==
     {/if}
