@@ -477,7 +477,7 @@
               <div class="column has-text-left is-narrow">
                 {#if !analysisRunning}
                   <button
-                    class="button is-primary is-small"
+                    class="button is-dark-cyan is-small"
                     title="Enable stockfish analysis"
                     class:is-danger={!puzzleComplete}
                     disabled={!stockfishReady}
@@ -485,16 +485,17 @@
                       analysisRunning = true;
                       madeMistake = true;
                     }}
-                    >Enable &nbsp;<Fa icon={faFishFins} />
+                    ><Fa icon={faFishFins} />
                   </button>
                 {:else}
                   <button
-                    class="button is-dark is-small is-inline-block"
+                    class="button is-tiffany-blue is-small is-inline-block"
+                    title="Stop analysis"
                     on:click={() => {
                       analysisRunning = false;
                       topStockfishMoves = [];
                     }}
-                    >Stop &nbsp;<Fa icon={faFishFins} />
+                    ><Fa icon={faFishFins} spin={true} />
                   </button>
                 {/if}
               </div>
@@ -723,7 +724,7 @@
               <br />
               {#if !analysisRunning}
                 <button
-                  class="button is-primary is-small"
+                  class="button is-dark-cyan is-small"
                   title="Enable stockfish analysis"
                   class:is-danger={!puzzleComplete}
                   disabled={!stockfishReady}
@@ -731,16 +732,17 @@
                     analysisRunning = true;
                     madeMistake = true;
                   }}
-                  >Enable &nbsp;<Fa icon={faFishFins} />
+                  ><Fa icon={faFishFins} />
                 </button>
               {:else}
                 <button
-                  class="button is-dark is-small is-inline-block"
+                  class="button is-tiffany-blue is-small is-inline-block"
+                  title="Stop analysis"
                   on:click={() => {
                     analysisRunning = false;
                     topStockfishMoves = [];
                   }}
-                  >Stop &nbsp;<Fa icon={faFishFins} />
+                  ><Fa icon={faFishFins} spin={true} />
                 </button>
               {/if}
               {#if topStockfishMoves.length > 0}
