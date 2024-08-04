@@ -75,12 +75,12 @@ class Util {
   }
 
   static isDev() {
-    return (
-      typeof window !== "undefined" &&
-      window.document !== undefined &&
-      (window.location.hostname !== "chess.hair" ||
-        window.location.search.includes("debug=1"))
-    );
+    if (typeof window !== "undefined" && window.document !== undefined) {
+      if (window.location.search.includes("debug=1")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static log(...args) {
