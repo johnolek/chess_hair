@@ -95,7 +95,7 @@
     },
   };
 
-  let wrapperWidth;
+  let boardWrapper;
   let boardContainer;
   let showPromotion = false;
   let promotionColor = "white";
@@ -111,7 +111,6 @@
   export let hasHistoryForward = false;
 
   let size;
-  let minSize = 200;
 
   $: {
     if (chessground) {
@@ -129,47 +128,6 @@
     } else {
       hasHistoryForward = false;
     }
-  }
-
-  let isResizing = false;
-  let resized = false;
-  let startX, startY, startSize;
-
-  function startResizing(event) {
-    isResizing = true;
-    resized = true;
-    startX = event.touches ? event.touches[0].clientX : event.clientX;
-    startY = event.touches ? event.touches[0].clientY : event.clientY;
-    startSize = size;
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", stopResizing);
-    document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", stopResizing);
-  }
-
-  function onMove(event) {
-    if (!isResizing) return;
-    event.preventDefault();
-    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-    const dx = clientX - startX;
-    const dy = clientY - startY;
-    let newSize = Math.max(startSize + dx, startSize + dy);
-    if (newSize < minSize) {
-      newSize = minSize;
-    }
-    if (newSize > wrapperWidth) {
-      newSize = wrapperWidth;
-    }
-    size = newSize;
-  }
-
-  function stopResizing() {
-    isResizing = false;
-    document.removeEventListener("mousemove", onMove);
-    document.removeEventListener("mouseup", stopResizing);
-    document.removeEventListener("touchmove", onMove);
-    document.removeEventListener("touchend", stopResizing);
   }
 
   /** @type {MoveTree} */
@@ -432,16 +390,8 @@
     if (fen) {
       this.load(fen);
     }
-    size = boardContainer.clientWidth;
-
-    window.addEventListener("resize", () => {
-      if (size > wrapperWidth) {
-        size = wrapperWidth;
-      }
-      if (!resized) {
-        size = wrapperWidth;
-      }
-    });
+    // get size from parent
+    size = boardWrapper.parentNode.getBoundingClientRect().width;
   });
 </script>
 
@@ -460,25 +410,21 @@
 {/if}
 
 <div
-  class="board-wrapper ml-2 mr-2"
-  bind:clientWidth={wrapperWidth}
+  class="board-wrapper"
+  bind:this={boardWrapper}
   data-board={currentBoardStyle}
 >
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>
-  <div style="position: relative;width: {size}px; height: {size}px">
+  <div
+    class="centered"
+    style="position: relative;width: {size}px; height: {size}px"
+  >
     <div
       class="is2d"
       bind:this={boardContainer}
       style="position: relative;width: {size}px; height: {size}px"
-    ></div>
-    <div
-      class="resizer"
-      on:mousedown={startResizing}
-      on:touchstart={startResizing}
-      role="button"
-      tabindex="0"
     ></div>
     <PromotionModal
       isOpen={showPromotion}
@@ -493,10 +439,6 @@
 </div>
 
 <style>
-  .board-wrapper {
-    position: relative;
-  }
-
   .centered-content {
     position: absolute;
     top: 50%;
@@ -505,21 +447,8 @@
     z-index: 3; /* required to appear in front of pieces */
     opacity: 0.8;
   }
-
-  /* Add these styles for the resizer */
-  .resizer {
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    bottom: -5px;
-    right: -5px;
-    cursor: nwse-resize;
-    background-color: transparent;
-    touch-action: none;
-    user-select: none;
-  }
-
-  .resizer:hover {
-    background-color: rgba(0, 0, 0, 0.1);
+  .centered {
+    margin-left: auto;
+    margin-right: auto;
   }
 </style>
