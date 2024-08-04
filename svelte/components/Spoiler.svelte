@@ -23,12 +23,12 @@
   on:click={toggleShown}
   on:keydown|preventDefault={handleKeydown}
 >
-  <div class="content" {title} class:hiddenContent={!isShown}>
+  <div class="content" {title}>
+    <slot></slot>
     {#if !isShown}
-      {title}
-    {/if}
-    {#if isShown}
-      <slot></slot>
+      <div class="overlay">
+        <span class="overlay-text">{title}</span>
+      </div>
     {/if}
   </div>
 </div>
@@ -37,18 +37,35 @@
   .spoiler {
     cursor: pointer;
     display: inline-block;
+    position: relative;
   }
-  .content {
+  .content,
+  .overlay {
     border-radius: 3px;
     padding: 2px 3px;
+    position: relative;
   }
-  .content:not(.hiddenContent) {
-    transition:
-      background-color 0.5s ease,
-      color 0.5s ease;
-  }
-  .hiddenContent {
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background-color: var(--bulma-grey);
     color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    transition: opacity 0.5s ease;
+    overflow: hidden;
+  }
+  .overlay-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    transform: scale(1);
+    transform-origin: center;
   }
 </style>
