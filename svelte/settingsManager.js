@@ -3,11 +3,21 @@ import * as RailsAPI from "./railsApi";
 import { settings } from "./stores";
 
 let localSettings = {};
+let initPromise = null;
 
 export async function initSettings() {
-  const settingsData = await RailsAPI.fetchSettings();
-  settings.set(settingsData);
-  localSettings = settingsData;
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
+    const settingsData = await RailsAPI.fetchSettings();
+    settings.set(settingsData);
+    localSettings = settingsData;
+    initPromise = null; // Clear the promise after initialization
+  })();
+
+  return initPromise;
 }
 
 // Update a setting both locally and on the server
