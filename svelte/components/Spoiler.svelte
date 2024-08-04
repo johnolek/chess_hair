@@ -1,4 +1,6 @@
 <script>
+  import { slide, fly } from "svelte/transition";
+  import { bounceOut, expoIn, expoOut, quartIn } from "svelte/easing";
   export let isShown = false;
   export let minWidth;
   export let title = "";
@@ -11,6 +13,7 @@
     // Check if the key is Enter or Space
     if (event.key === "Enter" || event.key === " ") {
       toggleShown();
+      event.preventDefault();
     }
   }
 </script>
@@ -21,12 +24,26 @@
   tabindex="0"
   style={minWidth ? `min-width: ${minWidth}px` : ""}
   on:click={toggleShown}
-  on:keydown|preventDefault={handleKeydown}
+  on:keydown={handleKeydown}
 >
   <div class="content" {title}>
     <slot></slot>
     {#if !isShown}
-      <div class="overlay">
+      <div
+        in:fly={{
+          y: "-100%",
+          duration: 1000,
+          opacity: 1,
+          easing: bounceOut,
+        }}
+        out:fly={{
+          y: "-100%",
+          duration: 1000,
+          opacity: 1,
+          easing: quartIn,
+        }}
+        class="overlay"
+      >
         <span class="overlay-text">{title}</span>
       </div>
     {/if}

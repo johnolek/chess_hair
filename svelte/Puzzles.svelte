@@ -548,6 +548,8 @@
                     class="button is-primary next-button ml-2"
                     bind:this={nextButton}
                     on:click={async () => {
+                      // Do this first for spoiler animations
+                      puzzleComplete = false;
                       await puzzleManager.updateCurrentPuzzle();
                       await loadCurrentPuzzle();
                     }}
