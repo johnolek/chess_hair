@@ -1,6 +1,6 @@
 <script>
   import { slide, fly } from "svelte/transition";
-  import { bounceOut, expoIn, expoOut, quartIn } from "svelte/easing";
+  import { bounceOut, expoIn, expoOut, quadIn, quartIn } from "svelte/easing";
   export let isShown = false;
   export let minWidth;
   export let title = "";
@@ -40,7 +40,7 @@
           y: "-100%",
           duration: 1000,
           opacity: 1,
-          easing: quartIn,
+          easing: quadIn,
         }}
         class="overlay"
       >
