@@ -8,14 +8,7 @@
 
   // State stores
   import {
-    puzzleHistory,
-    randomCompletedPuzzle,
     activePuzzles,
-    allPuzzles,
-    allFilteredPuzzles,
-    eligibleActivePuzzles,
-    eligibleOtherPuzzles,
-    eligibleFilteredPuzzles,
     currentPuzzle,
     nextPuzzle,
     totalIncorrectPuzzlesCount,
@@ -25,45 +18,14 @@
 
   const dispatch = createEventDispatcher();
 
-  let minimumTimeBetweenReviews = 0;
-  let oddsOfRandomCompleted = 0.1;
-  let minimumPuzzlesBetweenReviews = 10;
-
-  const puzzlesToExcludeBecauseOfPuzzleCountBetween = writable([]);
-
-  puzzleHistory.subscribe((history) => {
-    puzzlesToExcludeBecauseOfPuzzleCountBetween.set(
-      history.slice(0, minimumPuzzlesBetweenReviews),
-    );
-  });
-
-  activePuzzles.subscribe((puzzles) => {
-    eligibleActivePuzzles.set(puzzles.filter(eligiblePuzzlesFilter));
-  });
-
-  allPuzzles.subscribe((puzzles) => {
-    eligibleOtherPuzzles.set(puzzles.filter(eligiblePuzzlesFilter));
-  });
-
-  allFilteredPuzzles.subscribe((puzzles) => {
-    eligibleFilteredPuzzles.set(puzzles.filter(eligiblePuzzlesFilter));
-  });
-
-  // Fetch and update functions
   export async function updateActivePuzzles() {
     const response = await RailsAPI.fetchActivePuzzles();
-    puzzleHistory.set(response.most_recent_seen);
     activePuzzles.set(response.puzzles);
     totalIncorrectPuzzlesCount.set(response.total_incorrect_puzzles_count);
     totalFilteredPuzzlesCount.set(response.total_filtered_puzzles_count);
     completedFilteredPuzzlesCount.set(
       response.completed_filtered_puzzles_count,
     );
-  }
-
-  async function fetchAllPuzzles() {
-    const puzzles = await RailsAPI.fetchAllPuzzles();
-    allPuzzles.set(puzzles);
   }
 
   async function fetchNextPuzzle() {
@@ -75,64 +37,21 @@
     nextPuzzle.set(puzzle);
   }
 
-  async function fetchAllFilteredPuzzles() {
-    const puzzles = await RailsAPI.fetchFilteredPuzzles();
-    allFilteredPuzzles.set(puzzles);
-  }
-
-  async function updateRandomCompletedPuzzle(excludedPuzzleId = null) {
-    const puzzle = await RailsAPI.fetchRandomCompletedPuzzle(excludedPuzzleId);
-    randomCompletedPuzzle.set(puzzle);
-  }
-
-  function eligiblePuzzlesFilter(puzzle) {
-    const currentTimestamp = Util.getCurrentUnixTime();
-    if (
-      $puzzlesToExcludeBecauseOfPuzzleCountBetween.includes(puzzle.puzzle_id)
-    ) {
-      Util.debug(`Excluding ${puzzle.puzzle_id} since it was recently seen`);
-      return false;
-    }
-
-    if (!puzzle.last_played_timestamp) {
-      return true;
-    }
-
-    // The -10 is some wiggle room in to account for server/client time differences
-    return (
-      puzzle.last_played_timestamp + minimumTimeBetweenReviews - 10 <
-      currentTimestamp
-    );
+  async function getFirstPuzzles() {
+    const puzzle = await RailsAPI.fetchNextPuzzle();
+    currentPuzzle.set(puzzle);
+    void fetchNextPuzzle();
   }
 
   export async function updateCurrentPuzzle() {
-    if (
-      $randomCompletedPuzzle &&
-      (Math.random() < oddsOfRandomCompleted ||
-        $eligibleActivePuzzles.length < 1)
-    ) {
-      void updateRandomCompletedPuzzle($randomCompletedPuzzle.puzzle_id);
-      return currentPuzzle.set($randomCompletedPuzzle);
+    if ($nextPuzzle) {
+      currentPuzzle.set($nextPuzzle);
+      void fetchNextPuzzle();
+    } else {
+      const puzzle = await RailsAPI.fetchNextPuzzle();
+      currentPuzzle.set(puzzle);
+      void fetchNextPuzzle();
     }
-
-    if ($eligibleActivePuzzles.length >= 1) {
-      currentPuzzle.set(Util.getRandomElement($eligibleActivePuzzles));
-      return;
-    } else if ($eligibleFilteredPuzzles.length >= 1) {
-      currentPuzzle.set(Util.getRandomElement($eligibleFilteredPuzzles));
-      return;
-    } else if ($eligibleOtherPuzzles.length >= 1) {
-      currentPuzzle.set(Util.getRandomElement($eligibleOtherPuzzles));
-      return;
-    }
-
-    currentPuzzle.set(Util.getRandomElement($allPuzzles));
-  }
-
-  export function addPuzzleToHistory(puzzleId) {
-    puzzleHistory.update((history) => {
-      return [puzzleId, ...history];
-    });
   }
 
   function sortPuzzlesBySolveTime(a, b) {
@@ -159,7 +78,6 @@
     if ($currentPuzzle.complete || (wasComplete && !$currentPuzzle.complete)) {
       await updateActivePuzzles();
     }
-    addPuzzleToHistory(updatedPuzzle.puzzle_id);
     updatePuzzleStores(updatedPuzzle);
   }
 
@@ -172,9 +90,7 @@
       );
     };
 
-    updateStore(allPuzzles);
     updateStore(activePuzzles);
-    updateStore(allFilteredPuzzles);
 
     currentPuzzle.update((puzzle) =>
       puzzle && puzzle.puzzle_id === updatedPuzzle.puzzle_id
@@ -184,17 +100,6 @@
   }
 
   async function refreshSettings() {
-    minimumTimeBetweenReviews = await getSetting(
-      "puzzles.minimumTimeBetween",
-      0,
-    );
-    oddsOfRandomCompleted = await getSetting(
-      "puzzles.oddsOfRandomCompleted",
-      0.1,
-    );
-    minimumPuzzlesBetweenReviews = await getSetting(
-      "puzzles.minimumPuzzlesBetweenReviews",
-    );
     void updateActivePuzzles();
   }
 
@@ -204,11 +109,7 @@
   onMount(async () => {
     await initSettings();
     await refreshSettings();
-    await fetchAllPuzzles();
-    await fetchAllFilteredPuzzles();
-    await updateRandomCompletedPuzzle();
-    await updateCurrentPuzzle();
-    await fetchNextPuzzle();
+    await getFirstPuzzles();
     unsubscribeSettings = settings.subscribe(refreshSettings);
     dispatch("ready");
   });
