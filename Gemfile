@@ -49,6 +49,10 @@ group :development, :test do
   gem 'rack-mini-profiler', require: false
 end
 
+group :test do
+  gem 'timecop'
+end
+
 group :development do
   # Use console on exceptions pages [https://github.com/rails/web-console]
   gem "web-console"
