@@ -14,6 +14,33 @@ class UserPuzzle < ApplicationRecord
   scope :completed, -> { where(complete: true) }
   scope :incomplete, -> { where(complete: false) }
 
+  scope :excluding_last_n_played, ->(user, n) do
+    return all if n < 1
+
+    recent_puzzle_ids_subquery = user.puzzle_results
+      .order(created_at: :desc)
+      .limit(n)
+      .select(puzzle_id: :lichess_puzzle_id)
+
+    where.not(lichess_puzzle_id: recent_puzzle_ids_subquery)
+  end
+
+  scope :excluding_played_within_last_n_seconds, ->(user, n) do
+    n = n.to_i
+    return all if n < 1
+    puzzle_results_table = PuzzleResult.arel_table
+    recent_time = Time.current - n
+    recent_puzzle_ids_subquery = user.puzzle_results.where(puzzle_results_table[:created_at].gteq(recent_time))
+      .select(puzzle_id: :lichess_puzzle_id)
+    where.not(lichess_puzzle_id: recent_puzzle_ids_subquery)
+  end
+
+  scope :excluding_lichess_puzzle_ids, ->(ids) do
+    ids = Array(ids)
+    return all if ids.empty?
+    where.not(lichess_puzzle_id: ids)
+  end
+
   def calculate_average_solve_duration
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     results = puzzle_results
