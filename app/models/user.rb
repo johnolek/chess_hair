@@ -84,6 +84,31 @@ class User < ApplicationRecord
     user_puzzles.where(lichess_puzzle_id: active_puzzle_ids)
   end
 
+  def next_puzzle(previous_puzzle_id = nil)
+    minimum_puzzles_between = config.minimum_puzzles_between_reviews.to_i
+    minimum_time_between = config.minimum_time_between_puzzles.to_i
+
+    base_query = filtered_user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id)
+    without_last_n_played = base_query.excluding_last_n_played(self, minimum_puzzles_between)
+    without_last_played_within_n_seconds = base_query.excluding_played_within_last_n_seconds(self, minimum_time_between)
+
+    ideal_set = without_last_n_played.and(without_last_played_within_n_seconds)
+
+    in_order = [
+      ideal_set,
+      without_last_n_played,
+      without_last_played_within_n_seconds,
+      base_query,
+      user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id),
+    ]
+
+    in_order.each do |query|
+      return query.random_order.first if query.any?
+    end
+
+    nil
+  end
+
   def add_puzzle_id(puzzle_id)
     self.active_puzzle_ids << puzzle_id unless self.active_puzzle_ids.include?(puzzle_id)
     save
