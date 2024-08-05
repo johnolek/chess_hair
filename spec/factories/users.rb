@@ -10,15 +10,4 @@ FactoryBot.define do
     admin { false }
     data { {} }
   end
-
-  factory :collection do
-    association :user
-    name { Faker::Lorem.word }
-  end
-
-  factory :user_puzzle do
-    association :user
-    lichess_rating { Faker::Number.between(from: 500, to: 3500) }
-    complete { false }
-  end
 end
