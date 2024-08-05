@@ -93,11 +93,3 @@ export async function savePuzzleResult(result) {
     puzzle_result: result,
   });
 }
-
-export async function fetchRandomCompletedPuzzle(excludeId = null) {
-  const params = {};
-  if (excludeId) {
-    params["exclude_puzzle_id"] = excludeId;
-  }
-  return await getApiCall("/user/random-completed-puzzle", params);
-}

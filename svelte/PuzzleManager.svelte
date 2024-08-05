@@ -1,10 +1,6 @@
 <script>
-  import { onDestroy, onMount, createEventDispatcher } from "svelte";
-  import { writable } from "svelte/store";
+  import { onMount, createEventDispatcher } from "svelte";
   import * as RailsAPI from "./railsApi";
-  import { Util } from "src/util";
-  import { getSetting, initSettings } from "./settingsManager.js";
-  import { settings } from "./stores.js";
 
   // State stores
   import {
@@ -77,8 +73,9 @@
     currentPuzzle.set(updatedPuzzle);
     if ($currentPuzzle.complete || (wasComplete && !$currentPuzzle.complete)) {
       await updateActivePuzzles();
+    } else {
+      updatePuzzleStores(updatedPuzzle);
     }
-    updatePuzzleStores(updatedPuzzle);
   }
 
   export function updatePuzzleStores(updatedPuzzle) {
@@ -101,22 +98,10 @@
     );
   }
 
-  async function refreshSettings() {
-    void updateActivePuzzles();
-  }
-
-  let unsubscribeSettings = () => {};
-
   // Initialize puzzles on mount
   onMount(async () => {
-    await initSettings();
-    await refreshSettings();
     await getFirstPuzzles();
-    unsubscribeSettings = settings.subscribe(refreshSettings);
+    void updateActivePuzzles();
     dispatch("ready");
-  });
-
-  onDestroy(() => {
-    unsubscribeSettings();
   });
 </script>
