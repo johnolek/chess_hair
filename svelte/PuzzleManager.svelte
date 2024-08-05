@@ -85,7 +85,9 @@
     const updateStore = (store) => {
       store.update((puzzles) =>
         puzzles.map((puzzle) =>
-          puzzle.puzzle_id === updatedPuzzle.puzzle_id ? updatedPuzzle : puzzle,
+          puzzle.lichess_puzzle_id === updatedPuzzle.lichess_puzzle_id
+            ? updatedPuzzle
+            : puzzle,
         ),
       );
     };
@@ -93,7 +95,7 @@
     updateStore(activePuzzles);
 
     currentPuzzle.update((puzzle) =>
-      puzzle && puzzle.puzzle_id === updatedPuzzle.puzzle_id
+      puzzle && puzzle.lichess_puzzle_id === updatedPuzzle.lichess_puzzle_id
         ? updatedPuzzle
         : puzzle,
     );

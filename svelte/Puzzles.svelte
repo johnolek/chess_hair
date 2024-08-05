@@ -212,7 +212,7 @@
 
   async function handlePuzzleComplete() {
     const result = {
-      puzzle_id: $currentPuzzle.puzzle_id,
+      puzzle_id: $currentPuzzle.lichess_puzzle_id,
       made_mistake: madeMistake,
       duration: elapsedTime,
       mistakes: mistakes,
@@ -352,22 +352,23 @@
           <div class="columns is-mobile is-vcentered ml-0 mr-0 mb-1">
             <div class="column is-narrow pb-0">
               <a
-                href={`https://lichess.org/training/${$currentPuzzle.puzzle_id}`}
+                href={`https://lichess.org/training/${$currentPuzzle.lichess_puzzle_id}`}
                 class="puzzle-id"
                 target="_blank"
-                title="View on lichess.org">{$currentPuzzle.puzzle_id}</a
+                title="View on lichess.org"
+                >{$currentPuzzle.lichess_puzzle_id}</a
               >
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
-                {#key $currentPuzzle.puzzle_id}
+                {#key $currentPuzzle.lichess_puzzle_id}
                   <Spoiler
                     title="Rating"
                     minWidth="60"
                     isShown={puzzleComplete}
                   >
                     <div>
-                      {$currentPuzzle.rating}
+                      {$currentPuzzle.lichess_rating}
                     </div>
                   </Spoiler>
                 {/key}
@@ -375,7 +376,7 @@
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
-                {#key $currentPuzzle.puzzle_id}
+                {#key $currentPuzzle.lichess_puzzle_id}
                   <Spoiler
                     title="Material"
                     minWidth="70"
@@ -400,11 +401,12 @@
               </div>
             {/if}
             <div class="column">
-              {#key $currentPuzzle.puzzle_id}
+              {#key $currentPuzzle.lichess_puzzle_id}
                 <ProgressBar
                   max={requiredConsecutiveSolves}
-                  bind:current={$currentPuzzle.streak}
-                  className={$currentPuzzle.streak >= requiredConsecutiveSolves
+                  bind:current={$currentPuzzle.solve_streak}
+                  className={$currentPuzzle.solve_streak >=
+                  requiredConsecutiveSolves
                     ? "is-success"
                     : "is-warning"}
                 ></ProgressBar>
@@ -415,7 +417,7 @@
           <div class="block mb-1">
             <div class="board-container">
               {#if $currentPuzzle}
-                {#key $currentPuzzle.puzzle_id}
+                {#key $currentPuzzle.lichess_puzzle_id}
                   <FocusTimer bind:elapsedTime />
                 {/key}
               {/if}
@@ -443,7 +445,7 @@
           </div>
           <div class="block mt-1 ml-4 mr-4">
             <div class="mb-3 scrollable" style="min-height: 31px">
-              {#key $currentPuzzle.puzzle_id}
+              {#key $currentPuzzle.lichess_puzzle_id}
                 {#each moves.slice(0, lastMoveIndexToShow) as move, i (move.after)}
                   <button
                     in:fly={{ x: -30, duration: 300 }}
@@ -792,17 +794,18 @@
                 </tr>
               </thead>
               <tbody>
-                {#each $activePuzzles.sort(puzzleManager.sortPuzzlesBySolveTime) as puzzle (puzzle.puzzle_id)}
+                {#each $activePuzzles.sort(puzzleManager.sortPuzzlesBySolveTime) as puzzle (puzzle.lichess_puzzle_id)}
                   <tr
                     animate:flip={{ duration: 400 }}
-                    class:is-selected={$currentPuzzle.puzzle_id ===
-                      puzzle.puzzle_id}
+                    class:is-selected={$currentPuzzle.lichess_puzzle_id ===
+                      puzzle.lichess_puzzle_id}
                   >
                     <td class="puzzle-id"
                       ><a
-                        href={`https://lichess.org/training/${puzzle.puzzle_id}`}
+                        href={`https://lichess.org/training/${puzzle.lichess_puzzle_id}`}
                         target="_blank"
-                        title="View on lichess.org">{puzzle.puzzle_id}</a
+                        title="View on lichess.org"
+                        >{puzzle.lichess_puzzle_id}</a
                       ></td
                     >
                     {#if puzzle.average_solve_time}
@@ -820,8 +823,9 @@
                     <td>
                       <ProgressBar
                         max={requiredConsecutiveSolves}
-                        bind:current={puzzle.streak}
-                        className={puzzle.streak >= requiredConsecutiveSolves
+                        bind:current={puzzle.solve_streak}
+                        className={puzzle.solve_streak >=
+                        requiredConsecutiveSolves
                           ? "is-success"
                           : "is-warning"}
                       ></ProgressBar>
