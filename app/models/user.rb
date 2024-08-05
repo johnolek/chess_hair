@@ -99,16 +99,24 @@ class User < ApplicationRecord
     without_last_n_played = base_query.excluding_last_n_played(self, minimum_puzzles_between)
     without_last_played_within_n_seconds = base_query.excluding_played_within_last_n_seconds(self, minimum_time_between)
 
-    ideal_set = without_last_n_played.and(without_last_played_within_n_seconds)
+    excluding_recently_seen = without_last_n_played.and(without_last_played_within_n_seconds)
 
     in_order = [
-      ideal_set,
+      excluding_recently_seen,
       without_last_n_played,
       without_last_played_within_n_seconds,
       base_query,
       user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id),
     ]
 
+    # First check for active puzzles in any of the queries
+    in_order.each do |query|
+      query = query.and(active_puzzles)
+      puts query.to_sql, query.count
+      return query.random_order.first if query.any?
+    end
+
+    # Then check for any puzzles in any of the queries
     in_order.each do |query|
       return query.random_order.first if query.any?
     end
