@@ -85,17 +85,18 @@ class User < ApplicationRecord
   end
 
   def next_puzzle(previous_puzzle_id = nil)
+    base_query = filtered_user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id)
+
     odds_of_random = config.odds_of_random_completed
 
     if rand < odds_of_random
-      random_completed = user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id).completed
+      random_completed = base_query.completed
       return random_completed.random_order.first if random_completed.any?
     end
 
     minimum_puzzles_between = config.minimum_puzzles_between_reviews.to_i
     minimum_time_between = config.minimum_time_between_puzzles.to_i
 
-    base_query = filtered_user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id)
     without_last_n_played = base_query.excluding_last_n_played(self, minimum_puzzles_between)
     without_last_played_within_n_seconds = base_query.excluding_played_within_last_n_seconds(self, minimum_time_between)
 
