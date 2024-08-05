@@ -19,6 +19,7 @@ export const eligibleActivePuzzles = writable([]);
 export const eligibleOtherPuzzles = writable([]);
 export const eligibleFilteredPuzzles = writable([]);
 export const currentPuzzle = writable(null);
+export const nextPuzzle = writable(null);
 export const totalIncorrectPuzzlesCount = writable(0);
 export const totalFilteredPuzzlesCount = writable(0);
 export const completedFilteredPuzzlesCount = writable(0);

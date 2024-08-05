@@ -52,6 +52,12 @@ export async function fetchAllPuzzles() {
   return await getApiCall("/user/all-puzzles");
 }
 
+export async function fetchNextPuzzle(currentPuzzleId = null) {
+  return await getApiCall("/user/next-puzzle", {
+    exclude_puzzle_id: currentPuzzleId,
+  });
+}
+
 export async function fetchFilteredPuzzles() {
   return await getApiCall("/user/all-filtered-puzzles");
 }
