@@ -19,6 +19,7 @@ class FetchPuzzleHistoryJob < ApplicationJob
     fetched_existing = false
     oldest_saved = user.user_puzzle_histories.minimum(:played_at)
     user.set_data('puzzle_import_running', true)
+    went_back_to_oldest = false
 
     while keep_going
       batch_count = 0
@@ -61,10 +62,12 @@ class FetchPuzzleHistoryJob < ApplicationJob
 
       break if batch_count == 0
 
-      if fetched_existing && oldest_saved
+      if fetched_existing && oldest_saved && !went_back_to_oldest
         # The current batch contained at least one puzzle that was already fetched, so skip to the oldest fetched
         # in case we missed some the first time.
         before = oldest_saved
+        fetched_existing = false
+        went_back_to_oldest = true
       end
     end
   ensure
