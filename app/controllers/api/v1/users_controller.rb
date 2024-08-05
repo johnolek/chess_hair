@@ -61,6 +61,10 @@ module Api
         render json: query.first
       end
 
+      def next_puzzle
+        render json: @user.next_puzzle(params[:exclude_puzzle_id])
+      end
+
       def import_new_puzzle_histories
         FetchPuzzleHistoryJob.perform_later(user: @user)
         render json: { message: "Importing new puzzle histories." }

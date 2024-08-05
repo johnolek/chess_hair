@@ -17,6 +17,7 @@
     eligibleOtherPuzzles,
     eligibleFilteredPuzzles,
     currentPuzzle,
+    nextPuzzle,
     totalIncorrectPuzzlesCount,
     totalFilteredPuzzlesCount,
     completedFilteredPuzzlesCount,
@@ -63,6 +64,15 @@
   async function fetchAllPuzzles() {
     const puzzles = await RailsAPI.fetchAllPuzzles();
     allPuzzles.set(puzzles);
+  }
+
+  async function fetchNextPuzzle() {
+    const puzzleIdToExclude = $currentPuzzle?.puzzle_id || null;
+    const puzzle = await RailsAPI.fetchNextPuzzle(puzzleIdToExclude);
+    if (!puzzle) {
+      return;
+    }
+    nextPuzzle.set(puzzle);
   }
 
   async function fetchAllFilteredPuzzles() {
@@ -198,6 +208,7 @@
     await fetchAllFilteredPuzzles();
     await updateRandomCompletedPuzzle();
     await updateCurrentPuzzle();
+    await fetchNextPuzzle();
     unsubscribeSettings = settings.subscribe(refreshSettings);
     dispatch("ready");
   });
