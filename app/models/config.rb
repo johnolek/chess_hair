@@ -29,6 +29,10 @@ class Config < ApplicationRecord
     self.get_setting('puzzles.minimumTimeBetween')
   end
 
+  def minimum_puzzles_between_reviews
+    self.get_setting('puzzles.minimumPuzzlesBetweenReviews')
+  end
+
   def puzzle_consecutive_solves
     self.get_setting('puzzles.consecutiveSolves')
   end
@@ -41,6 +45,10 @@ class Config < ApplicationRecord
     self.get_setting('puzzles.minRating')
   end
 
+  def odds_of_random_completed
+    self.get_setting('puzzles.oddsOfRandomCompleted')
+  end
+
   def self.default_settings
     {
       "puzzles.batchSize" => 15,
@@ -48,6 +56,7 @@ class Config < ApplicationRecord
       "puzzles.consecutiveSolves" => 2,
       "puzzles.oddsOfRandomCompleted" => 0.1,
       "puzzles.minimumTimeBetween" => 5.minutes.to_i,
+      "puzzles.minimumPuzzlesBetweenReviews" => 10,
       "puzzles.minRating" => 1,
       "puzzles.maxRating" => 3500,
     }
