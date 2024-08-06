@@ -274,8 +274,7 @@
   }
 
   onMount(async () => {
-    await initSettings();
-    await updateUserInfo();
+    await Promise.all([initSettings(), updateUserInfo()]);
     if (userInfo.import_in_progress) {
       void waitForImportComplete();
     }
@@ -346,7 +345,6 @@
     <div class="column is-6 pl-0 pr-0">
       {#if !loaded}
         <div class="block has-text-centered">
-          <h2>Loading</h2>
           <progress class="progress is-small is-primary" max="100" />
         </div>
       {/if}
