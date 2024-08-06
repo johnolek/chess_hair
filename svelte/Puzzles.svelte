@@ -182,6 +182,11 @@
       }
     } else {
       madeMistake = true;
+      void RailsAPI.saveMistake({
+        user_puzzle_id: $currentPuzzle.id,
+        uci_move: move.lan,
+        move_index: move.moveIndex,
+      });
       // Override temporarily so it move highlight doesn't flash when undoing
       fenToHighlight = move.before;
       chessboard.highlightSquare(move.to, "incorrect-move", 400);

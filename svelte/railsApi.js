@@ -93,3 +93,9 @@ export async function savePuzzleResult(result) {
     puzzle_result: result,
   });
 }
+
+export async function saveMistake(mistake) {
+  return await postApiCall("/mistakes", {
+    mistake,
+  });
+}
