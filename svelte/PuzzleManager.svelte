@@ -25,7 +25,7 @@
   }
 
   async function fetchNextPuzzle() {
-    const puzzleIdToExclude = $currentPuzzle?.puzzle_id || null;
+    const puzzleIdToExclude = $currentPuzzle?.lichess_puzzle_id || null;
     const puzzle = await RailsAPI.fetchNextPuzzle(puzzleIdToExclude);
     if (!puzzle) {
       return;
