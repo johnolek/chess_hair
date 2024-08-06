@@ -1,4 +1,5 @@
 import { Util } from "../app/javascript/src/util";
+import { currentPuzzle } from "./stores";
 
 const BASE_URL = "/api/v1";
 
@@ -94,8 +95,12 @@ export async function savePuzzleResult(result) {
   });
 }
 
-export async function saveMistake(mistake) {
+export async function saveMistake(userPuzzleId, move) {
   return await postApiCall("/mistakes", {
-    mistake,
+    mistake: {
+      user_puzzle_id: userPuzzleId,
+      uci_move: move.lan,
+      move_index: move.moveIndex,
+    },
   });
 }

@@ -85,13 +85,13 @@
   let moves = [];
 
   let madeMistake = false;
-  let mistakes = [];
+  let mistakes = new Map();
   let puzzleComplete = false;
   let elapsedTime = 0;
 
   function resetPuzzleState() {
     madeMistake = false;
-    mistakes = [];
+    mistakes = new Map();
     puzzleComplete = false;
     elapsedTime = 0;
     lastMoveIndexToShow = 0;
@@ -182,18 +182,17 @@
       }
     } else {
       madeMistake = true;
-      void RailsAPI.saveMistake({
-        user_puzzle_id: $currentPuzzle.id,
-        uci_move: move.lan,
-        move_index: move.moveIndex,
-      });
+      const mistakeId = move.after;
+      if (!mistakes.has(mistakeId)) {
+        mistakes.set(mistakeId, move);
+        void RailsAPI.saveMistake($currentPuzzle.id, move);
+      }
       // Override temporarily so it move highlight doesn't flash when undoing
       fenToHighlight = move.before;
       chessboard.highlightSquare(move.to, "incorrect-move", 400);
       setTimeout(() => {
         chessboard.enableShowLastMove();
         chessboard.undo();
-        mistakes = [...mistakes, move];
       }, 300);
     }
   }
@@ -220,7 +219,6 @@
       puzzle_id: $currentPuzzle.lichess_puzzle_id,
       made_mistake: madeMistake,
       duration: elapsedTime,
-      mistakes: mistakes,
     };
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
