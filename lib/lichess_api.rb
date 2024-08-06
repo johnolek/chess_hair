@@ -11,9 +11,12 @@ module LichessApi
     request['Accept'] = 'application/x-ndjson'
     request['User-Agent'] = 'chess.hair'
     request["Authorization"] = "Bearer #{token}"
+    puzzles = []
 
     NdJsonStreamer.stream_from_request(request) do |puzzle_json|
-      yield puzzle_json
+      puzzles << puzzle_json
     end
+
+    puzzles
   end
 end

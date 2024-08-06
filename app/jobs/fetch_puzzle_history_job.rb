@@ -12,66 +12,50 @@ class FetchPuzzleHistoryJob < ApplicationJob
       return
     end
 
+    user.set_data('puzzle_import_running', true)
     before = nil
     per_request = 50
-    keep_going = true
-    imported = 0
-    fetched_existing = false
-    oldest_saved = user.user_puzzle_histories.minimum(:played_at)
-    user.set_data('puzzle_import_running', true)
-    went_back_to_oldest = false
 
-    while keep_going
-      batch_count = 0
-
-      LichessApi.fetch_puzzle_activity(user.lichess_api_token, per_request, before) do |puzzle_json|
-        batch_count += 1
-        parsed = JSON.parse(puzzle_json)
-        before = parsed['date']
-        Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
-        puzzle = parsed['puzzle']
-        history = user.user_puzzle_histories.find_or_initialize_by(
-          {
-            puzzle_id: puzzle['id'],
-            played_at: parsed['date']
-          }
-        )
-        Rails.logger.info "Puzzle history already exists" unless history.new_record?
-
-        unless history.new_record?
-          fetched_existing = true
-          next
+    begin
+      loop do
+        imported_this_loop = 0
+        puzzles_fetched = LichessApi.fetch_puzzle_activity(user.lichess_api_token, per_request, before)
+        if puzzles_fetched.empty?
+          user.set_data('puzzle_import_fetched_to_end', true)
+          break
         end
 
-        history.assign_attributes(
-          {
+        puzzles_fetched.each do |puzzle_json|
+          parsed = JSON.parse(puzzle_json)
+          before = parsed['date']
+          Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
+          puzzle = parsed['puzzle']
+          history = user.user_puzzle_histories.find_or_initialize_by(
+            puzzle_id: puzzle['id'],
+            played_at: parsed['date']
+          )
+
+          next unless history.new_record?
+
+          history.assign_attributes(
             win: parsed['win'],
             rating: puzzle['rating'],
             solution: puzzle['solution'].join(' '),
             fen: puzzle['fen'],
             plays: puzzle['plays'],
             themes: puzzle['themes'].join(' '),
-            last_move: puzzle['lastMove'],
-          }
-        )
-        history.save!
-        history.create_user_puzzle unless history.win?
-        oldest_saved = parsed['date'] if oldest_saved.nil? || parsed['date'] < oldest_saved
-        imported += 1
-      end
+            last_move: puzzle['lastMove']
+          )
+          history.save!
+          history.create_user_puzzle unless history.win?
+          imported_this_loop += 1
+        end
 
-      break if batch_count == 0
-
-      if fetched_existing && oldest_saved && !went_back_to_oldest
-        # The current batch contained at least one puzzle that was already fetched, so skip to the oldest fetched
-        # in case we missed some the first time.
-        before = oldest_saved
-        fetched_existing = false
-        went_back_to_oldest = true
+        break if imported_this_loop == 0
       end
+    ensure
+      user.set_data('puzzle_import_running', false)
+      user.set_data('puzzles_imported_at', Time.current.to_i)
     end
-  ensure
-    user.set_data('puzzle_import_running', false)
-    user.set_data('puzzles_imported_at', Time.current.to_i)
   end
 end
