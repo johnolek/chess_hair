@@ -17,6 +17,9 @@ export function getLegalMovesMap(fen) {
   return legalMovesMap;
 }
 
+const files = "abcdefgh";
+const ranks = "12345678";
+
 const pieceValues = {
   p: 1, // pawn
   n: 3, // knight
@@ -24,6 +27,52 @@ const pieceValues = {
   r: 5, // rook
   q: 9, // queen
 };
+
+function getSurroundingSquares(square) {
+  const file = square[0];
+  const rank = square[1];
+  const fileIndex = files.indexOf(file);
+  const rankIndex = ranks.indexOf(rank);
+
+  const surroundingSquares = [];
+
+  for (let i = -1; i <= 1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      if (i === 0 && j === 0) continue; // Skip the original square
+      const newFileIndex = fileIndex + i;
+      const newRankIndex = rankIndex + j;
+      if (
+        newFileIndex >= 0 &&
+        newFileIndex < 8 &&
+        newRankIndex >= 0 &&
+        newRankIndex < 8
+      ) {
+        const newSquare = files[newFileIndex] + ranks[newRankIndex];
+        surroundingSquares.push(newSquare);
+      }
+    }
+  }
+
+  return surroundingSquares;
+}
+
+export function getKingSurroundingSquares(fen, color = "w") {
+  const square = findPiece(fen, "k", color);
+  return getSurroundingSquares(square);
+}
+
+export function findPiece(fen, type, color) {
+  const chess = new Chess(fen);
+  const board = chess.board();
+  const flattened = board.flat();
+  const square = flattened
+    .filter((square) => square !== null)
+    .find((square) => square.type === type && square.color === color);
+  if (!square) {
+    return null;
+  }
+  return square.square;
+}
 
 export function getMaterialCounts(fen) {
   const chess = new Chess(fen);
