@@ -369,13 +369,13 @@
                   class="button is-white is-small"
                   on:click={() => {
                     chessboard.showKingSafety("w");
-                  }}>King Safety</button
+                  }}>King</button
                 >
                 <button
                   class="button is-black is-small"
                   on:click={() => {
                     chessboard.showKingSafety("b");
-                  }}>King Safety</button
+                  }}>King</button
                 >
               </div>
             </div>
