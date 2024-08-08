@@ -14,7 +14,7 @@
   export let lines = 5;
   export let ready = false;
 
-  let readyok = false;
+  export let readyok = false;
   let analysisFileLoaded = false;
   let nnueInitialized = false;
 
@@ -188,12 +188,11 @@
   }
 
   function handleStockfishMessage(message) {
-    if (Util.isDev()) {
-      console.debug(message);
-    }
+    Util.debug(message);
     if (message.startsWith("bestmove")) {
       analyzing = false;
       dispatchTopMoves();
+      stopAnalysis();
     } else if (message.startsWith("info depth") && message.includes("pv")) {
       const info = parseStockfishInfo(message);
       if (info) {
