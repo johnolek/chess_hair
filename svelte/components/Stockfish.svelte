@@ -1,21 +1,29 @@
 <script>
   import { onMount, createEventDispatcher, onDestroy } from "svelte";
+  import { cloneDeep } from "lodash";
   import { Util } from "src/util";
   import { Chess } from "chess.js";
   import { stockfishLines, stockfishDepth, stockfishCores } from "../stores";
 
-  let topMoves = {};
+  export let analysisEnabled = false;
   export let analyzing = false;
-
-  let analysisFen;
-
   export let readyok = false;
 
-  let bestMovesCache = {};
+  let topMoves = {};
+  let analysisFen;
+  let stockfishWorker;
 
-  let stockfish;
+  stockfishLines.subscribe(restartAnalysis);
+  stockfishDepth.subscribe(restartAnalysis);
 
   const dispatch = createEventDispatcher();
+
+  function restartAnalysis() {
+    if (analysisEnabled && analysisFen) {
+      Util.log("restarting analysis");
+      analyzePosition(analysisFen);
+    }
+  }
 
   function parseStockfishInfo(infoLine) {
     const parts = infoLine.split(" ");
@@ -89,7 +97,7 @@
   function checkForEvalFileLoaded(event) {
     const message = event.data;
     if (message.startsWith("Load eval file success: 1")) {
-      stockfish.removeEventListener("message", checkForEvalFileLoaded);
+      stockfishWorker.removeEventListener("message", checkForEvalFileLoaded);
       uciMessage("isready");
     }
   }
@@ -111,12 +119,13 @@
    * @param message
    */
   export function uciMessage(message) {
-    stockfish.postMessage(message);
+    stockfishWorker.postMessage(message);
   }
 
   function dispatchTopMoves(topMoves, fen) {
     const topMovesArray = Object.values(topMoves)
       .slice(0, $stockfishLines)
+      .map(cloneDeep)
       .map((moveData) => {
         return {
           ...moveData,
@@ -136,6 +145,8 @@
 
   let nextAnalysisTimeout;
   export function analyzePosition(fen, attempt = 0) {
+    analysisEnabled = true;
+    topMoves = {};
     if (analyzing) {
       Util.log(`Attempt ${attempt}: already analyzing, stopping and retrying`);
       stopAnalysis();
@@ -146,18 +157,10 @@
       return;
     }
 
-    if (bestMovesCache[getCacheKey(fen)]) {
-      Util.log("Using cached best moves");
-      topMoves = bestMovesCache[getCacheKey(fen)];
-      dispatchTopMoves(topMoves, fen);
-      return;
-    }
-
     Util.log(`Starting to analyze position: ${fen}`);
     analysisFen = fen;
     analyzing = true;
     readyok = false;
-    clearData();
     uciMessage(`position fen ${fen}`);
     uciMessage(`setoption name MultiPV value ${$stockfishLines}`);
     uciMessage(`setoption name Threads value ${$stockfishCores}`);
@@ -169,15 +172,10 @@
     if (!analyzing || stopping) {
       return;
     }
+    // This will be set back to false after receiving the readyok message
     stopping = true;
-    analysisFen = null;
     uciMessage("stop");
     uciMessage("isready");
-    clearData();
-  }
-
-  function clearData() {
-    topMoves = {};
   }
 
   function handleStockfishMessage(message) {
@@ -189,9 +187,14 @@
     }
 
     if (message.startsWith("bestmove")) {
-      bestMovesCache[getCacheKey(analysisFen)] = { ...topMoves };
-      dispatchTopMoves(topMoves, analysisFen);
-      stopAnalysis();
+      const topMoveMoves = Object.values(topMoves);
+      const isDoneAnalyzing =
+        topMoveMoves.length > 0 &&
+        topMoveMoves.every((topMove) => topMove.depth === $stockfishDepth);
+      if (isDoneAnalyzing) {
+        dispatchTopMoves(topMoves, analysisFen);
+        stopAnalysis();
+      }
     } else if (message.startsWith("info depth") && message.includes("pv")) {
       const info = parseStockfishInfo(message);
       if (info) {
@@ -201,24 +204,20 @@
     }
   }
 
-  function getCacheKey(fen) {
-    return `${fen}-${$stockfishDepth}-${$stockfishCores}-${$stockfishLines}`;
-  }
-
   onMount(() => {
-    stockfish = new Worker(
+    stockfishWorker = new Worker(
       "/javascript/stockfish/src/stockfish-nnue-16.js", // served with rails public assets server thing
     );
-    Util.log({ stockfishWorker: stockfish });
-    stockfish.addEventListener("error", (event) => Util.error(event));
-    stockfish.addEventListener("message", (event) =>
+    Util.log({ stockfishWorker: stockfishWorker });
+    stockfishWorker.addEventListener("error", (event) => Util.error(event));
+    stockfishWorker.addEventListener("message", (event) =>
       handleStockfishMessage(event.data),
     );
-    stockfish.addEventListener("message", checkForEvalFileLoaded);
+    stockfishWorker.addEventListener("message", checkForEvalFileLoaded);
     uciMessage("setoption name Use NNUE value true");
   });
 
   onDestroy(() => {
-    stockfish.terminate();
+    stockfishWorker.terminate();
   });
 </script>

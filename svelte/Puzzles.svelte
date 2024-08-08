@@ -103,8 +103,8 @@
       chessboard.enableShowLastMove();
     }
 
-    if (analysisTurnedOn) {
-      analysisTurnedOn = false;
+    if (analysisEnabled) {
+      analysisEnabled = false;
       topStockfishMoves = [];
       stockfish.stopAnalysis();
     }
@@ -290,10 +290,10 @@
   let stockfish;
   let readyToStartAnalyzing;
   let topStockfishMoves = [];
-  let analysisTurnedOn;
+  let analysisEnabled = false;
 
   $: {
-    if (!analysisTurnedOn) {
+    if (!analysisEnabled) {
       if (stockfish) {
         stockfish.stopAnalysis();
         chessboard.clearDrawings();
@@ -302,7 +302,7 @@
   }
 
   $: {
-    if (analysisTurnedOn && stockfish && fen) {
+    if (analysisEnabled && stockfish && fen) {
       stockfish.analyzePosition(fen);
     }
   }
@@ -469,14 +469,14 @@
             </div>
             <div class="columns is-mobile is-vcentered">
               <div class="column has-text-left is-narrow">
-                {#if !analysisTurnedOn}
+                {#if !analysisEnabled}
                   <button
                     class="button is-dark-cyan is-small is-inline-block"
                     title="Enable stockfish analysis"
                     class:is-danger={!puzzleComplete}
                     disabled={!readyToStartAnalyzing}
                     on:click={() => {
-                      analysisTurnedOn = true;
+                      analysisEnabled = true;
                       madeMistake = true;
                     }}
                     ><Fa icon={faFishFins} />
@@ -486,7 +486,7 @@
                     class="button is-tiffany-blue is-small is-inline-block"
                     title="Stop analysis"
                     on:click={() => {
-                      analysisTurnedOn = false;
+                      analysisEnabled = false;
                       topStockfishMoves = [];
                     }}
                     ><Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
@@ -544,7 +544,7 @@
                 {/if}
               </div>
             </div>
-            {#if analysisTurnedOn && topStockfishMoves.length > 0}
+            {#if analysisEnabled && topStockfishMoves.length > 0}
               <div class="block">
                 <div class="buttons">
                   {#each topStockfishMoves as move}
@@ -627,8 +627,9 @@
             <Stockfish
               bind:this={stockfish}
               bind:readyok={readyToStartAnalyzing}
+              bind:analysisEnabled
               on:topmoves={(event) => {
-                if (!analysisTurnedOn) {
+                if (!analysisEnabled) {
                   return;
                 }
                 topStockfishMoves = event.detail.topMoves;
@@ -685,14 +686,14 @@
                 </label>
               </div>
               <br />
-              {#if !analysisTurnedOn}
+              {#if !analysisEnabled}
                 <button
                   class="button is-dark-cyan is-small is-inline-block"
                   title="Enable stockfish analysis"
                   class:is-danger={!puzzleComplete}
                   disabled={!readyToStartAnalyzing}
                   on:click={() => {
-                    analysisTurnedOn = true;
+                    analysisEnabled = true;
                     madeMistake = true;
                   }}
                   ><Fa icon={faFishFins} />
@@ -702,7 +703,7 @@
                   class="button is-tiffany-blue is-small is-inline-block"
                   title="Stop analysis"
                   on:click={() => {
-                    analysisTurnedOn = false;
+                    analysisEnabled = false;
                     topStockfishMoves = [];
                   }}
                   ><Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
