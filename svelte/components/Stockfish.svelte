@@ -201,7 +201,7 @@
         topMovesArray.length > 0 &&
         topMovesArray.every((topMove) => topMove.depth === $stockfishDepth);
       if (isAnalysisComplete) {
-        topMovesCache[cacheKey(analysisFen)] = topMovesArray;
+        topMovesCache[cacheKey(analysisFen)] = cloneDeep(topMovesArray);
         stopAnalysis();
       }
     }
