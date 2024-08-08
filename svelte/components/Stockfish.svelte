@@ -124,9 +124,33 @@
     stockfishWorker.postMessage(message);
   }
 
+  function getStockfishLines() {
+    if ($stockfishLines > 0) {
+      return $stockfishLines;
+    }
+
+    return 1;
+  }
+
+  function getStockfishCores() {
+    if ($stockfishCores > 0) {
+      return $stockfishCores;
+    }
+
+    return 1;
+  }
+
+  function getStockfishDepth() {
+    if ($stockfishDepth > 5) {
+      return $stockfishDepth;
+    }
+
+    return 5;
+  }
+
   function getTopMovesArray(topMoves, fen) {
     const topMovesArray = Object.values(topMoves)
-      .slice(0, $stockfishLines)
+      .slice(0, getStockfishLines())
       .map(cloneDeep)
       .map((moveData) => {
         return {
@@ -171,9 +195,9 @@
     analyzing = true;
     readyok = false;
     uciMessage(`position fen ${fen}`);
-    uciMessage(`setoption name MultiPV value ${$stockfishLines}`);
-    uciMessage(`setoption name Threads value ${$stockfishCores}`);
-    uciMessage(`go depth ${$stockfishDepth}`);
+    uciMessage(`setoption name MultiPV value ${getStockfishLines()}`);
+    uciMessage(`setoption name Threads value ${getStockfishCores()}`);
+    uciMessage(`go depth ${getStockfishDepth()}`);
   }
 
   let stopping = false;
@@ -211,7 +235,7 @@
       const topMovesArray = getTopMovesArray(topMoves, analysisFen);
       const isAnalysisComplete =
         topMovesArray.length > 0 &&
-        topMovesArray.every((topMove) => topMove.depth === $stockfishDepth);
+        topMovesArray.every((topMove) => topMove.depth === getStockfishDepth());
       if (isAnalysisComplete) {
         topMovesCache[cacheKey(analysisFen)] = cloneDeep(topMovesArray);
         stopAnalysis();
@@ -220,7 +244,7 @@
   }
 
   function cacheKey(fen) {
-    return `${fen}-depth:${$stockfishDepth}-lines:${$stockfishLines}`;
+    return `${fen}-depth:${getStockfishDepth()}-lines:${getStockfishLines()}`;
   }
 
   onMount(() => {
