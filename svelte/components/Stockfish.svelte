@@ -12,6 +12,7 @@
   let topMoves = {};
   let analysisFen;
   let stockfishWorker;
+  let topMovesCache = {};
 
   stockfishLines.subscribe(restartAnalysis);
   stockfishDepth.subscribe(restartAnalysis);
@@ -138,12 +139,8 @@
     return topMovesArray;
   }
 
-  function dispatchTopMoves(topMoves, fen) {
-    const topMovesArray = getTopMovesArray(topMoves, fen);
-
-    if (topMovesArray.length > 0) {
-      dispatch("topmoves", { topMoves: cloneDeep(topMovesArray) });
-    }
+  function dispatchTopMoves(topMovesArray) {
+    dispatch("topmoves", { topMoves: cloneDeep(topMovesArray) });
   }
 
   let nextAnalysisTimeout;
@@ -193,7 +190,8 @@
       const info = parseStockfishInfo(message);
       if (info) {
         topMoves[info.multiPV] = info;
-        dispatchTopMoves(topMoves, analysisFen);
+        const topMovesArray = getTopMovesArray(topMoves, analysisFen);
+        dispatchTopMoves(topMovesArray);
       }
     }
 
@@ -203,9 +201,14 @@
         topMovesArray.length > 0 &&
         topMovesArray.every((topMove) => topMove.depth === $stockfishDepth);
       if (isAnalysisComplete) {
+        topMovesCache[cacheKey(analysisFen)] = topMovesArray;
         stopAnalysis();
       }
     }
+  }
+
+  function cacheKey(fen) {
+    return `${fen}-depth:${$stockfishDepth}-lines:${$stockfishLines}`;
   }
 
   onMount(() => {
