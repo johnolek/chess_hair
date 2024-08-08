@@ -3,7 +3,6 @@
   import { Util } from "src/util";
   import { Chess } from "chess.js";
 
-  let bestMove = "";
   let topMoves = {};
   export let analyzing = false;
 
@@ -12,23 +11,12 @@
   export let depth = 20;
   export let numCores = 1;
   export let lines = 5;
-  export let ready = false;
 
   export let readyok = false;
-  let analysisFileLoaded = false;
-  let nnueInitialized = false;
-
-  $: ready = analysisFileLoaded;
 
   $: if (fen && analysisFen && fen !== analysisFen) {
+    Util.log("stopping analysis due to fen change");
     stopAnalysis();
-  }
-
-  $: {
-    if (readyok && !nnueInitialized) {
-      uciMessage("setoption name Use NNUE value true");
-      nnueInitialized = true;
-    }
   }
 
   let stockfish;
@@ -91,15 +79,24 @@
 
   function checkForReady(message) {
     if (message === "readyok") {
+      Util.log("stockfish ready command received");
       readyok = true;
+      if (stopping) {
+        Util.log("setting stopping to false");
+        stopping = false;
+      }
+      if (analyzing) {
+        Util.log("setting analyzing to false");
+        analyzing = false;
+      }
     }
   }
 
   function checkForEvalFileLoaded(event) {
     const message = event.data;
     if (message.startsWith("Load eval file success: 1")) {
-      analysisFileLoaded = true;
       stockfish.removeEventListener("message", checkForEvalFileLoaded);
+      uciMessage("isready");
     }
   }
 
@@ -112,6 +109,7 @@
     try {
       return chessInstance.move(uciMove);
     } catch (error) {
+      Util.error("error getting full move", error);
       return null;
     }
   }
@@ -123,12 +121,6 @@
    */
   export function uciMessage(message) {
     stockfish.postMessage(message);
-  }
-
-  function dispatchBestMove() {
-    if (bestMove !== "") {
-      dispatch("bestmove", { bestMove });
-    }
   }
 
   function dispatchTopMoves() {
@@ -151,13 +143,19 @@
     }
   }
 
-  export function analyzePosition() {
-    if (analyzing || !readyok) {
+  let nextAnalysisTimeout;
+  export function analyzePosition(attempt = 0) {
+    if (analyzing) {
       stopAnalysis();
-      setTimeout(analyzePosition, 200);
+      clearTimeout(nextAnalysisTimeout);
+      nextAnalysisTimeout = setTimeout(() => {
+        analyzePosition(attempt + 1);
+      }, 1);
+      Util.log(`Attempt ${attempt}: already analyzing, stopping and retrying`);
       return;
     }
     if (fen) {
+      Util.log(`Starting to analyze position: ${fen}`);
       analyzing = true;
       readyok = false;
       clearData();
@@ -169,18 +167,18 @@
     }
   }
 
+  let stopping = false;
   export function stopAnalysis() {
-    if (!analyzing && readyok) {
+    if (!analyzing || stopping) {
       return;
     }
+    stopping = true;
     uciMessage("stop");
     uciMessage("isready");
     clearData();
-    dispatchTopMoves();
   }
 
   function clearData() {
-    bestMove = "";
     topMoves = {};
   }
 
@@ -188,7 +186,6 @@
     Util.debug(message);
     checkForReady(message);
     if (message.startsWith("bestmove")) {
-      analyzing = false;
       dispatchTopMoves();
       stopAnalysis();
     } else if (message.startsWith("info depth") && message.includes("pv")) {
@@ -210,8 +207,7 @@
       handleStockfishMessage(event.data),
     );
     stockfish.addEventListener("message", checkForEvalFileLoaded);
-    uciMessage("uci");
-    uciMessage("isready");
+    uciMessage("setoption name Use NNUE value true");
   });
 
   onDestroy(() => {
