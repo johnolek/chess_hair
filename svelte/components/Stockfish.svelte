@@ -16,6 +16,7 @@
 
   stockfishLines.subscribe(restartAnalysis);
   stockfishDepth.subscribe(restartAnalysis);
+  stockfishCores.subscribe(restartAnalysis);
 
   const dispatch = createEventDispatcher();
 
@@ -146,6 +147,7 @@
   let nextAnalysisTimeout;
   export function analyzePosition(fen, attempt = 0) {
     analysisEnabled = true;
+    analysisFen = fen;
     topMoves = {};
     if (analyzing) {
       Util.log(`Attempt ${attempt}: already analyzing, stopping and retrying`);
