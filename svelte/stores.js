@@ -8,6 +8,10 @@ export const blackBoardStyle = persisted("global.blackBoardStyle", "brown");
 export const whitePieceSet = persisted("global.whitePieceSet", "maestro");
 export const blackPieceSet = persisted("global.blackPieceSet", "maestro");
 
+export const stockfishLines = persisted("global.stockfishLines", 5);
+export const stockfishCores = persisted("global.stockfishCores", 1);
+export const stockfishDepth = persisted("global.stockfishDepth", 22);
+
 export const settings = writable({});
 
 export const activePuzzles = writable([]);

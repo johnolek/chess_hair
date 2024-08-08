@@ -2,14 +2,12 @@
   import { onMount, createEventDispatcher, onDestroy } from "svelte";
   import { Util } from "src/util";
   import { Chess } from "chess.js";
+  import { stockfishLines, stockfishDepth, stockfishCores } from "../stores";
 
   let topMoves = {};
   export let analyzing = false;
 
   let analysisFen;
-  export let depth = 20;
-  export let numCores = 1;
-  export let lines = 5;
 
   export let readyok = false;
 
@@ -118,7 +116,7 @@
 
   function dispatchTopMoves(topMoves, fen) {
     const topMovesArray = Object.values(topMoves)
-      .slice(0, lines)
+      .slice(0, $stockfishLines)
       .map((moveData) => {
         return {
           ...moveData,
@@ -161,9 +159,9 @@
     readyok = false;
     clearData();
     uciMessage(`position fen ${fen}`);
-    uciMessage(`setoption name MultiPV value ${lines}`);
-    uciMessage(`setoption name Threads value ${numCores}`);
-    uciMessage(`go depth ${depth}`);
+    uciMessage(`setoption name MultiPV value ${$stockfishLines}`);
+    uciMessage(`setoption name Threads value ${$stockfishCores}`);
+    uciMessage(`go depth ${$stockfishDepth}`);
   }
 
   let stopping = false;
@@ -204,7 +202,7 @@
   }
 
   function getCacheKey(fen) {
-    return `${fen}-${depth}-${numCores}-${lines}`;
+    return `${fen}-${$stockfishDepth}-${$stockfishCores}-${$stockfishLines}`;
   }
 
   onMount(() => {

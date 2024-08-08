@@ -23,8 +23,6 @@
   } from "@fortawesome/free-solid-svg-icons";
   import { getMaterialCounts } from "./components/lib/chess_functions";
 
-  const [send, receive] = crossfade({ fallback: fade, duration: 300 });
-
   // State stores
   import {
     activePuzzles,
@@ -32,7 +30,13 @@
     totalIncorrectPuzzlesCount,
     totalFilteredPuzzlesCount,
     completedFilteredPuzzlesCount,
+    stockfishLines,
+    stockfishCores,
+    stockfishDepth,
   } from "./stores.js";
+
+  const [send, receive] = crossfade({ fallback: fade, duration: 300 });
+
   import PuzzleConfigForm from "./PuzzleConfigForm.svelte";
   import DevOnly from "./components/DevOnly.svelte";
   import MaterialCounter from "./components/MaterialCounter.svelte";
@@ -285,9 +289,6 @@
   /** @type {Stockfish} */
   let stockfish;
   let readyToStartAnalyzing;
-  let depth = 22;
-  let numCores = 1;
-  let lines = 5;
   let topStockfishMoves = [];
   let analysisTurnedOn;
 
@@ -626,9 +627,6 @@
             <Stockfish
               bind:this={stockfish}
               bind:readyok={readyToStartAnalyzing}
-              {depth}
-              {numCores}
-              {lines}
               on:topmoves={(event) => {
                 if (!analysisTurnedOn) {
                   return;
@@ -647,7 +645,7 @@
                       type="number"
                       inputmode="numeric"
                       pattern="[0-9]*"
-                      bind:value={depth}
+                      bind:value={$stockfishDepth}
                       min="10"
                       max="50"
                     />
@@ -663,7 +661,7 @@
                       type="number"
                       inputmode="numeric"
                       pattern="[0-9]*"
-                      bind:value={numCores}
+                      bind:value={$stockfishCores}
                       min="1"
                       max="12"
                     />
@@ -679,7 +677,7 @@
                       type="number"
                       inputmode="numeric"
                       pattern="[0-9]*"
-                      bind:value={lines}
+                      bind:value={$stockfishLines}
                       min="1"
                       max="100"
                     />
