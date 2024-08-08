@@ -13,6 +13,8 @@
 
   export let readyok = false;
 
+  let bestMovesCache = {};
+
   let stockfish;
 
   const dispatch = createEventDispatcher();
@@ -94,12 +96,9 @@
     }
   }
 
-  function getFullMove(uciMove) {
-    if (!analysisFen) {
-      return null;
-    }
+  function getFullMove(uciMove, fen) {
     const chessInstance = new Chess();
-    chessInstance.load(analysisFen);
+    chessInstance.load(fen);
     try {
       return chessInstance.move(uciMove);
     } catch (error) {
@@ -117,14 +116,14 @@
     stockfish.postMessage(message);
   }
 
-  function dispatchTopMoves() {
+  function dispatchTopMoves(topMoves, fen) {
     const topMovesArray = Object.values(topMoves)
       .slice(0, lines)
       .map((moveData) => {
         return {
           ...moveData,
-          fullMove: getFullMove(moveData.principalVariation[0]),
-          fen: analysisFen,
+          fullMove: getFullMove(moveData.principalVariation[0], fen),
+          fen: fen,
         };
       })
       .filter((moveData) => moveData.fullMove);
@@ -148,6 +147,14 @@
       }, 5);
       return;
     }
+
+    if (bestMovesCache[getCacheKey(fen)]) {
+      Util.log("Using cached best moves");
+      topMoves = bestMovesCache[getCacheKey(fen)];
+      dispatchTopMoves(topMoves, fen);
+      return;
+    }
+
     Util.log(`Starting to analyze position: ${fen}`);
     analysisFen = fen;
     analyzing = true;
@@ -184,15 +191,20 @@
     }
 
     if (message.startsWith("bestmove")) {
-      dispatchTopMoves();
+      bestMovesCache[getCacheKey(analysisFen)] = { ...topMoves };
+      dispatchTopMoves(topMoves, analysisFen);
       stopAnalysis();
     } else if (message.startsWith("info depth") && message.includes("pv")) {
       const info = parseStockfishInfo(message);
       if (info) {
         topMoves[info.multiPV] = info;
-        dispatchTopMoves();
+        dispatchTopMoves(topMoves, analysisFen);
       }
     }
+  }
+
+  function getCacheKey(fen) {
+    return `${fen}-${depth}-${numCores}-${lines}`;
   }
 
   onMount(() => {
