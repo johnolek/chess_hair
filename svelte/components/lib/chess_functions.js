@@ -1,4 +1,5 @@
 import { Chess } from "chess.js";
+import { Util } from "src/util";
 
 export function getLegalMoves(fen) {
   const chess = new Chess(fen);
@@ -59,6 +60,25 @@ function getSurroundingSquares(square) {
 export function getKingSurroundingSquares(fen, color = "w") {
   const square = findPiece(fen, "k", color);
   return getSurroundingSquares(square);
+}
+
+export function getKingSquareAttackers(fen, color = "w") {
+  const otherColor = Util.otherShortColor(color);
+  const surroundingSquares = getKingSurroundingSquares(fen, color);
+  const attackers = {};
+  const chess = new Chess(fen);
+
+  surroundingSquares.forEach((square) => {
+    const attackingSquares = chess.attackers(square, otherColor);
+    attackingSquares.forEach((attackingSquare) => {
+      if (!attackers[attackingSquare]) {
+        attackers[attackingSquare] = [];
+      }
+      attackers[attackingSquare].push(square);
+    });
+  });
+
+  return attackers;
 }
 
 export function findPiece(fen, type, color) {
