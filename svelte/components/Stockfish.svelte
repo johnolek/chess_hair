@@ -157,6 +157,13 @@
       return;
     }
 
+    if (topMovesCache[cacheKey(fen)]) {
+      Util.log(`Using cached analysis for ${fen}`);
+      const topMovesArray = topMovesCache[cacheKey(fen)];
+      dispatchTopMoves(topMovesArray);
+      return;
+    }
+
     Util.log(`Starting to analyze position: ${fen}`);
     analysisFen = fen;
     analyzing = true;
