@@ -13,6 +13,7 @@
   import PromotionModal from "./PromotionModal.svelte";
   import { Util } from "src/util";
   import { MoveTree } from "./lib/MoveTree";
+  import { getKingSquareAttackers } from "./lib/chess_functions";
 
   const customBrushes = {
     brand1: {
@@ -25,49 +26,49 @@
       key: "brand2",
       color: Util.getRootCssVarValue("--brand-color-2"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     brand3: {
       key: "brand3",
       color: Util.getRootCssVarValue("--brand-color-3"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     brand4: {
       key: "brand4",
       color: Util.getRootCssVarValue("--brand-color-4"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     brand5: {
       key: "brand5",
       color: Util.getRootCssVarValue("--brand-color-5"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     brand6: {
       key: "brand6",
       color: Util.getRootCssVarValue("--brand-color-6"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     brand7: {
       key: "brand7",
       color: Util.getRootCssVarValue("--brand-color-7"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     brand8: {
       key: "brand8",
       color: Util.getRootCssVarValue("--brand-color-8"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     brand9: {
       key: "brand9",
       color: Util.getRootCssVarValue("--brand-color-9"),
       opacity: 0.85,
-      lineWidth: 15,
+      lineWidth: 8,
     },
     goodMove: {
       key: "goodMove",
@@ -362,6 +363,25 @@
   export function clearDrawings() {
     shapes = [];
     chessground.set({ drawable: { shapes: [] } });
+  }
+
+  export function showKingSafety(color = "w") {
+    clearDrawings();
+    const attackers = getKingSquareAttackers(fen, color);
+    let brushIndex = 4;
+    for (const attackingSquare in attackers) {
+      const attackedSquares = attackers[attackingSquare];
+      attackedSquares.forEach((attackedSquare) => {
+        drawArrow(
+          {
+            from: attackingSquare,
+            to: attackedSquare,
+          },
+          `brand${brushIndex}`,
+        );
+      });
+      brushIndex += 1;
+    }
   }
 
   export function highlightSquare(square, className, duration) {
