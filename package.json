@@ -5,7 +5,7 @@
     "@rollup/plugin-commonjs": "^26.0.1",
     "bulma": "^1.0.2",
     "bulma-extensions": "^6.2.7",
-    "chess.js": "1.0.0-beta.8",
+    "chess.js": "github:jhlywa/chess.js#4d4928d47cacf01a194f5a48bb4b9ddcc9fd5f19",
     "chessground": "^9.1.1",
     "chessops": "^0.14.1",
     "install": "^0.13.0",
