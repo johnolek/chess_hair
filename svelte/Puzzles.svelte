@@ -22,7 +22,10 @@
     faArrowLeft,
     faArrowRight,
   } from "@fortawesome/free-solid-svg-icons";
-  import { getMaterialCounts } from "./components/lib/chess_functions";
+  import {
+    getKingSquareAttackers,
+    getMaterialCounts,
+  } from "./components/lib/chess_functions";
 
   const [send, receive] = crossfade({ fallback: fade, duration: 300 });
 
@@ -387,6 +390,22 @@
                     <MaterialCounter bind:fen />
                   </Spoiler>
                 {/key}
+              </div>
+            </div>
+            <div class="column is-narrow pb-0">
+              <div class="has-text-centered is-inline-block">
+                <button
+                  class="button is-white is-small"
+                  on:click={() => {
+                    chessboard.showKingSafety("w");
+                  }}>King Safety</button
+                >
+                <button
+                  class="button is-black is-small"
+                  on:click={() => {
+                    chessboard.showKingSafety("b");
+                  }}>King Safety</button
+                >
               </div>
             </div>
           </div>
