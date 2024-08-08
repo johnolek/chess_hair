@@ -14,8 +14,8 @@
   export let lines = 5;
   export let ready = false;
 
-  let analysisFileLoaded = false;
   let readyok = false;
+  let analysisFileLoaded = false;
   let nnueInitialized = false;
 
   $: ready = analysisFileLoaded;
@@ -193,6 +193,7 @@
     }
     if (message.startsWith("bestmove")) {
       analyzing = false;
+      dispatchTopMoves();
     } else if (message.startsWith("info depth") && message.includes("pv")) {
       const info = parseStockfishInfo(message);
       if (info) {
