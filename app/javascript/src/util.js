@@ -25,6 +25,10 @@ class Util {
     return "white";
   }
 
+  static otherShortColor(color) {
+    return color === "w" ? "b" : "w";
+  }
+
   static whoseMoveIsIt(ply) {
     return ply % 2 === 0 ? "white" : "black";
   }
