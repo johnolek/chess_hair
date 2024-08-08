@@ -120,8 +120,6 @@
   /**
    * Send a message to the Stockfish worker
    *
-   *
-   *
    * @param message
    */
   export function uciMessage(message) {
@@ -197,7 +195,6 @@
       const info = parseStockfishInfo(message);
       if (info) {
         topMoves[info.multiPV] = info;
-
         dispatchTopMoves();
       }
     }
@@ -208,8 +205,10 @@
       "/javascript/stockfish/src/stockfish-nnue-16.js", // served with rails public assets server thing
     );
     Util.log({ stockfishWorker: stockfish });
-    stockfish.onerror = (event) => Util.error(event);
-    stockfish.onmessage = (event) => handleStockfishMessage(event.data);
+    stockfish.addEventListener("error", (event) => Util.error(event));
+    stockfish.addEventListener("message", (event) =>
+      handleStockfishMessage(event.data),
+    );
     stockfish.addEventListener("message", checkForEvalFileLoaded);
     stockfish.addEventListener("message", checkForReady);
     uciMessage("uci");
