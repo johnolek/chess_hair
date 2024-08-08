@@ -122,7 +122,7 @@
     stockfishWorker.postMessage(message);
   }
 
-  function dispatchTopMoves(topMoves, fen) {
+  function getTopMovesArray(topMoves, fen) {
     const topMovesArray = Object.values(topMoves)
       .slice(0, $stockfishLines)
       .map(cloneDeep)
@@ -135,11 +135,14 @@
       })
       .filter((moveData) => moveData.fullMove);
 
+    return topMovesArray;
+  }
+
+  function dispatchTopMoves(topMoves, fen) {
+    const topMovesArray = getTopMovesArray(topMoves, fen);
+
     if (topMovesArray.length > 0) {
-      topMoves = Object.fromEntries(
-        topMovesArray.map((move, index) => [index + 1, move]),
-      );
-      dispatch("topmoves", { topMoves: Object.values(topMoves) });
+      dispatch("topmoves", { topMoves: cloneDeep(topMovesArray) });
     }
   }
 
@@ -186,20 +189,21 @@
       return;
     }
 
-    if (message.startsWith("bestmove")) {
-      const topMoveMoves = Object.values(topMoves);
-      const isDoneAnalyzing =
-        topMoveMoves.length > 0 &&
-        topMoveMoves.every((topMove) => topMove.depth === $stockfishDepth);
-      if (isDoneAnalyzing) {
-        dispatchTopMoves(topMoves, analysisFen);
-        stopAnalysis();
-      }
-    } else if (message.startsWith("info depth") && message.includes("pv")) {
+    if (message.startsWith("info depth") && message.includes("pv")) {
       const info = parseStockfishInfo(message);
       if (info) {
         topMoves[info.multiPV] = info;
         dispatchTopMoves(topMoves, analysisFen);
+      }
+    }
+
+    if (message.startsWith("bestmove")) {
+      const topMovesArray = getTopMovesArray(topMoves, analysisFen);
+      const isAnalysisComplete =
+        topMovesArray.length > 0 &&
+        topMovesArray.every((topMove) => topMove.depth === $stockfishDepth);
+      if (isAnalysisComplete) {
+        stopAnalysis();
       }
     }
   }
