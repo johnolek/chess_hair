@@ -89,8 +89,7 @@
     };
   }
 
-  function checkForReady(event) {
-    const message = event.data;
+  function checkForReady(message) {
     if (message === "readyok") {
       readyok = true;
     }
@@ -187,6 +186,7 @@
 
   function handleStockfishMessage(message) {
     Util.debug(message);
+    checkForReady(message);
     if (message.startsWith("bestmove")) {
       analyzing = false;
       dispatchTopMoves();
@@ -210,7 +210,6 @@
       handleStockfishMessage(event.data),
     );
     stockfish.addEventListener("message", checkForEvalFileLoaded);
-    stockfish.addEventListener("message", checkForReady);
     uciMessage("uci");
     uciMessage("isready");
   });
