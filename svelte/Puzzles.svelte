@@ -547,7 +547,6 @@
               </div>
 
               <div class="column has-text-right is-narrow">
-                <div class="is-inline-block"></div>
                 {#if puzzleComplete}
                   <button
                     class="button is-primary next-button ml-2"
