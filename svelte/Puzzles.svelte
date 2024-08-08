@@ -481,7 +481,7 @@
               <div class="column has-text-left is-narrow">
                 {#if !analysisTurnedOn}
                   <button
-                    class="button is-dark-cyan is-small"
+                    class="button is-dark-cyan is-small is-inline-block"
                     title="Enable stockfish analysis"
                     class:is-danger={!puzzleComplete}
                     disabled={!readyToStartAnalyzing}
@@ -729,7 +729,7 @@
               <br />
               {#if !analysisTurnedOn}
                 <button
-                  class="button is-dark-cyan is-small"
+                  class="button is-dark-cyan is-small is-inline-block"
                   title="Enable stockfish analysis"
                   class:is-danger={!puzzleComplete}
                   disabled={!readyToStartAnalyzing}
