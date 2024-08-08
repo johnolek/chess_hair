@@ -6,18 +6,12 @@
   let topMoves = {};
   export let analyzing = false;
 
-  export let fen;
   let analysisFen;
   export let depth = 20;
   export let numCores = 1;
   export let lines = 5;
 
   export let readyok = false;
-
-  $: if (fen && analysisFen && fen !== analysisFen) {
-    Util.log("stopping analysis due to fen change");
-    stopAnalysis();
-  }
 
   let stockfish;
 
@@ -144,27 +138,25 @@
   }
 
   let nextAnalysisTimeout;
-  export function analyzePosition(attempt = 0) {
+  export function analyzePosition(fen, attempt = 0) {
     if (analyzing) {
+      Util.log(`Attempt ${attempt}: already analyzing, stopping and retrying`);
       stopAnalysis();
       clearTimeout(nextAnalysisTimeout);
       nextAnalysisTimeout = setTimeout(() => {
-        analyzePosition(attempt + 1);
-      }, 1);
-      Util.log(`Attempt ${attempt}: already analyzing, stopping and retrying`);
+        analyzePosition(fen, attempt + 1);
+      }, 5);
       return;
     }
-    if (fen) {
-      Util.log(`Starting to analyze position: ${fen}`);
-      analyzing = true;
-      readyok = false;
-      clearData();
-      analysisFen = fen;
-      uciMessage(`position fen ${fen}`);
-      uciMessage(`setoption name MultiPV value ${lines}`);
-      uciMessage(`setoption name Threads value ${numCores}`);
-      uciMessage(`go depth ${depth}`);
-    }
+    Util.log(`Starting to analyze position: ${fen}`);
+    analysisFen = fen;
+    analyzing = true;
+    readyok = false;
+    clearData();
+    uciMessage(`position fen ${fen}`);
+    uciMessage(`setoption name MultiPV value ${lines}`);
+    uciMessage(`setoption name Threads value ${numCores}`);
+    uciMessage(`go depth ${depth}`);
   }
 
   let stopping = false;
@@ -173,6 +165,7 @@
       return;
     }
     stopping = true;
+    analysisFen = null;
     uciMessage("stop");
     uciMessage("isready");
     clearData();
@@ -185,6 +178,11 @@
   function handleStockfishMessage(message) {
     Util.debug(message);
     checkForReady(message);
+
+    if (stopping) {
+      return;
+    }
+
     if (message.startsWith("bestmove")) {
       dispatchTopMoves();
       stopAnalysis();

@@ -5,7 +5,6 @@
   import Stockfish from "./components/Stockfish.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
   import { Util } from "src/util";
-  import { MoveTree } from "./components/lib/MoveTree";
   import { onMount } from "svelte";
   import { fade, crossfade, fly } from "svelte/transition";
   import { flip } from "svelte/animate";
@@ -22,10 +21,7 @@
     faArrowLeft,
     faArrowRight,
   } from "@fortawesome/free-solid-svg-icons";
-  import {
-    getKingSquareAttackers,
-    getMaterialCounts,
-  } from "./components/lib/chess_functions";
+  import { getMaterialCounts } from "./components/lib/chess_functions";
 
   const [send, receive] = crossfade({ fallback: fade, duration: 300 });
 
@@ -147,10 +143,6 @@
     if (chessboard) {
       chessboard.move(move);
       lastMoveIndexToShow = lastMoveIndexToShow + 1;
-      if (analysisTurnedOn) {
-        topStockfishMoves = [];
-        stockfish.analyzePosition();
-      }
     }
   }
 
@@ -213,7 +205,7 @@
       colorToPlay = lastMove.color === "w" ? "black" : "white";
     } else {
       fenToHighlight = fen;
-      colorToPlay = orientation;
+      colorToPlay = Util.otherColor(orientation);
     }
   }
 
@@ -292,8 +284,7 @@
   // Stockfish
   /** @type {Stockfish} */
   let stockfish;
-  let stockfishReady = false;
-  let readyToStartAnalyzing = false;
+  let readyToStartAnalyzing;
   let depth = 22;
   let numCores = 1;
   let lines = 5;
@@ -301,16 +292,17 @@
   let analysisTurnedOn;
 
   $: {
-    if (stockfish) {
-      if (fen && analysisTurnedOn) {
-        stockfish.analyzePosition();
-      }
-      if (!analysisTurnedOn) {
-        if (stockfish) {
-          stockfish.stopAnalysis();
-        }
+    if (!analysisTurnedOn) {
+      if (stockfish) {
+        stockfish.stopAnalysis();
         chessboard.clearDrawings();
       }
+    }
+  }
+
+  $: {
+    if (analysisTurnedOn && stockfish && fen) {
+      stockfish.analyzePosition(fen);
     }
   }
 
@@ -529,10 +521,6 @@
                   bind:this={historyBackButton}
                   on:click={() => {
                     chessboard.historyBack();
-                    if (analysisTurnedOn) {
-                      topStockfishMoves = [];
-                      stockfish.analyzePosition();
-                    }
                   }}
                 >
                   <Fa icon={faArrowLeft} />
@@ -543,10 +531,6 @@
                   bind:this={historyForwardButton}
                   on:click={() => {
                     chessboard.historyForward();
-                    if (analysisTurnedOn) {
-                      topStockfishMoves = [];
-                      stockfish.analyzePosition();
-                    }
                   }}
                 >
                   <Fa icon={faArrowRight} />
@@ -663,9 +647,7 @@
             <h3 class="is-size-4">Analysis</h3>
             <Stockfish
               bind:this={stockfish}
-              bind:ready={stockfishReady}
               bind:readyok={readyToStartAnalyzing}
-              {fen}
               {depth}
               {numCores}
               {lines}
@@ -690,12 +672,6 @@
                       bind:value={depth}
                       min="10"
                       max="50"
-                      on:change={() => {
-                        if (analysisTurnedOn) {
-                          topStockfishMoves = [];
-                          stockfish.analyzePosition();
-                        }
-                      }}
                     />
                   </div>
                 </label>
@@ -712,12 +688,6 @@
                       bind:value={numCores}
                       min="1"
                       max="12"
-                      on:change={() => {
-                        if (analysisTurnedOn) {
-                          topStockfishMoves = [];
-                          stockfish.analyzePosition();
-                        }
-                      }}
                     />
                   </div>
                 </label>
@@ -734,12 +704,6 @@
                       bind:value={lines}
                       min="1"
                       max="100"
-                      on:change={() => {
-                        if (analysisTurnedOn) {
-                          topStockfishMoves = [];
-                          stockfish.analyzePosition();
-                        }
-                      }}
                     />
                   </div>
                 </label>
