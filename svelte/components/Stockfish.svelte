@@ -188,6 +188,9 @@
   }
 
   function handleStockfishMessage(message) {
+    if (!message) {
+      return;
+    }
     Util.debug(message);
     checkForReady(message);
 
