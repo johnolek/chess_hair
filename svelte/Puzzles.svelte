@@ -305,28 +305,6 @@
       stockfish.analyzePosition(fen);
     }
   }
-
-  function drawStockfishArrows() {
-    chessboard.clearDrawings();
-    if (topStockfishMoves.length > 0) {
-      const reversed = topStockfishMoves.slice().reverse();
-      reversed.forEach((move) => {
-        const fullMove = move.fullMove;
-        const analysisFen = move.fen;
-        if (fullMove !== null && analysisFen === fen) {
-          let arrowType = "drawMove";
-          if (move.score > 3 || (move.scoreType === "mate" && move.score > 0)) {
-            arrowType = "greatMove";
-          } else if (move.score > 1.25) {
-            arrowType = "goodMove";
-          } else if (move.score < -0.75) {
-            arrowType = "badMove";
-          }
-          chessboard.drawArrow(fullMove, arrowType);
-        }
-      });
-    }
-  }
 </script>
 
 <PuzzleManager
@@ -656,7 +634,7 @@
                   return;
                 }
                 topStockfishMoves = event.detail.topMoves;
-                drawStockfishArrows();
+                chessboard.drawStockfishArrows(topStockfishMoves);
               }}
             />
             <div>
