@@ -14,11 +14,14 @@ class UserPuzzleHistory < ApplicationRecord
   def create_user_puzzle
     return unless lichess_puzzle.present? && lichess_puzzle.fen
     return if user.user_puzzles.exists?(fen: lichess_puzzle.fen)
-    user.user_puzzles.create!(
+    collection = user.failed_lichess_puzzles_collection
+    new_puzzle = user.user_puzzles.create!(
       lichess_puzzle_id: puzzle_id,
       lichess_rating: lichess_puzzle.rating,
       uci_moves: lichess_puzzle.moves,
       fen: lichess_puzzle.fen,
     )
+    collection.user_puzzles << new_puzzle
+    collection.save!
   end
 end
