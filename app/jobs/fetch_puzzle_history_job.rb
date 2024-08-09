@@ -15,6 +15,7 @@ class FetchPuzzleHistoryJob < ApplicationJob
     user.set_data('puzzle_import_running', true)
     before = nil
     per_request = 50
+    existing_ids = user.user_puzzle_histories.pluck(:puzzle_id)
 
     begin
       loop do
@@ -30,14 +31,11 @@ class FetchPuzzleHistoryJob < ApplicationJob
           before = parsed['date']
           Rails.logger.info "Processing puzzle played at #{parsed['date']}: #{puzzle_json}"
           puzzle = parsed['puzzle']
-          history = user.user_puzzle_histories.find_or_initialize_by(
+          next if existing_ids.include?(puzzle['id'])
+
+          history = user.user_puzzle_histories.create!(
             puzzle_id: puzzle['id'],
-            played_at: parsed['date']
-          )
-
-          next unless history.new_record?
-
-          history.assign_attributes(
+            played_at: parsed['date'],
             win: parsed['win'],
             rating: puzzle['rating'],
             solution: puzzle['solution'].join(' '),
@@ -46,6 +44,7 @@ class FetchPuzzleHistoryJob < ApplicationJob
             themes: puzzle['themes'].join(' '),
             last_move: puzzle['lastMove']
           )
+
           history.save!
           history.create_user_puzzle unless history.win?
           imported_this_loop += 1
