@@ -32,6 +32,10 @@ class User < ApplicationRecord
     collections.find_by(name: 'favorites')&.user_puzzles || []
   end
 
+  def failed_lichess_puzzles_collection
+    collections.find_by(name: 'failed_lichess_puzzles')
+  end
+
   def add_favorite(user_puzzle)
     collection = collections.find_by(name: 'favorites')
     collection.user_puzzles << user_puzzle
