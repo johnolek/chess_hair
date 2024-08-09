@@ -1,7 +1,7 @@
 class User < ApplicationRecord
   after_initialize :init_active_puzzle_ids
   after_commit :maybe_fetch_more_puzzles, on: :update
-  after_create :create_default_collection
+  after_create :create_default_collections
 
   # Include default devise modules. Others available are:
   # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
@@ -24,8 +24,9 @@ class User < ApplicationRecord
     super || build_config
   end
 
-  def create_default_collection
+  def create_default_collections
     collections.create!(name: 'favorites')
+    collections.create!(name: 'failed_lichess_puzzles')
   end
 
   def favorites
