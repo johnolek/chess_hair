@@ -5,6 +5,10 @@
   import { Chess } from "chess.js";
   import { stockfishLines, stockfishDepth, stockfishCores } from "../stores";
 
+  $: lines = $stockfishLines;
+  $: threads = $stockfishCores;
+  $: depth = $stockfishDepth;
+
   export let analysisEnabled = false;
   export let analyzing = false;
   export let readyok = false;
@@ -14,16 +18,15 @@
   let stockfishWorker;
   let topMovesCache = {};
 
-  stockfishLines.subscribe(restartAnalysis);
-  stockfishDepth.subscribe(restartAnalysis);
-  stockfishCores.subscribe(restartAnalysis);
-
   const dispatch = createEventDispatcher();
 
   function restartAnalysis() {
     if (analysisEnabled && analysisFen) {
       Util.log("restarting analysis");
-      analyzePosition(analysisFen);
+      // Allow reactive statements to fire so we have latest stockfish settings
+      setTimeout(() => {
+        analyzePosition(analysisFen);
+      }, 1);
     }
   }
 
@@ -125,27 +128,15 @@
   }
 
   function getStockfishLines() {
-    if ($stockfishLines > 0) {
-      return $stockfishLines;
-    }
-
-    return 1;
+    return lines > 0 ? lines : 1;
   }
 
   function getStockfishCores() {
-    if ($stockfishCores > 0) {
-      return $stockfishCores;
-    }
-
-    return 1;
+    return threads > 0 ? threads : 1;
   }
 
   function getStockfishDepth() {
-    if ($stockfishDepth > 5) {
-      return $stockfishDepth;
-    }
-
-    return 5;
+    return depth >= 5 ? depth : 5;
   }
 
   function getTopMovesArray(topMoves, fen) {
@@ -169,7 +160,12 @@
   }
 
   let nextAnalysisTimeout;
+  let timeoutLength = 5;
   export function analyzePosition(fen, attempt = 0) {
+    if (attempt * timeoutLength >= 2000) {
+      Util.error(`Failed to start analysis after ${attempt * timeoutLength}ms`);
+      return;
+    }
     analysisEnabled = true;
     analysisFen = fen;
     topMoves = {};
@@ -179,7 +175,7 @@
       clearTimeout(nextAnalysisTimeout);
       nextAnalysisTimeout = setTimeout(() => {
         analyzePosition(fen, attempt + 1);
-      }, 5);
+      }, timeoutLength);
       return;
     }
 
@@ -244,10 +240,16 @@
   }
 
   function cacheKey(fen) {
-    return `${fen}-depth:${getStockfishDepth()}-lines:${getStockfishLines()}`;
+    const cacheKey = `${fen}-depth:${getStockfishDepth()}-lines:${getStockfishLines()}`;
+    Util.log(`cache key: ${cacheKey}`);
+    return cacheKey;
   }
 
   onMount(() => {
+    stockfishLines.subscribe(restartAnalysis);
+    stockfishDepth.subscribe(restartAnalysis);
+    stockfishCores.subscribe(restartAnalysis);
+
     stockfishWorker = new Worker(
       "/javascript/stockfish/src/stockfish-nnue-16.js", // served with rails public assets server thing
     );
