@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_08_09_024756) do
+ActiveRecord::Schema[7.1].define(version: 2024_08_09_031247) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -53,7 +53,13 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_09_024756) do
     t.integer "nb_plays"
     t.string "themes"
     t.string "opening_tags"
+    t.index ["fen"], name: "index_lichess_puzzles_on_fen"
+    t.index ["nb_plays"], name: "index_lichess_puzzles_on_nb_plays"
+    t.index ["opening_tags"], name: "index_lichess_puzzles_on_opening_tags"
+    t.index ["popularity"], name: "index_lichess_puzzles_on_popularity"
     t.index ["puzzle_id"], name: "index_lichess_puzzles_on_puzzle_id", unique: true
+    t.index ["rating"], name: "index_lichess_puzzles_on_rating"
+    t.index ["themes"], name: "index_lichess_puzzles_on_themes"
   end
 
   create_table "mistakes", force: :cascade do |t|
