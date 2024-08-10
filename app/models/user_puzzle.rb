@@ -5,7 +5,7 @@ class UserPuzzle < ApplicationRecord
   has_many :puzzle_results, ->(user_puzzle) { where(puzzle_id: user_puzzle.lichess_puzzle_id) }, through: :user, source: :puzzle_results
   has_many :mistakes
 
-  has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :puzzle_id
+  has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :lichess_puzzle_id
 
   scope :with_weighted_fail_ratio, -> { select(
     arel_table[Arel.star],
