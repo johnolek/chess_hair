@@ -1,19 +1,4 @@
-# frozen_string_literal: true
+require 'rails_helper'
 
-require 'rspec'
-
-RSpec.describe 'UserPuzzleHistory' do
-  before do
-    # Do nothing
-  end
-
-  after do
-    # Do nothing
-  end
-
-  context 'when condition' do
-    it 'succeeds' do
-      pending 'Not implemented'
-    end
-  end
+RSpec.describe UserPuzzleHistory, type: :model do
 end
