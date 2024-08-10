@@ -15,4 +15,6 @@ bundle install
 rails db:migrate
 rails assets:clobber
 rails assets:precompile
+rails site:update_site_version
+
 touch tmp/restart.txt
