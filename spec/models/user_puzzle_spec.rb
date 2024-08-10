@@ -168,7 +168,7 @@ RSpec.describe UserPuzzle, type: :model do
       it 'returns the correct json representation' do
         user_puzzle = create(:user_puzzle)
         json = user_puzzle.as_json
-        expect(json.keys).to include('puzzle_id', 'rating', 'moves', 'streak', 'last_played_timestamp')
+        expect(json.keys).to include("id", "fen", "average_solve_time", "solve_streak", "total_fails", "total_solves", "complete", "lichess_puzzle_id", "lichess_rating", "moves", "themes")
       end
     end
   end
