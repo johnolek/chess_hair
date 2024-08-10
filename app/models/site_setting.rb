@@ -1,5 +1,10 @@
 class SiteSetting < ApplicationRecord
   class << self
+    def get(name, default = nil)
+      setting = SiteSetting.find_by(name: name)
+      setting&.value || default
+    end
+
     def update_setting(name, value)
       setting = SiteSetting.find_or_initialize_by(name: name)
       setting.update!(value: value)

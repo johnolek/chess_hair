@@ -104,7 +104,10 @@
   <%= yield %>
 </div>
 </body>
-<footer>
+<footer class="footer pt-4 pb-4">
+  <div class="container has-text-centered">
+    Version: <%= SiteSetting.get_cached_site_version %>
+  </div>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
 
@@ -137,5 +140,6 @@
     });
   </script>
   <% yield :footer %>
+
 </footer>
 </html>
