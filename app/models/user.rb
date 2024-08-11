@@ -166,6 +166,7 @@ class User < ApplicationRecord
 
   def maybe_fetch_more_puzzles
     return unless lichess_api_token
+    reload # ensure we get the latest imported at timestamp
     return if puzzle_import_in_progress?
     last_fetched = get_data('puzzles_imported_at', Time.current.to_i)
     difference = Time.current.to_i - last_fetched
