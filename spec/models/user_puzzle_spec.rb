@@ -58,7 +58,7 @@ RSpec.describe UserPuzzle, type: :model do
         user = create(:user)
         puzzle1 = create(:user_puzzle, user: user)
         puzzle2 = create(:user_puzzle, user: user)
-        create(:puzzle_result, user: user, user_puzzle: puzzle1)
+        create(:puzzle_result, user_puzzle: puzzle1)
         expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle2]
       end
     end
@@ -69,7 +69,7 @@ RSpec.describe UserPuzzle, type: :model do
           user = create(:user)
           puzzle1 = create(:user_puzzle, user: user)
           puzzle2 = create(:user_puzzle, user: user)
-          create(:puzzle_result, user: user, user_puzzle: puzzle1)
+          create(:puzzle_result, user_puzzle: puzzle1)
           expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq [puzzle2]
         end
       end
@@ -181,11 +181,11 @@ RSpec.describe UserPuzzle, type: :model do
 
       expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle1, puzzle2]
 
-      create(:puzzle_result, user: user, user_puzzle: puzzle1)
+      create(:puzzle_result, user_puzzle: puzzle1)
 
       expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle2]
 
-      create(:puzzle_result, user: user, user_puzzle: puzzle2)
+      create(:puzzle_result, user_puzzle: puzzle2)
 
       expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle1]
       expect(UserPuzzle.excluding_last_n_played(user, 2)).to eq []
@@ -199,11 +199,11 @@ RSpec.describe UserPuzzle, type: :model do
 
         expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq [puzzle1, puzzle2]
 
-        create(:puzzle_result, user: user, user_puzzle: puzzle1)
+        create(:puzzle_result, user_puzzle: puzzle1)
 
         expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq [puzzle2]
 
-        create(:puzzle_result, user: user, user_puzzle: puzzle2)
+        create(:puzzle_result, user_puzzle: puzzle2)
 
         expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq []
 

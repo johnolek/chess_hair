@@ -9,7 +9,7 @@ class User < ApplicationRecord
          :recoverable, :rememberable, :validatable
   has_many :user_puzzles
   has_many :mistakes, through: :user_puzzles
-  has_many :puzzle_results
+  has_many :puzzle_results, through: :user_puzzles
   has_one :config
   has_many :user_puzzle_histories
   has_many :collections
