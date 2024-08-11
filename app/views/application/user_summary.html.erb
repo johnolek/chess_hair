@@ -1,0 +1,14 @@
+<div class="content">
+  <h1>User summary</h1>
+  <% @users.each do |user| %>
+    <h2><%= user.email %></h2>
+    <h3>Puzzles</h3>
+    <p>Total: <%= user.user_puzzles.count %></p>
+    <p>Complete: <%= user.user_puzzles.completed.count %></p>
+    <% if user.puzzle_results.count > 0 %>
+      <p>Last result: <%= time_ago_in_words(user.puzzle_results.last&.created_at) %></p>
+      <p>Played today: <%= user.puzzle_results.where(created_at: (Time.current.beginning_of_day..Time.current)).count %></p>
+    <% end %>
+    <hr />
+  <% end %>
+</div>
