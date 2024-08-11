@@ -1,6 +1,6 @@
 class PuzzleResult < ApplicationRecord
-  belongs_to :user
   belongs_to :user_puzzle
+  has_one :user, through: :user_puzzle
 
   after_create :recalculate_user_puzzle_stats
 
@@ -12,8 +12,6 @@ class PuzzleResult < ApplicationRecord
   end
 
   def recalculate_user_puzzle_stats
-    if user_puzzle
-      user_puzzle.recalculate_stats
-    end
+    user_puzzle.recalculate_stats
   end
 end

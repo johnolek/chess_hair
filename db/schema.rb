@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_08_10_171853) do
+ActiveRecord::Schema[7.1].define(version: 2024_08_11_034239) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -72,17 +72,14 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_10_171853) do
   end
 
   create_table "puzzle_results", force: :cascade do |t|
-    t.bigint "user_id", null: false
     t.string "lichess_puzzle_id"
     t.boolean "made_mistake", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "duration", null: false
-    t.bigint "user_puzzle_id"
+    t.bigint "user_puzzle_id", null: false
     t.index ["created_at"], name: "index_puzzle_results_on_created_at"
     t.index ["made_mistake"], name: "index_puzzle_results_on_made_mistake"
-    t.index ["user_id", "lichess_puzzle_id"], name: "index_puzzle_results_on_user_id_and_lichess_puzzle_id"
-    t.index ["user_id"], name: "index_puzzle_results_on_user_id"
   end
 
   create_table "site_settings", force: :cascade do |t|
@@ -155,7 +152,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_10_171853) do
 
   add_foreign_key "configs", "users"
   add_foreign_key "mistakes", "user_puzzles"
-  add_foreign_key "puzzle_results", "users"
+  add_foreign_key "puzzle_results", "user_puzzles"
   add_foreign_key "user_puzzle_histories", "users"
   add_foreign_key "user_puzzles", "users"
 end
