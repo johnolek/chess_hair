@@ -70,10 +70,9 @@ class UserPuzzle < ApplicationRecord
 
   def complete?
     required_consecutive_solves = user.config.puzzle_consecutive_solves
-    return false if puzzle_results.count < required_consecutive_solves
+    return false unless solve_streak >= required_consecutive_solves
     time_goal = user.config.puzzle_time_goal
-    return false if average_solve_time && average_solve_time > time_goal
-    solve_streak >= required_consecutive_solves
+    average_solve_time && average_solve_time <= time_goal
   end
 
   def recalculate_stats
