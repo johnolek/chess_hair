@@ -357,12 +357,12 @@
       brush: brush,
     };
     shapes = [...shapes, shape];
-    chessground.set({ drawable: { shapes: shapes } });
+    chessground.set({ drawable: { autoShapes: shapes } });
   }
 
   export function clearDrawings() {
     shapes = [];
-    chessground.set({ drawable: { shapes: [] } });
+    chessground.set({ drawable: { shapes: [], autoShapes: [] } });
   }
 
   export function showKingSafety(color = "w") {

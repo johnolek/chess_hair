@@ -4,12 +4,13 @@
   import FocusTimer from "./components/FocusTimer.svelte";
   import Stockfish from "./components/Stockfish.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
+  import { Chess } from "chess.js";
+  import { debounce } from "lodash";
   import { Util } from "src/util";
   import { onMount } from "svelte";
   import { fade, crossfade, fly } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { scrollIntoView } from "./actions/scrollIntoView";
-  import { Chess } from "chess.js";
   import CollapsibleBox from "./components/CollapsibleBox.svelte";
   import Spoiler from "./components/Spoiler.svelte";
   import { getSetting, initSettings } from "./settingsManager.js";
