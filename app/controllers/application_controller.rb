@@ -21,7 +21,7 @@ class ApplicationController < ActionController::Base
 
   def user_summary
     return render file: "#{Rails.root}/public/404.html", status: :not_found unless current_user&.admin?
-    @users = User.all.includes(:user_puzzles, :puzzle_results)
+    @users = User.all.includes([:user_puzzles])
     render 'user_summary'
   end
 
