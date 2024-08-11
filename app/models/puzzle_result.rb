@@ -1,6 +1,6 @@
 class PuzzleResult < ApplicationRecord
   belongs_to :user
-  belongs_to :user_puzzle, optional: true
+  belongs_to :user_puzzle
 
   after_create :recalculate_user_puzzle_stats
 
