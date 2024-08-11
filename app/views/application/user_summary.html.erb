@@ -6,7 +6,7 @@
     <p>Total: <%= user.user_puzzles.count %></p>
     <p>Complete: <%= user.user_puzzles.completed.count %></p>
     <% if user.puzzle_results.count > 0 %>
-      <p>Last result: <%= time_ago_in_words(user.puzzle_results.last&.created_at) %></p>
+      <p>Last result: <%= time_ago_in_words(user.puzzle_results.order(created_at: :desc).first.created_at) %></p>
       <p>Played today: <%= user.puzzle_results.where(created_at: (Time.current.beginning_of_day..Time.current)).count %></p>
     <% end %>
     <hr />
