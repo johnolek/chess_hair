@@ -6,7 +6,7 @@ require 'net/http'
 
 class ApplicationController < ActionController::Base
   before_action :set_default_body_attributes
-  before_action :authenticate_user!, only: [:puzzles, :user_summary]
+  before_action :authenticate_user!, only: [:puzzles]
 
   before_action do
     # For stockfish
@@ -17,12 +17,6 @@ class ApplicationController < ActionController::Base
   end
 
   def knight_moves
-  end
-
-  def user_summary
-    return render file: "#{Rails.root}/public/404.html", status: :not_found unless current_user&.admin?
-    @users = User.all.includes([:user_puzzles])
-    render 'user_summary'
   end
 
   def authenticate_with_lichess
@@ -109,9 +103,9 @@ class ApplicationController < ActionController::Base
 
   private
 
+
   def set_default_body_attributes
-    @body_attributes = {
-    }
+    @body_attributes = { }
   end
 
   def directory_names(path)
