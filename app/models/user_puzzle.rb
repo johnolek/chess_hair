@@ -2,10 +2,10 @@ class UserPuzzle < ApplicationRecord
   belongs_to :user
   has_and_belongs_to_many :collections
 
-  has_many :puzzle_results, ->(user_puzzle) { where(puzzle_id: user_puzzle.lichess_puzzle_id) }, through: :user, source: :puzzle_results
+  has_many :puzzle_results
   has_many :mistakes
 
-  has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :lichess_puzzle_id
+  has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :puzzle_id
 
   scope :with_weighted_fail_ratio, -> { select(
     arel_table[Arel.star],
@@ -21,9 +21,9 @@ class UserPuzzle < ApplicationRecord
     recent_puzzle_ids_subquery = user.puzzle_results
       .order(created_at: :desc)
       .limit(n)
-      .select(puzzle_id: :lichess_puzzle_id)
+      .select(:user_puzzle_id)
 
-    where.not(lichess_puzzle_id: recent_puzzle_ids_subquery)
+    where.not(id: recent_puzzle_ids_subquery)
   end
 
   scope :excluding_played_within_last_n_seconds, ->(user, n) do
@@ -32,14 +32,14 @@ class UserPuzzle < ApplicationRecord
     puzzle_results_table = PuzzleResult.arel_table
     recent_time = Time.current - n
     recent_puzzle_ids_subquery = user.puzzle_results.where(puzzle_results_table[:created_at].gteq(recent_time))
-      .select(puzzle_id: :lichess_puzzle_id)
-    where.not(lichess_puzzle_id: recent_puzzle_ids_subquery)
+      .select(:user_puzzle_id)
+    where.not(id: recent_puzzle_ids_subquery)
   end
 
-  scope :excluding_lichess_puzzle_ids, ->(ids) do
+  scope :excluding_ids, ->(ids) do
     ids = Array(ids)
     return all if ids.empty?
-    where.not(lichess_puzzle_id: ids)
+    where.not(id: ids)
   end
 
   def calculate_average_solve_duration

@@ -16,4 +16,24 @@ RSpec.describe UserPuzzle, type: :model do
       expect(settings['puzzles.timeGoal']).to eq 20
     end
   end
+
+  describe 'active puzzles' do
+    it 'calculates active puzzles' do
+      user = create(:user)
+      expect(user.active_puzzle_ids).to be_empty
+      puzzle = create(:user_puzzle, user: user)
+      user.recalculate_active_puzzles
+      expect(user.active_puzzle_ids.count).to be 1
+      expect(user.active_puzzle_ids.first).to eq puzzle.id
+    end
+
+    it 'can not include completed puzzles' do
+      user = create(:user)
+      puzzle = create(:user_puzzle, user: user, complete: true)
+      puzzle2 = create(:user_puzzle, user: user, complete: false)
+      user.recalculate_active_puzzles
+      expect(user.active_puzzle_ids.count).to be 1
+      expect(user.active_puzzle_ids.first).to eq puzzle2.id
+    end
+  end
 end

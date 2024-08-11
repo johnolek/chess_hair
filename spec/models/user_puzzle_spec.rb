@@ -17,7 +17,7 @@ RSpec.describe UserPuzzle, type: :model do
     it 'has many puzzle results through user' do
       user = create(:user)
       user_puzzle = create(:user_puzzle, user: user)
-      puzzle_result = create(:puzzle_result, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
+      puzzle_result = create(:puzzle_result, user: user, user_puzzle: user_puzzle)
       expect(user_puzzle.puzzle_results).to include(puzzle_result)
     end
 
@@ -58,7 +58,7 @@ RSpec.describe UserPuzzle, type: :model do
         user = create(:user)
         puzzle1 = create(:user_puzzle, user: user)
         puzzle2 = create(:user_puzzle, user: user)
-        create(:puzzle_result, user: user, puzzle_id: puzzle1.lichess_puzzle_id)
+        create(:puzzle_result, user: user, user_puzzle: puzzle1)
         expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle2]
       end
     end
@@ -69,7 +69,7 @@ RSpec.describe UserPuzzle, type: :model do
           user = create(:user)
           puzzle1 = create(:user_puzzle, user: user)
           puzzle2 = create(:user_puzzle, user: user)
-          create(:puzzle_result, user: user, puzzle_id: puzzle1.lichess_puzzle_id)
+          create(:puzzle_result, user: user, user_puzzle: puzzle1)
           expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq [puzzle2]
         end
       end
@@ -79,7 +79,7 @@ RSpec.describe UserPuzzle, type: :model do
       it 'excludes puzzles with specific lichess puzzle ids' do
         puzzle1 = create(:user_puzzle)
         puzzle2 = create(:user_puzzle)
-        expect(UserPuzzle.excluding_lichess_puzzle_ids([puzzle1.lichess_puzzle_id])).to eq [puzzle2]
+        expect(UserPuzzle.excluding_ids([puzzle1.id])).to eq [puzzle2]
       end
     end
   end
@@ -89,8 +89,8 @@ RSpec.describe UserPuzzle, type: :model do
       it 'calculates the average solve duration' do
         user = create(:user)
         user_puzzle = create(:user_puzzle, user: user)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id, duration: 2000)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id, duration: 3000 )
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle, duration: 2000)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle, duration: 3000 )
         expect(user_puzzle.calculate_average_solve_duration).to eq 2.5
       end
     end
@@ -99,26 +99,26 @@ RSpec.describe UserPuzzle, type: :model do
       it 'calculates the solve streak for multiple sucesses in a row' do
         user = create(:user)
         user_puzzle = create(:user_puzzle, user: user)
-        create(:puzzle_result, :incorrect, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
+        create(:puzzle_result, :incorrect, user: user, user_puzzle: user_puzzle)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
         expect(user_puzzle.calculate_solve_streak).to eq 2
       end
 
       it 'calculates the solve streak when incorrect results present' do
         user = create(:user)
         user_puzzle = create(:user_puzzle, user: user)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
-        create(:puzzle_result, :incorrect, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
+        create(:puzzle_result, :incorrect, user: user, user_puzzle: user_puzzle)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
         expect(user_puzzle.calculate_solve_streak).to eq 1
       end
 
       it 'calculates the solve streak when latest result is fail' do
         user = create(:user)
         user_puzzle = create(:user_puzzle, user: user)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
-        create(:puzzle_result, :incorrect, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
+        create(:puzzle_result, :incorrect, user: user, user_puzzle: user_puzzle)
         expect(user_puzzle.calculate_solve_streak).to eq 0
       end
 
@@ -135,8 +135,8 @@ RSpec.describe UserPuzzle, type: :model do
         user_puzzle = create(:user_puzzle, user: user)
         allow(user.config).to receive(:puzzle_consecutive_solves).and_return(2)
         allow(user.config).to receive(:puzzle_time_goal).and_return(3)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id, duration: 2000)
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id, duration: 2000)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle, duration: 2000)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle, duration: 2000)
         user_puzzle.reload
         expect(user_puzzle.complete?).to be true
       end
@@ -152,12 +152,12 @@ RSpec.describe UserPuzzle, type: :model do
         expect(user_puzzle.total_solves).to eq 0
         expect(user_puzzle.total_fails).to eq 0
 
-        create(:puzzle_result, :correct, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
         user_puzzle.reload
         expect(user_puzzle.total_solves).to eq 1
         expect(user_puzzle.total_fails).to eq 0
 
-        create(:puzzle_result, :incorrect, user: user, puzzle_id: user_puzzle.lichess_puzzle_id)
+        create(:puzzle_result, :incorrect, user: user, user_puzzle: user_puzzle)
         user_puzzle.reload
         expect(user_puzzle.total_solves).to eq 1
         expect(user_puzzle.total_fails).to eq 1
@@ -181,11 +181,11 @@ RSpec.describe UserPuzzle, type: :model do
 
       expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle1, puzzle2]
 
-      create(:puzzle_result, user: user, puzzle_id: puzzle1.lichess_puzzle_id)
+      create(:puzzle_result, user: user, user_puzzle: puzzle1)
 
       expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle2]
 
-      create(:puzzle_result, user: user, puzzle_id: puzzle2.lichess_puzzle_id)
+      create(:puzzle_result, user: user, user_puzzle: puzzle2)
 
       expect(UserPuzzle.excluding_last_n_played(user, 1)).to eq [puzzle1]
       expect(UserPuzzle.excluding_last_n_played(user, 2)).to eq []
@@ -199,11 +199,11 @@ RSpec.describe UserPuzzle, type: :model do
 
         expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq [puzzle1, puzzle2]
 
-        create(:puzzle_result, user: user, puzzle_id: puzzle1.lichess_puzzle_id)
+        create(:puzzle_result, user: user, user_puzzle: puzzle1)
 
         expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq [puzzle2]
 
-        create(:puzzle_result, user: user, puzzle_id: puzzle2.lichess_puzzle_id)
+        create(:puzzle_result, user: user, user_puzzle: puzzle2)
 
         expect(UserPuzzle.excluding_played_within_last_n_seconds(user, 1)).to eq []
 

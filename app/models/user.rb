@@ -64,33 +64,33 @@ class User < ApplicationRecord
     base_query = base_query.where('lichess_rating >= ?', config.puzzle_min_rating) if config.puzzle_min_rating
     base_query = base_query.where('lichess_rating <= ?', config.puzzle_max_rating) if config.puzzle_max_rating
 
-    existing = base_query.where(lichess_puzzle_id: active_puzzle_ids)
+    existing = base_query.where(id: active_puzzle_ids)
 
     batch_size = config.puzzle_batch_size
 
     if existing.count > batch_size
-      self.active_puzzle_ids = existing.pluck(:lichess_puzzle_id).sample(batch_size)
+      self.active_puzzle_ids = existing.pluck(:id).sample(batch_size)
       save!
       return
     end
 
     return if existing.count == batch_size
 
-    self.active_puzzle_ids = existing.pluck(:lichess_puzzle_id)
+    self.active_puzzle_ids = existing.pluck(:id)
 
     additional_required = batch_size - active_puzzle_ids.count
 
-    extra = base_query.random_order.limit(additional_required).pluck(:lichess_puzzle_id)
+    extra = base_query.random_order.limit(additional_required).pluck(:id)
 
     add_puzzle_ids(extra)
   end
 
   def active_puzzles
-    user_puzzles.where(lichess_puzzle_id: active_puzzle_ids)
+    user_puzzles.where(id: active_puzzle_ids)
   end
 
   def next_puzzle(previous_puzzle_id = nil)
-    base_query = filtered_user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id)
+    base_query = filtered_user_puzzles.excluding_ids(previous_puzzle_id)
 
     odds_of_random = config.odds_of_random_completed
 
@@ -113,7 +113,7 @@ class User < ApplicationRecord
       without_last_n_played,
       without_last_played_within_n_seconds,
       base_query,
-      user_puzzles.excluding_lichess_puzzle_ids(previous_puzzle_id),
+      user_puzzles.excluding_ids(previous_puzzle_id),
     ]
 
     in_order.each do |query|

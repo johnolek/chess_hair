@@ -215,7 +215,7 @@
 
   async function handlePuzzleComplete() {
     const result = {
-      puzzle_id: $currentPuzzle.lichess_puzzle_id,
+      user_puzzle_id: $currentPuzzle.id,
       made_mistake: madeMistake,
       duration: elapsedTime,
     };
@@ -324,7 +324,7 @@
         </div>
       {/if}
       <div class="block">
-        {#if $currentPuzzle}
+        {#if $currentPuzzle && $currentPuzzle.lichess_puzzle_id}
           <div class="columns is-mobile is-vcentered ml-0 mr-0 mb-1">
             <div class="column is-narrow pb-0">
               <a
@@ -337,7 +337,7 @@
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
-                {#key $currentPuzzle.lichess_puzzle_id}
+                {#key $currentPuzzle.id}
                   <Spoiler
                     title="Rating"
                     minWidth="60"
@@ -352,7 +352,7 @@
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
-                {#key $currentPuzzle.lichess_puzzle_id}
+                {#key $currentPuzzle.id}
                   <Spoiler
                     title="Material"
                     minWidth="70"
@@ -393,7 +393,7 @@
               </div>
             {/if}
             <div class="column">
-              {#key $currentPuzzle.lichess_puzzle_id}
+              {#key $currentPuzzle.id}
                 <ProgressBar
                   max={requiredConsecutiveSolves}
                   bind:current={$currentPuzzle.solve_streak}
@@ -409,7 +409,7 @@
           <div class="block mb-1">
             <div class="board-container">
               {#if $currentPuzzle}
-                {#key $currentPuzzle.lichess_puzzle_id}
+                {#key $currentPuzzle.id}
                   <FocusTimer bind:elapsedTime />
                 {/key}
               {/if}
@@ -437,7 +437,7 @@
           </div>
           <div class="block mt-1 ml-4 mr-4">
             <div class="mb-3 scrollable" style="min-height: 31px">
-              {#key $currentPuzzle.lichess_puzzle_id}
+              {#key $currentPuzzle.id}
                 {#each moves.slice(0, lastMoveIndexToShow) as move, i (move.after)}
                   <button
                     in:fly={{ x: -30, duration: 300 }}
@@ -756,20 +756,21 @@
                 </tr>
               </thead>
               <tbody>
-                {#each $activePuzzles.sort(puzzleManager.sortPuzzlesBySolveTime) as puzzle (puzzle.lichess_puzzle_id)}
+                {#each $activePuzzles.sort(puzzleManager.sortPuzzlesBySolveTime) as puzzle (puzzle.id)}
                   <tr
                     animate:flip={{ duration: 400 }}
-                    class:is-selected={$currentPuzzle.lichess_puzzle_id ===
-                      puzzle.lichess_puzzle_id}
+                    class:is-selected={$currentPuzzle.id === puzzle.id}
                   >
-                    <td class="puzzle-id"
-                      ><a
-                        href={`https://lichess.org/training/${puzzle.lichess_puzzle_id}`}
-                        target="_blank"
-                        title="View on lichess.org"
-                        >{puzzle.lichess_puzzle_id}</a
-                      ></td
-                    >
+                    <td class="puzzle-id">
+                      {#if $currentPuzzle.lichess_puzzle_id}
+                        <a
+                          href={`https://lichess.org/training/${puzzle.lichess_puzzle_id}`}
+                          target="_blank"
+                          title="View on lichess.org"
+                          >{puzzle.lichess_puzzle_id}</a
+                        >
+                      {/if}
+                    </td>
                     {#if puzzle.average_solve_time}
                       <td
                         class:has-text-warning={puzzle.average_solve_time >

@@ -25,7 +25,7 @@
   }
 
   async function fetchNextPuzzle() {
-    const puzzleIdToExclude = $currentPuzzle?.lichess_puzzle_id || null;
+    const puzzleIdToExclude = $currentPuzzle?.id || null;
     const puzzle = await RailsAPI.fetchNextPuzzle(puzzleIdToExclude);
     if (!puzzle) {
       return;
@@ -82,9 +82,7 @@
     const updateStore = (store) => {
       store.update((puzzles) =>
         puzzles.map((puzzle) =>
-          puzzle.lichess_puzzle_id === updatedPuzzle.lichess_puzzle_id
-            ? updatedPuzzle
-            : puzzle,
+          puzzle.id === updatedPuzzle.id ? updatedPuzzle : puzzle,
         ),
       );
     };
@@ -92,9 +90,7 @@
     updateStore(activePuzzles);
 
     currentPuzzle.update((puzzle) =>
-      puzzle && puzzle.lichess_puzzle_id === updatedPuzzle.lichess_puzzle_id
-        ? updatedPuzzle
-        : puzzle,
+      puzzle && puzzle.id === updatedPuzzle.id ? updatedPuzzle : puzzle,
     );
   }
 

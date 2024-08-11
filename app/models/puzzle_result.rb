@@ -1,7 +1,8 @@
 class PuzzleResult < ApplicationRecord
   belongs_to :user
+  belongs_to :user_puzzle, optional: true
 
-  after_commit :recalculate_user_puzzle_stats
+  after_create :recalculate_user_puzzle_stats
 
   scope :correct, -> { where(made_mistake: false)}
   scope :incorrect, -> { where(made_mistake: true)}
@@ -11,6 +12,8 @@ class PuzzleResult < ApplicationRecord
   end
 
   def recalculate_user_puzzle_stats
-    user.user_puzzles.find_by(lichess_puzzle_id: puzzle_id)&.recalculate_stats
+    if user_puzzle
+      user_puzzle.recalculate_stats
+    end
   end
 end

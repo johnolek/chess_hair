@@ -4,7 +4,7 @@ module Api
       def create
         puzzle_result = @user.puzzle_results.new(puzzle_result_params)
         if puzzle_result.save
-          updated_puzzle = @user.user_puzzles.find_by(lichess_puzzle_id: puzzle_result.puzzle_id)
+          updated_puzzle = puzzle_result.user_puzzle
           updated_puzzle.reload
           render json: { result: puzzle_result, puzzle: updated_puzzle }, status: :created
         else
@@ -25,7 +25,7 @@ module Api
       private
 
       def puzzle_result_params
-        params.require(:puzzle_result).permit(:puzzle_id, :duration, :made_mistake, :id)
+        params.require(:puzzle_result).permit(:user_puzzle_id, :lichess_puzzle_id, :duration, :made_mistake, :id)
       end
     end
   end
