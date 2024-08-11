@@ -89,6 +89,20 @@ class User < ApplicationRecord
     user_puzzles.where(id: active_puzzle_ids)
   end
 
+  def random_lichess_puzzle
+    max_id = LichessPuzzle.maximum(:id)
+    random_id = rand(1..max_id)
+    puzzle = LichessPuzzle.where('id > ?', random_id).limit(1).first
+
+    user_puzzles.build(
+      lichess_puzzle: puzzle,
+      lichess_puzzle_id: puzzle.puzzle_id,
+      lichess_rating: puzzle.rating,
+      uci_moves: puzzle.moves,
+      fen: puzzle.fen
+    )
+  end
+
   def next_puzzle(previous_puzzle_id = nil)
     base_query = filtered_user_puzzles.excluding_ids(previous_puzzle_id)
 
