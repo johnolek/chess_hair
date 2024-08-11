@@ -1,6 +1,6 @@
 <div class="content">
   <h1>User summary</h1>
-  <% @users.each do |user| %>
+  <% @users.order(updated_at: :desc).each do |user| %>
     <h2><%= user.email %></h2>
     <h3>Puzzles</h3>
     <p>Total: <%= user.user_puzzles.count %></p>
