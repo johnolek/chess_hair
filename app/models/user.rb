@@ -90,10 +90,15 @@ class User < ApplicationRecord
   end
 
   def create_random_lichess_puzzle
+    min = config.puzzle_min_rating
+    max = config.puzzle_max_rating
     puzzle = LichessPuzzle
       .excluding_user_puzzles(self)
       .high_quality
+      .where(rating: min..max)
       .random_record
+
+    return nil unless puzzle
 
     new_user_puzzle = user_puzzles.create!(
       lichess_puzzle: puzzle,
@@ -110,23 +115,38 @@ class User < ApplicationRecord
     new_user_puzzle
   end
 
-  def next_puzzle(previous_puzzle_id = nil)
-    base_query = filtered_user_puzzles.excluding_ids(previous_puzzle_id)
-
-    odds_of_random = config.odds_of_random_completed
-
-    if rand < odds_of_random
-      random_completed = base_query.completed
-      return random_completed.random_order.first if random_completed.any?
+  def next_puzzle_type
+    odds_of_random_new = config.odds_of_random_new
+    odds_of_random_completed = config.odds_of_random_completed
+    random = rand
+    if random < odds_of_random_new
+      return :random_new
     end
 
+    if random < odds_of_random_new + odds_of_random_completed
+      return :random_completed
+    end
+
+    :normal
+  end
+
+  def next_puzzle(previous_puzzle_id = nil)
+    base_query = filtered_user_puzzles.excluding_ids(previous_puzzle_id)
     minimum_puzzles_between = config.minimum_puzzles_between_reviews.to_i
     minimum_time_between = config.minimum_time_between_puzzles.to_i
-
     without_last_n_played = base_query.excluding_last_n_played(self, minimum_puzzles_between)
     without_last_played_within_n_seconds = base_query.excluding_played_within_last_n_seconds(self, minimum_time_between)
 
     excluding_recently_seen = without_last_n_played.and(without_last_played_within_n_seconds)
+
+    case next_puzzle_type
+      when :random_new
+        puzzle = create_random_lichess_puzzle
+        return puzzle if puzzle
+      when :random_completed
+        random_completed = excluding_recently_seen.completed.random_record
+        return random_completed if random_completed
+    end
 
     in_order = [
       active_puzzles.and(excluding_recently_seen),
@@ -138,10 +158,12 @@ class User < ApplicationRecord
     ]
 
     in_order.each do |query|
-      return query.random_order.first if query.any?
+      puzzle = query.random_record
+      return puzzle if puzzle
     end
 
-    nil
+    # Final fallback is to create a new puzzle
+    create_random_lichess_puzzle
   end
 
   def add_puzzle_id(puzzle_id)
