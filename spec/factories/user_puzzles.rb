@@ -23,5 +23,12 @@ FactoryBot.define do
         user_puzzle.recalculate_stats
       end
     end
+
+    trait :random_lichess_puzzle do
+      complete { true }
+      after(:create) do |user_puzzle|
+        user_puzzle.user.random_lichess_puzzles_collection.add_puzzle(user_puzzle)
+      end
+    end
   end
 end
