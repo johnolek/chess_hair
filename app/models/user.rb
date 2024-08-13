@@ -95,9 +95,7 @@ class User < ApplicationRecord
     puzzle = LichessPuzzle
       .excluding_user_puzzles(self)
       .high_quality
-      .random_order
-      .limit(1)
-      .first
+      .random_record
 
     new_user_puzzle = user_puzzles.create!(
       lichess_puzzle: puzzle,
