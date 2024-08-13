@@ -326,7 +326,7 @@
       {/if}
       <div class="block">
         {#if $currentPuzzle && $currentPuzzle.lichess_puzzle_id}
-          <div class="columns is-mobile is-vcentered ml-0 mr-0 mb-1">
+          <div class="columns is-mobile is-vcentered ml-0 mr-0 mb-3">
             <div class="column is-narrow pb-0">
               <a
                 href={`https://lichess.org/training/${$currentPuzzle.lichess_puzzle_id}`}
