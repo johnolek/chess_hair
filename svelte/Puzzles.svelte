@@ -382,26 +382,9 @@
             </div>
           </div>
           <div class="columns is-mobile is-vcentered mb-1 ml-0 mr-0">
-            {#if $currentPuzzle.average_solve_time}
-              <div class="column is-narrow">
-                <span
-                  class:has-text-warning={$currentPuzzle.average_solve_time >
-                    timeGoal}
-                  class:has-text-success={$currentPuzzle.average_solve_time <=
-                    timeGoal && $currentPuzzle.average_solve_time > 0}
-                  >{$currentPuzzle.average_solve_time.toFixed(2)}s</span
-                >
-              </div>
-            {/if}
             <div class="column">
               {#key $currentPuzzle.id}
-                <ProgressBar
-                  max={requiredConsecutiveSolves}
-                  bind:current={$currentPuzzle.solve_streak}
-                  className={$currentPuzzle.solve_streak >=
-                  requiredConsecutiveSolves
-                    ? "is-success"
-                    : "is-warning"}
+                <ProgressBar bind:current={$currentPuzzle.percentage_complete}
                 ></ProgressBar>
               {/key}
             </div>
@@ -750,8 +733,7 @@
               <thead>
                 <tr>
                   <th><abbr title="Lichess Puzzle ID">ID</abbr></th>
-                  <th><abbr title="Average solve time">Avg</abbr></th>
-                  <th><abbr title="Correct solves in a row">Streak</abbr></th>
+                  <th><abbr title="Percentage Complete">Progress</abbr></th>
                   <th><abbr title="Total correct solves">W</abbr></th>
                   <th><abbr title="Failure Count">L</abbr></th>
                 </tr>
@@ -772,26 +754,8 @@
                         >
                       {/if}
                     </td>
-                    {#if puzzle.average_solve_time}
-                      <td
-                        class:has-text-warning={puzzle.average_solve_time >
-                          timeGoal}
-                        class:has-text-success={puzzle.average_solve_time <=
-                          timeGoal && puzzle.average_solve_time > 0}
-                      >
-                        {puzzle.average_solve_time.toFixed(2)}s
-                      </td>
-                    {:else}
-                      <td>?</td>
-                    {/if}
                     <td>
-                      <ProgressBar
-                        max={requiredConsecutiveSolves}
-                        bind:current={puzzle.solve_streak}
-                        className={puzzle.solve_streak >=
-                        requiredConsecutiveSolves
-                          ? "is-success"
-                          : "is-warning"}
+                      <ProgressBar bind:current={puzzle.percentage_complete}
                       ></ProgressBar>
                     </td>
                     <td>
@@ -845,6 +809,7 @@
               <strong>{$totalFilteredPuzzlesCount}</strong> completed
             </p>
             <ProgressBar
+              automdaticColor={false}
               max={$totalFilteredPuzzlesCount}
               current={$completedFilteredPuzzlesCount}
             />
