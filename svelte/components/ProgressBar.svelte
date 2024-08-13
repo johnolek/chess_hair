@@ -2,8 +2,8 @@
   import { tweened } from "svelte/motion";
   import { quadInOut } from "svelte/easing";
 
-  export let max;
   export let current;
+  export let max = 100;
   export let className = "is-success";
 
   const tweenedProgress = tweened(current, {
