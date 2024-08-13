@@ -5,10 +5,8 @@ module ActiveRecordRelationExtensions
   end
 
   def random_record
-    count = self.count
-    return nil if count == 0
-    return self.first if count == 1
     min, max = self.min_max_ids
+    return nil if min.nil? || max.nil?
     random_id = rand(min..max)
     self.where(id: random_id..).limit(1).first
   end
