@@ -389,7 +389,37 @@
               {/key}
             </div>
           </div>
-
+          <div class="mb-0 scrollable" style="min-height: 31px">
+            {#key $currentPuzzle.id}
+              {#each moves.slice(0, lastMoveIndexToShow) as move, i (move.after)}
+                <button
+                  in:fly={{ x: -30, duration: 300 }}
+                  on:click={() => {
+                    chessboard.goToFen(move.after);
+                  }}
+                  class="tag is-small move-tag button"
+                  class:is-white={move.color === "w"}
+                  class:is-black={move.color === "b"}
+                >
+                  {move.color === "w" || i === 0
+                    ? move.fullMove
+                    : ""}{move.color === "b" && i === 0
+                    ? "... "
+                    : move.color === "w"
+                      ? ". "
+                      : ""}{move.san}
+                  {#if move.after === fenToHighlight}
+                    <span
+                      use:scrollIntoView
+                      in:receive={{ key: "current-move-highlight" }}
+                      out:send={{ key: "current-move-highlight" }}
+                      class="active-move-tag"
+                    ></span>
+                  {/if}
+                </button>
+              {/each}
+            {/key}
+          </div>
           <div class="block mb-1">
             <div class="board-container">
               {#if $currentPuzzle}
@@ -420,37 +450,6 @@
             </div>
           </div>
           <div class="block mt-1 ml-4 mr-4">
-            <div class="mb-3 scrollable" style="min-height: 31px">
-              {#key $currentPuzzle.id}
-                {#each moves.slice(0, lastMoveIndexToShow) as move, i (move.after)}
-                  <button
-                    in:fly={{ x: -30, duration: 300 }}
-                    on:click={() => {
-                      chessboard.goToFen(move.after);
-                    }}
-                    class="tag is-small move-tag button"
-                    class:is-white={move.color === "w"}
-                    class:is-black={move.color === "b"}
-                  >
-                    {move.color === "w" || i === 0
-                      ? move.fullMove
-                      : ""}{move.color === "b" && i === 0
-                      ? "... "
-                      : move.color === "w"
-                        ? ". "
-                        : ""}{move.san}
-                    {#if move.after === fenToHighlight}
-                      <span
-                        use:scrollIntoView
-                        in:receive={{ key: "current-move-highlight" }}
-                        out:send={{ key: "current-move-highlight" }}
-                        class="active-move-tag"
-                      ></span>
-                    {/if}
-                  </button>
-                {/each}
-              {/key}
-            </div>
             <div class="columns is-mobile is-vcentered">
               <div class="column has-text-left is-narrow">
                 {#if !analysisEnabled}
