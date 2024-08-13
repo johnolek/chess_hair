@@ -29,8 +29,16 @@ class User < ApplicationRecord
     collections.create!(name: 'failed_lichess_puzzles')
   end
 
-  def favorites
-    collections.find_by(name: 'favorites')&.user_puzzles || []
+  def get_collection(name)
+    collections.find_or_initialize_by(name: name)
+  end
+
+  def random_lichess_puzzles_collection
+    get_collection('random_lichess_puzzles')
+  end
+
+  def favorites_collection
+    get_collection('favorites')
   end
 
   def failed_lichess_puzzles_collection
@@ -38,15 +46,13 @@ class User < ApplicationRecord
   end
 
   def add_favorite(user_puzzle)
-    collection = collections.find_by(name: 'favorites')
-    collection.user_puzzles << user_puzzle
-    collection.save!
+    favorites_collection.user_puzzles << user_puzzle
+    favorites_collection.save!
   end
 
   def remove_favorite(user_puzzle)
-    collection = collections.find_by(name: 'favorites')
-    collection.user_puzzles.delete(user_puzzle)
-    collection.save!
+    favorites_collection.user_puzzles.delete(user_puzzle)
+    favorites_collection.save!
   end
 
   def grouped_puzzle_results
