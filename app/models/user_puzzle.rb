@@ -68,7 +68,14 @@ class UserPuzzle < ApplicationRecord
     streak
   end
 
-  def complete?
+  def is_complete?
+    # Special case for random lichess puzzles solved correctly the first time
+    #
+    # This currently ignores time for first attempt
+    if complete? && user.random_lichess_puzzles_collection.user_puzzles.include?(self)
+      return true if puzzle_results.incorrect.count == 0
+    end
+
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     return false unless solve_streak >= required_consecutive_solves
     time_goal = user.config.puzzle_time_goal
@@ -80,7 +87,7 @@ class UserPuzzle < ApplicationRecord
     self.total_fails = puzzle_results.incorrect.count
     self.average_solve_time = calculate_average_solve_duration
     self.solve_streak = calculate_solve_streak
-    self.complete = complete?
+    self.complete = is_complete?
     self.last_played = puzzle_results.last&.created_at
     most_recent_result = puzzle_results.order(created_at: :desc).first
     if most_recent_result

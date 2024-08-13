@@ -46,13 +46,11 @@ class User < ApplicationRecord
   end
 
   def add_favorite(user_puzzle)
-    favorites_collection.user_puzzles << user_puzzle
-    favorites_collection.save!
+    favorites_collection.add_puzzle(user_puzzle)
   end
 
   def remove_favorite(user_puzzle)
-    favorites_collection.user_puzzles.delete(user_puzzle)
-    favorites_collection.save!
+    favorites_collection.remove_puzzle(user_puzzle)
   end
 
   def filtered_user_puzzles

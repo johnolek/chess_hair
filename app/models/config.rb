@@ -77,7 +77,7 @@ class Config < ApplicationRecord
   def maybe_recalculate_user_puzzles
     if completion_criteria_changed?
       user.user_puzzles.each do |puzzle|
-        puzzle.complete = puzzle.complete?
+        puzzle.complete = puzzle.is_complete?
         puzzle.save!
       end
     end
