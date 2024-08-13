@@ -55,10 +55,6 @@ class User < ApplicationRecord
     favorites_collection.save!
   end
 
-  def grouped_puzzle_results
-    @grouped_puzzle_results ||= puzzle_results.group_by(&:puzzle_id)
-  end
-
   def filtered_user_puzzles
     query = user_puzzles.where('lichess_rating >= ?', config.puzzle_min_rating) if config.puzzle_min_rating
     query = query.where('lichess_rating <= ?', config.puzzle_max_rating) if config.puzzle_max_rating
