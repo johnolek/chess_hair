@@ -91,18 +91,27 @@ class User < ApplicationRecord
     user_puzzles.where(id: active_puzzle_ids)
   end
 
-  def random_lichess_puzzle
-    max_id = LichessPuzzle.maximum(:id)
-    random_id = rand(1..max_id)
-    puzzle = LichessPuzzle.where('id > ?', random_id).limit(1).first
+  def create_random_lichess_puzzle
+    puzzle = LichessPuzzle
+      .excluding_user_puzzles(self)
+      .high_quality
+      .random_order
+      .limit(1)
+      .first
 
-    user_puzzles.build(
+    new_user_puzzle = user_puzzles.create!(
       lichess_puzzle: puzzle,
       lichess_puzzle_id: puzzle.puzzle_id,
       lichess_rating: puzzle.rating,
       uci_moves: puzzle.moves,
-      fen: puzzle.fen
+      fen: puzzle.fen,
+      complete: true,
     )
+
+    random_puzzles_collection = random_lichess_puzzles_collection
+    random_puzzles_collection.user_puzzles << new_user_puzzle
+    random_puzzles_collection.save!
+    new_user_puzzle
   end
 
   def next_puzzle(previous_puzzle_id = nil)
