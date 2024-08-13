@@ -96,6 +96,31 @@ class UserPuzzle < ApplicationRecord
     save!
   end
 
+  def percentage_complete
+    return 0 if total_solves == 0
+    return 100 if complete?
+    required_consecutive_solves = user.config.puzzle_consecutive_solves
+    streak_percent = (solve_streak / required_consecutive_solves.to_f) * 100
+    time_percent = percent_time_complete
+
+    (streak_percent * 0.5) + (time_percent * 0.5)
+  end
+
+  def percent_time_complete
+    return 0 if average_solve_time.nil?
+
+    time_goal = user.config.puzzle_time_goal
+    max_multiplier = 4
+    max_time = max_multiplier * time_goal
+
+    return 100 if average_solve_time <= time_goal
+    return 0 if average_solve_time >= max_time
+
+    time_difference = average_solve_time - time_goal
+    total_time_range = max_time - time_goal
+    100 - (time_difference / total_time_range * 100)
+  end
+
   def as_json(options = nil)
     super.slice(
       'id',

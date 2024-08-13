@@ -202,6 +202,83 @@ RSpec.describe UserPuzzle, type: :model do
         expect(json.keys).to include("id", "fen", "average_solve_time", "solve_streak", "total_fails", "total_solves", "complete", "lichess_puzzle_id", "lichess_rating", "moves", "themes")
       end
     end
+
+    describe '#percentage_complete' do
+      it 'returns 100 if it  is totally complete' do
+        user_puzzle = create(:user_puzzle, complete: true)
+        expect(user_puzzle.percentage_complete).to eq 100
+      end
+
+      describe '#percent_time_complete' do
+        it 'returns 0 if average solve time greater than 4x time goal' do
+          user = create(:user)
+          user_puzzle = create(:user_puzzle, user: user)
+          allow(user.config).to receive(:puzzle_time_goal).and_return(3)
+          user_puzzle.average_solve_time = 13
+          expect(user_puzzle.percent_time_complete).to eq 0
+        end
+
+        it 'returns 100 if average solve time less than or equal to time goal' do
+          user = create(:user)
+          user_puzzle = create(:user_puzzle, user: user)
+          allow(user.config).to receive(:puzzle_time_goal).and_return(3)
+          user_puzzle.average_solve_time = 2
+          expect(user_puzzle.percent_time_complete).to eq 100
+        end
+
+        it 'returns 50 if average solve time is halfway between time goal and 4x time goal' do
+          user = create(:user)
+          user_puzzle = create(:user_puzzle, user: user)
+          allow(user.config).to receive(:puzzle_time_goal).and_return(30)
+          user_puzzle.average_solve_time = 75
+          expect(user_puzzle.percent_time_complete).to eq 50
+        end
+
+        it 'returns 75 if average solve time is a quarter way between time goal and halfway point' do
+          user = create(:user)
+          user_puzzle = create(:user_puzzle, user: user)
+          allow(user.config).to receive(:puzzle_time_goal).and_return(30)
+          user_puzzle.average_solve_time = 52.5
+          expect(user_puzzle.percent_time_complete).to eq 75
+        end
+
+        it 'returns 25 if average solve time is three quarters way between halfway point and 4x time goal' do
+          user = create(:user)
+          user_puzzle = create(:user_puzzle, user: user)
+          allow(user.config).to receive(:puzzle_time_goal).and_return(30)
+          user_puzzle.average_solve_time = 97.5
+          expect(user_puzzle.percent_time_complete).to eq 25
+        end
+
+        it 'returns 10 if 10% complete' do
+          user = create(:user)
+          user_puzzle = create(:user_puzzle, user: user)
+          allow(user.config).to receive(:puzzle_time_goal).and_return(100)
+          user_puzzle.average_solve_time = 370
+          expect(user_puzzle.percent_time_complete).to eq 10
+        end
+      end
+
+      it 'returns 50 if time is complete but streak is not' do
+        user = create(:user)
+        user_puzzle = create(:user_puzzle, user: user)
+        allow(user.config).to receive(:puzzle_consecutive_solves).and_return(2)
+        allow(user.config).to receive(:puzzle_time_goal).and_return(3)
+        create(:puzzle_result, :correct, user_puzzle: user_puzzle, duration: 2000)
+        create(:puzzle_result, :incorrect, user_puzzle: user_puzzle, duration: 2000)
+        expect(user_puzzle.percentage_complete).to eq 50
+      end
+
+      it 'returns 50 if streak is complete but time is not' do
+        user = create(:user)
+        user_puzzle = create(:user_puzzle, user: user)
+        allow(user.config).to receive(:puzzle_consecutive_solves).and_return(2)
+        allow(user.config).to receive(:puzzle_time_goal).and_return(30)
+        create(:puzzle_result, :correct, user_puzzle: user_puzzle, duration: 300_000_000)
+        create(:puzzle_result, :correct, user_puzzle: user_puzzle, duration: 300_000_000)
+        expect(user_puzzle.percentage_complete).to eq 50
+      end
+    end
   end
 
   describe 'puzzle queries' do
