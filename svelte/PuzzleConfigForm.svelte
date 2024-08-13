@@ -7,6 +7,7 @@
     minimumPuzzlesBetweenReviews,
     minimumTimeBetweenReviews,
     oddsOfRandomCompleted,
+    oddsOfRandomNew,
     requiredConsecutiveSolves,
     timeGoal,
     minimumRating,
@@ -29,6 +30,7 @@
       "puzzles.oddsOfRandomCompleted",
       0.1,
     );
+    oddsOfRandomNew = await getSetting("puzzles.oddsOfRandomNew", 0.0);
     requiredConsecutiveSolves = await getSetting(
       "puzzles.consecutiveSolves",
       2,
@@ -92,6 +94,21 @@
   onChange={async (value) => {
     settingUpdating = true;
     await updateSetting("puzzles.oddsOfRandomCompleted", value);
+    settingUpdating = false;
+  }}
+/>
+<hr />
+<NumberInput
+  label="Odds of New Puzzle"
+  helpText="A number between 0 and 1 representing the odds of getting a brand new puzzle from lichess (within current min and max rating range)"
+  min={0}
+  max={1}
+  step={0.01}
+  isLoading={settingUpdating}
+  bind:value={oddsOfRandomNew}
+  onChange={async (value) => {
+    settingUpdating = true;
+    await updateSetting("puzzles.oddsOfRandomNew", value);
     settingUpdating = false;
   }}
 />
