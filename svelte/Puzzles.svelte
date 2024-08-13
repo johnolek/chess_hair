@@ -366,18 +366,24 @@
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
-                <button
-                  class="button is-white is-small"
-                  on:click={() => {
-                    chessboard.showKingSafety("w");
-                  }}>King</button
-                >
-                <button
-                  class="button is-black is-small"
-                  on:click={() => {
-                    chessboard.showKingSafety("b");
-                  }}>King</button
-                >
+                {#key $currentPuzzle.id}
+                  <span title="Total times played"
+                    >{$currentPuzzle.total_fails +
+                      $currentPuzzle.total_solves}</span
+                  >
+                  |
+                  <span class="has-text-success" title="Current solve streak"
+                    >{$currentPuzzle.solve_streak}</span
+                  >
+                  |
+                  <span class="has-text-success" title="Total solves"
+                    >{$currentPuzzle.total_solves}</span
+                  >
+                  |
+                  <span class="has-text-danger" title="Total fails"
+                    >{$currentPuzzle.total_fails}</span
+                  >
+                {/key}
               </div>
             </div>
           </div>
