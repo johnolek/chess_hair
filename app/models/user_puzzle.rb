@@ -72,8 +72,8 @@ class UserPuzzle < ApplicationRecord
     # Special case for random lichess puzzles solved correctly the first time
     #
     # This currently ignores time for first attempt
-    if complete? && user.random_lichess_puzzles_collection.user_puzzles.include?(self)
-      return true if puzzle_results.incorrect.count == 0
+    if user.random_lichess_puzzles_collection.user_puzzles.include?(self)
+      return true if puzzle_results.count >= 1 && puzzle_results.incorrect.count == 0
     end
 
     required_consecutive_solves = user.config.puzzle_consecutive_solves

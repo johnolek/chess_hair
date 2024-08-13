@@ -106,7 +106,6 @@ class User < ApplicationRecord
       lichess_rating: puzzle.rating,
       uci_moves: puzzle.moves,
       fen: puzzle.fen,
-      complete: true,
     )
 
     random_puzzles_collection = random_lichess_puzzles_collection

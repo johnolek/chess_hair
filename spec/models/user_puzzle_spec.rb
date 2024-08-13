@@ -141,11 +141,22 @@ RSpec.describe UserPuzzle, type: :model do
         expect(user_puzzle.is_complete?).to be true
       end
 
-      it 'does not mark a random lichess puzzle as complete if the first attempt is incorrect' do
+      it 'is complete if the first result for a random lichess puzzle is correct' do
         user = create(:user)
         user_puzzle = create(:user_puzzle, :random_lichess_puzzle, user: user)
         allow(user.config).to receive(:puzzle_consecutive_solves).and_return(2)
         allow(user.config).to receive(:puzzle_time_goal).and_return(3)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
+        user_puzzle.reload
+        expect(user_puzzle.is_complete?).to be true
+      end
+
+      it 'is complete if all results for random lichess puzzles are correct' do
+        user = create(:user)
+        user_puzzle = create(:user_puzzle, :random_lichess_puzzle, user: user)
+        allow(user.config).to receive(:puzzle_consecutive_solves).and_return(3)
+        allow(user.config).to receive(:puzzle_time_goal).and_return(3)
+        create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
         create(:puzzle_result, :correct, user: user, user_puzzle: user_puzzle)
         user_puzzle.reload
         expect(user_puzzle.is_complete?).to be true

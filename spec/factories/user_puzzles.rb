@@ -25,7 +25,6 @@ FactoryBot.define do
     end
 
     trait :random_lichess_puzzle do
-      complete { true }
       after(:create) do |user_puzzle|
         user_puzzle.user.random_lichess_puzzles_collection.add_puzzle(user_puzzle)
       end
