@@ -1,6 +1,5 @@
 FactoryBot.define do
   factory :puzzle_result do
-    association :user
     association :user_puzzle
     lichess_puzzle_id { Faker::Alphanumeric.alphanumeric(number: 10) }
     made_mistake { false }
