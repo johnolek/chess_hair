@@ -100,7 +100,8 @@ class UserPuzzle < ApplicationRecord
     return 0 if total_solves == 0
     return 100 if complete?
     required_consecutive_solves = user.config.puzzle_consecutive_solves
-    streak_percent = (solve_streak / required_consecutive_solves.to_f) * 100
+    streak_percent = solve_streak >= required_consecutive_solves ? 100
+      : (solve_streak / required_consecutive_solves.to_f) * 100
     time_percent = percent_time_complete
 
     (streak_percent * 0.5) + (time_percent * 0.5)
