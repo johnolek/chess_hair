@@ -139,7 +139,15 @@ class User < ApplicationRecord
     excluding_recently_seen = without_last_n_played.and(without_last_played_within_n_seconds)
 
     case next_puzzle_type
-      when :random_new
+    when :random_new
+        existing_random = random_lichess_puzzles_collection
+          .user_puzzles
+          .excluding_ids(previous_puzzle_id)
+          .incomplete
+          .left_outer_joins(:puzzle_results)
+          .where(puzzle_results: { id: nil })
+          .random_record
+        return existing_random if existing_random
         puzzle = create_random_lichess_puzzle
         return puzzle if puzzle
       when :random_completed
