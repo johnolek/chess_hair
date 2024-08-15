@@ -145,6 +145,7 @@ class User < ApplicationRecord
           .incomplete
           .left_outer_joins(:puzzle_results)
           .where(puzzle_results: { id: nil })
+          .where(lichess_rating: config.puzzle_min_rating..config.puzzle_max_rating)
           .random_record
         return existing_random if existing_random
         puzzle = create_random_lichess_puzzle

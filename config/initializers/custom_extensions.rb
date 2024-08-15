@@ -7,13 +7,10 @@ module ActiveRecordRelationExtensions
   end
 
   def random_record
-    min, max = self.min_max_ids
-    return nil if min.nil? || max.nil?
-    table_name = self.klass.table_name
-    primary_key = self.klass.primary_key
-    full_primary_key = "#{table_name}.#{primary_key}"
-    random_id = rand(min..max)
-    self.where("#{full_primary_key}" => random_id..).order("#{full_primary_key}" => :asc).limit(1).first
+    total_records = self.count
+    return nil unless total_records > 0
+    random_offset = rand(total_records)
+    self.offset(random_offset).limit(1).take
   end
 end
 
