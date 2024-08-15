@@ -26,6 +26,10 @@ class UserPuzzle < ApplicationRecord
     where.not(id: recent_puzzle_ids_subquery)
   end
 
+  scope :due_for_review, -> do
+    where(next_review: ..Time.current)
+  end
+
   scope :excluding_played_within_last_n_seconds, ->(user, n) do
     n = n.to_i
     return all if n < 1

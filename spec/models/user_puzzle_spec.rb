@@ -293,6 +293,14 @@ RSpec.describe UserPuzzle, type: :model do
   end
 
   describe 'puzzle queries' do
+    it 'can find puzzles due for review' do
+      puzzle1 = create(:user_puzzle, next_review: 10.seconds.from_now)
+      puzzle2 = create(:user_puzzle, next_review: 10.seconds.ago)
+      due_puzzles = UserPuzzle.due_for_review
+      expect(due_puzzles.count).to be 1
+      expect(due_puzzles.first).to eq puzzle2
+    end
+
     it 'can find puzzles excluding recently played' do
       user = create(:user)
       puzzle1 = create(:user_puzzle, user: user)
