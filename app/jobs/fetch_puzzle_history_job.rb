@@ -53,8 +53,8 @@ class FetchPuzzleHistoryJob < ApplicationJob
         break if imported_this_loop == 0
       end
     ensure
-      user.set_data('puzzle_import_running', false)
       user.set_data('puzzles_imported_at', Time.current.to_i)
+      user.set_data('puzzle_import_running', false)
     end
   end
 end

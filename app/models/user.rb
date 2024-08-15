@@ -1,6 +1,6 @@
 class User < ApplicationRecord
   after_initialize :init_active_puzzle_ids
-  after_commit :maybe_fetch_more_puzzles, on: :update
+  after_update :maybe_fetch_more_puzzles
   after_create :create_default_collections
 
   # Include default devise modules. Others available are:
