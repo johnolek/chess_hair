@@ -27,7 +27,7 @@ class UserPuzzle < ApplicationRecord
   end
 
   scope :due_for_review, -> do
-    where(next_review: ..Time.current)
+    where(next_review: ..Time.current).or(where(next_review: nil))
   end
 
   scope :excluding_played_within_last_n_seconds, ->(user, n) do

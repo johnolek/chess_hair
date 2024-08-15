@@ -301,6 +301,14 @@ RSpec.describe UserPuzzle, type: :model do
       expect(due_puzzles.first).to eq puzzle2
     end
 
+    it 'includes puzzles without an explicit due date in due for review' do
+      puzzle1 = create(:user_puzzle, next_review: 10.seconds.ago)
+      puzzle2 = create(:user_puzzle, next_review: nil)
+      due_puzzles = UserPuzzle.due_for_review
+      expect(due_puzzles.count).to be 2
+      expect(due_puzzles).to include(puzzle1, puzzle2)
+    end
+
     it 'can find puzzles excluding recently played' do
       user = create(:user)
       puzzle1 = create(:user_puzzle, user: user)
