@@ -132,11 +132,10 @@ class User < ApplicationRecord
   def next_puzzle(previous_puzzle_id = nil)
     base_query = filtered_user_puzzles.excluding_ids(previous_puzzle_id)
     minimum_puzzles_between = config.minimum_puzzles_between_reviews.to_i
-    minimum_time_between = config.minimum_time_between_puzzles.to_i
     without_last_n_played = base_query.excluding_last_n_played(self, minimum_puzzles_between)
-    without_last_played_within_n_seconds = base_query.excluding_played_within_last_n_seconds(self, minimum_time_between)
+    due_for_review = base_query.due_for_review
 
-    excluding_recently_seen = without_last_n_played.and(without_last_played_within_n_seconds)
+    excluding_recently_seen = without_last_n_played.and(due_for_review)
 
     case next_puzzle_type
     when :random_new
@@ -155,18 +154,23 @@ class User < ApplicationRecord
         return random_completed if random_completed
     end
 
-    in_order = [
-      active_puzzles.and(excluding_recently_seen),
-      excluding_recently_seen,
-      without_last_n_played,
-      without_last_played_within_n_seconds,
-      base_query,
-      user_puzzles.excluding_ids(previous_puzzle_id),
-    ]
+    in_order = {
+      'filtered active puzzles without recently seen' => active_puzzles.and(excluding_recently_seen),
+      'filtered non-active puzzles not recently seen' => excluding_recently_seen,
+      'filtered without last N played' => without_last_n_played,
+      'filtered due for review' => due_for_review,
+      'filtered user puzzles without previous puzzle' => base_query,
+      'any user puzzle without previous puzzle' => user_puzzles.excluding_ids(previous_puzzle_id)
+    }
 
-    in_order.each do |query|
+    in_order.each do |description, query|
       puzzle = query.random_record
-      return puzzle if puzzle
+      unless puzzle
+        Rails.logger.info("No puzzle found for `#{description}`")
+        next
+      end
+      Rails.logger.info("Found puzzle for `#{description}`")
+      return puzzle
     end
 
     # Final fallback is to create a new puzzle

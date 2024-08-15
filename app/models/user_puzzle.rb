@@ -30,16 +30,6 @@ class UserPuzzle < ApplicationRecord
     where(next_review: ..Time.current).or(where(next_review: nil))
   end
 
-  scope :excluding_played_within_last_n_seconds, ->(user, n) do
-    n = n.to_i
-    return all if n < 1
-    puzzle_results_table = PuzzleResult.arel_table
-    recent_time = Time.current - n
-    recent_puzzle_ids_subquery = user.puzzle_results.where(puzzle_results_table[:created_at].gteq(recent_time))
-      .select(:user_puzzle_id)
-    where.not(id: recent_puzzle_ids_subquery)
-  end
-
   scope :excluding_ids, ->(ids) do
     ids = Array(ids)
     return all if ids.empty?
