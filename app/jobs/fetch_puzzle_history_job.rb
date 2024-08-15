@@ -12,6 +12,10 @@ class FetchPuzzleHistoryJob < ApplicationJob
       return
     end
 
+    last_fetched = user.get_data('puzzles_imported_at', Time.current.to_i)
+    difference = Time.current.to_i - last_fetched
+    return unless difference > 60 * 60 * 12
+
     user.set_data('puzzle_import_running', true)
     before = nil
     per_request = 50
