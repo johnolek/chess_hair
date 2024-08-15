@@ -9,8 +9,11 @@ module ActiveRecordRelationExtensions
   def random_record
     min, max = self.min_max_ids
     return nil if min.nil? || max.nil?
+    table_name = self.klass.table_name
+    primary_key = self.klass.primary_key
+    full_primary_key = "#{table_name}.#{primary_key}"
     random_id = rand(min..max)
-    self.where(id: random_id..).limit(1).first
+    self.where("#{full_primary_key}" => random_id..).order("#{full_primary_key}" => :asc).limit(1).first
   end
 end
 
