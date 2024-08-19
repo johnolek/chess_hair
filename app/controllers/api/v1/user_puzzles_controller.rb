@@ -35,20 +35,20 @@ module Api
         query = base_query.high_quality.rating_range(min_rating, max_rating)
         count = query.count
 
-        if count >= required_puzzles
-          return query.random_record
-        end
-
-        # Not enough in the high quality, so try the rest
-        query = base_query.rating_range(min_rating, max_rating)
-
-        while query.count < required_puzzles
-          max_rating = max_rating * 1.25
-          min_rating = min_rating * 0.95
+        if count < required_puzzles
+          # Not enough in the high quality, so try the rest
           query = base_query.rating_range(min_rating, max_rating)
+
+          # Expand rating range until we have enough puzzles
+          while query.count < required_puzzles
+            max_rating = max_rating * 1.25
+            min_rating = min_rating * 0.95
+            query = base_query.rating_range(min_rating, max_rating)
+          end
         end
 
         puzzle = query.random_record
+
         user_puzzle = @user.user_puzzles.build(
           lichess_puzzle: puzzle,
           lichess_puzzle_id: puzzle.puzzle_id,
