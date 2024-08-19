@@ -7,7 +7,7 @@
   import { Chess } from "chess.js";
   import { debounce } from "lodash";
   import { Util } from "src/util";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { fade, crossfade, fly } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { scrollIntoView } from "./actions/scrollIntoView";
@@ -34,6 +34,9 @@
     stockfishLines,
     stockfishCores,
     stockfishDepth,
+    puzzleMode,
+    drillModeTheme,
+    drillModeLevels,
   } from "./stores.js";
 
   const [send, receive] = crossfade({ fallback: fade, duration: 300 });
@@ -41,6 +44,8 @@
   import PuzzleConfigForm from "./PuzzleConfigForm.svelte";
   import DevOnly from "./components/DevOnly.svelte";
   import MaterialCounter from "./components/MaterialCounter.svelte";
+  import LichessDrillingPuzzleManager from "./LichessDrillingPuzzleManager.svelte";
+  import DrillModeConfigForm from "./DrillModeConfigForm.svelte";
 
   /** @type {PuzzleManager} */
   let puzzleManager;
@@ -185,7 +190,9 @@
       const mistakeId = move.after;
       if (!mistakes.has(mistakeId)) {
         mistakes.set(mistakeId, move);
-        void RailsAPI.saveMistake($currentPuzzle.id, move);
+        if ($currentPuzzle.id) {
+          void RailsAPI.saveMistake($currentPuzzle.id, move);
+        }
       }
       // Override temporarily so it move highlight doesn't flash when undoing
       fenToHighlight = move.before;
@@ -309,13 +316,21 @@
   }
 </script>
 
-<PuzzleManager
-  bind:this={puzzleManager}
-  on:ready={async () => {
-    loaded = true;
-    await loadCurrentPuzzle();
-  }}
-/>
+{#if $puzzleMode === "failedLichess"}
+  <PuzzleManager
+    bind:this={puzzleManager}
+    on:ready={async () => {
+      loaded = true;
+      await loadCurrentPuzzle();
+    }} />
+{:else if $puzzleMode === "lichessDrillMode"}
+  <LichessDrillingPuzzleManager
+    bind:this={puzzleManager}
+    on:ready={async () => {
+      loaded = true;
+      await loadCurrentPuzzle();
+    }} />
+{/if}
 <div class="section pt-0 pl-0 pr-0">
   <div class="columns is-centered ml-0 mr-0">
     <div class="column is-6 pl-0 pr-0">
@@ -332,9 +347,9 @@
                 href={`https://lichess.org/training/${$currentPuzzle.lichess_puzzle_id}`}
                 class="puzzle-id"
                 target="_blank"
-                title="View on lichess.org"
-                >{$currentPuzzle.lichess_puzzle_id}</a
-              >
+                title="View on lichess.org">
+                {$currentPuzzle.lichess_puzzle_id}
+              </a>
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
@@ -342,8 +357,7 @@
                   <Spoiler
                     title="Rating"
                     minWidth="60"
-                    isShown={puzzleComplete}
-                  >
+                    isShown={puzzleComplete}>
                     <div>
                       {$currentPuzzle.lichess_rating}
                     </div>
@@ -357,8 +371,7 @@
                   <Spoiler
                     title="Material"
                     minWidth="70"
-                    isShown={puzzleComplete}
-                  >
+                    isShown={puzzleComplete}>
                     <MaterialCounter bind:fen />
                   </Spoiler>
                 {/key}
@@ -367,22 +380,21 @@
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
                 {#key $currentPuzzle.id}
-                  <span title="Total times played"
-                    >{$currentPuzzle.total_fails +
-                      $currentPuzzle.total_solves}</span
-                  >
+                  <span title="Total times played">
+                    {$currentPuzzle.total_fails + $currentPuzzle.total_solves}
+                  </span>
                   |
-                  <span class="has-text-success" title="Current solve streak"
-                    >{$currentPuzzle.solve_streak}</span
-                  >
+                  <span class="has-text-success" title="Current solve streak">
+                    {$currentPuzzle.solve_streak}
+                  </span>
                   |
-                  <span class="has-text-success" title="Total solves"
-                    >{$currentPuzzle.total_solves}</span
-                  >
+                  <span class="has-text-success" title="Total solves">
+                    {$currentPuzzle.total_solves}
+                  </span>
                   |
-                  <span class="has-text-danger" title="Total fails"
-                    >{$currentPuzzle.total_fails}</span
-                  >
+                  <span class="has-text-danger" title="Total fails">
+                    {$currentPuzzle.total_fails}
+                  </span>
                 {/key}
               </div>
             </div>
@@ -405,8 +417,7 @@
                   }}
                   class="tag is-small move-tag button"
                   class:is-white={move.color === "w"}
-                  class:is-black={move.color === "b"}
-                >
+                  class:is-black={move.color === "b"}>
                   {move.color === "w" || i === 0
                     ? move.fullMove
                     : ""}{move.color === "b" && i === 0
@@ -419,8 +430,8 @@
                       use:scrollIntoView
                       in:receive={{ key: "current-move-highlight" }}
                       out:send={{ key: "current-move-highlight" }}
-                      class="active-move-tag"
-                    ></span>
+                      class="active-move-tag">
+                    </span>
                   {/if}
                 </button>
               {/each}
@@ -429,7 +440,7 @@
           <div class="block mb-1">
             <div class="board-container">
               {#if $currentPuzzle}
-                {#key $currentPuzzle.id}
+                {#key $currentPuzzle}
                   <FocusTimer bind:elapsedTime />
                 {/key}
               {/if}
@@ -443,8 +454,7 @@
                 {orientation}
                 bind:this={chessboard}
                 on:move={handleUserMove}
-                on:currentNode={handleCurrentNode}
-              >
+                on:currentNode={handleCurrentNode}>
                 <div slot="centered-content">
                   {#if successMessage}
                     <span transition:fade class="tag is-success is-size-4">
@@ -467,8 +477,8 @@
                     on:click={() => {
                       analysisEnabled = true;
                       madeMistake = true;
-                    }}
-                    ><Fa icon={faFishFins} />
+                    }}>
+                    <Fa icon={faFishFins} />
                   </button>
                 {:else}
                   <button
@@ -477,8 +487,8 @@
                     on:click={() => {
                       analysisEnabled = false;
                       topStockfishMoves = [];
-                    }}
-                    ><Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
+                    }}>
+                    <Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
                   </button>
                 {/if}
               </div>
@@ -489,8 +499,7 @@
                   bind:this={historyBackButton}
                   on:click={() => {
                     chessboard.historyBack();
-                  }}
-                >
+                  }}>
                   <Fa icon={faArrowLeft} />
                 </button>
                 <button
@@ -499,8 +508,7 @@
                   bind:this={historyForwardButton}
                   on:click={() => {
                     chessboard.historyForward();
-                  }}
-                >
+                  }}>
                   <Fa icon={faArrowRight} />
                 </button>
                 {#if isViewingHistory}
@@ -510,8 +518,7 @@
                     class="button is-primary history-button is-normal"
                     on:click={() => {
                       chessboard.backToMainLine();
-                    }}
-                  >
+                    }}>
                     <Fa icon={faRotateLeft} />
                   </button>
                 {/if}
@@ -527,8 +534,8 @@
                       puzzleComplete = false;
                       await puzzleManager.updateCurrentPuzzle();
                       await loadCurrentPuzzle();
-                    }}
-                    >Next
+                    }}>
+                    Next
                   </button>
                 {/if}
               </div>
@@ -543,8 +550,7 @@
                       class:is-black={colorToPlay === "black"}
                       on:click|preventDefault={() => {
                         makeMove(move.fullMove.lan);
-                      }}
-                    >
+                      }}>
                       <div class="has-text-centered">
                         <div>
                           {move.fullMove.san}
@@ -575,8 +581,8 @@
               on:click={() => {
                 // copy fen to clipboard
                 navigator.clipboard.writeText(fen);
-              }}
-              >Copy fen
+              }}>
+              Copy fen
             </button>
             <button
               class="button is-primary"
@@ -584,8 +590,8 @@
                 const chessInstance = new Chess();
                 chessInstance.load(fen);
                 navigator.clipboard.writeText(chessInstance.ascii());
-              }}
-              >Copy ASCII
+              }}>
+              Copy ASCII
             </button>
           </div>
           <div>
@@ -602,8 +608,7 @@
                   makeMove(move);
                 }
               }}
-              class="button is-rust"
-            >
+              class="button is-rust">
               Play next
             </button>
           </div>
@@ -623,12 +628,11 @@
                 }
                 topStockfishMoves = event.detail.topMoves;
                 chessboard.drawStockfishArrows(topStockfishMoves);
-              }}
-            />
+              }} />
             <div>
               <div class="field is-inline-block">
-                <label class="label"
-                  >Depth
+                <label class="label">
+                  Depth
                   <div class="control">
                     <input
                       class="input"
@@ -637,14 +641,13 @@
                       pattern="[0-9]*"
                       bind:value={$stockfishDepth}
                       min="10"
-                      max="50"
-                    />
+                      max="50" />
                   </div>
                 </label>
               </div>
               <div class="field is-inline-block">
-                <label class="label"
-                  >CPU Threads
+                <label class="label">
+                  CPU Threads
                   <div class="control">
                     <input
                       class="input"
@@ -653,14 +656,13 @@
                       pattern="[0-9]*"
                       bind:value={$stockfishCores}
                       min="1"
-                      max="12"
-                    />
+                      max="12" />
                   </div>
                 </label>
               </div>
               <div class="field is-inline-block">
-                <label class="label"
-                  >Lines
+                <label class="label">
+                  Lines
                   <div class="control">
                     <input
                       class="input"
@@ -669,8 +671,7 @@
                       pattern="[0-9]*"
                       bind:value={$stockfishLines}
                       min="1"
-                      max="100"
-                    />
+                      max="100" />
                   </div>
                 </label>
               </div>
@@ -684,8 +685,8 @@
                   on:click={() => {
                     analysisEnabled = true;
                     madeMistake = true;
-                  }}
-                  ><Fa icon={faFishFins} />
+                  }}>
+                  <Fa icon={faFishFins} />
                 </button>
               {:else}
                 <button
@@ -694,8 +695,8 @@
                   on:click={() => {
                     analysisEnabled = false;
                     topStockfishMoves = [];
-                  }}
-                  ><Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
+                  }}>
+                  <Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
                 </button>
               {/if}
               {#if topStockfishMoves.length > 0}
@@ -717,8 +718,7 @@
                             class:is-black={colorToPlay === "black"}
                             on:click|preventDefault={() => {
                               makeMove(move.fullMove.lan);
-                            }}
-                          >
+                            }}>
                             {move.fullMove.san}
                           </button>
                         </td>
@@ -747,16 +747,15 @@
                 {#each $activePuzzles.sort(puzzleManager.sortPuzzlesBySolveTime) as puzzle (puzzle.id)}
                   <tr
                     animate:flip={{ duration: 400 }}
-                    class:is-selected={$currentPuzzle.id === puzzle.id}
-                  >
+                    class:is-selected={$currentPuzzle.id === puzzle.id}>
                     <td class="puzzle-id">
                       {#if $currentPuzzle.lichess_puzzle_id}
                         <a
                           href={`https://lichess.org/training/${puzzle.lichess_puzzle_id}`}
                           target="_blank"
-                          title="View on lichess.org"
-                          >{puzzle.lichess_puzzle_id}</a
-                        >
+                          title="View on lichess.org">
+                          {puzzle.lichess_puzzle_id}
+                        </a>
                       {/if}
                     </td>
                     <td>
@@ -776,53 +775,94 @@
           </div>
         {/if}
       {/if}
-      <div class="box">
-        <div class="block">
-          {#if userInfo && !userInfo.has_lichess_token}
-            <a href="/authenticate-with-lichess" class="button is-primary">
-              Authenticate with Lichess to load puzzles
-            </a>
-          {:else if userInfo && userInfo.import_in_progress}
-            <div class="block">
+      {#if $puzzleMode === "failedLichess"}
+        <div class="box">
+          <div class="block">
+            {#if userInfo && !userInfo.has_lichess_token}
+              <a href="/authenticate-with-lichess" class="button is-primary">
+                Authenticate with Lichess to load puzzles
+              </a>
+            {:else if userInfo && userInfo.import_in_progress}
+              <div class="block">
+                <p>
+                  Puzzle import in progress. This can take a long time,
+                  especially the first time.
+                </p>
+                <progress class="progress is-small is-primary" max="100">
+                </progress>
+              </div>
+            {:else}
+              <button
+                on:click={async () => {
+                  await RailsAPI.triggerPuzzleImport();
+                  userInfo = { ...userInfo, import_in_progress: true };
+                  await waitForImportComplete();
+                }}
+                class="button is-primary">
+                Fetch latest puzzles from lichess
+              </button>
+            {/if}
+            <p>
+              <strong>{$totalIncorrectPuzzlesCount}</strong>
+              total puzzles
+            </p>
+            {#if $totalIncorrectPuzzlesCount !== $totalFilteredPuzzlesCount}
               <p>
-                Puzzle import in progress. This can take a long time, especially
-                the first time.
+                <strong>{$totalFilteredPuzzlesCount}</strong>
+                puzzles after filtering
               </p>
-              <progress class="progress is-small is-primary" max="100"
-              ></progress>
-            </div>
-          {:else}
-            <button
-              on:click={async () => {
-                await RailsAPI.triggerPuzzleImport();
-                userInfo = { ...userInfo, import_in_progress: true };
-                await waitForImportComplete();
-              }}
-              class="button is-primary"
-              >Fetch latest puzzles from lichess
-            </button>
-          {/if}
-          <p><strong>{$totalIncorrectPuzzlesCount}</strong> total puzzles</p>
-          {#if $totalIncorrectPuzzlesCount !== $totalFilteredPuzzlesCount}
-            <p>
-              <strong>{$totalFilteredPuzzlesCount}</strong> puzzles after filtering
-            </p>
-          {/if}
-          {#if $totalFilteredPuzzlesCount && $completedFilteredPuzzlesCount}
-            <p>
-              <strong>{$completedFilteredPuzzlesCount}</strong> of
-              <strong>{$totalFilteredPuzzlesCount}</strong> completed
-            </p>
-            <ProgressBar
-              automdaticColor={false}
-              max={$totalFilteredPuzzlesCount}
-              current={$completedFilteredPuzzlesCount}
-            />
-          {/if}
+            {/if}
+            {#if $totalFilteredPuzzlesCount && $completedFilteredPuzzlesCount}
+              <p>
+                <strong>{$completedFilteredPuzzlesCount}</strong>
+                of
+                <strong>{$totalFilteredPuzzlesCount}</strong>
+                completed
+              </p>
+              <ProgressBar
+                automdaticColor={false}
+                max={$totalFilteredPuzzlesCount}
+                current={$completedFilteredPuzzlesCount} />
+            {/if}
+          </div>
         </div>
-      </div>
+      {/if}
+
+      {#if $puzzleMode === "lichessDrillMode"}
+        <div class="box">
+          <div class="content">
+            <h3>Drill Mode</h3>
+            <p>Current Theme: {$drillModeTheme}</p>
+            <p>Rating: {$drillModeLevels[$drillModeTheme] || "?"}</p>
+          </div>
+        </div>
+      {/if}
+
       <CollapsibleBox title="Config" defaultOpen={true}>
-        <PuzzleConfigForm />
+        <div class="field">
+          <label class="label" for="puzzle-mode-select">Puzzle Mode</label>
+          <div class="control">
+            <div class="select">
+              <select
+                id="puzzle-mode-select"
+                bind:value={$puzzleMode}
+                on:change={async () => {
+                  loaded = false;
+                }}>
+                <option value="failedLichess">Failed Lichess Puzzles</option>
+                <option value="lichessDrillMode">Lichess Drill Mode</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {#if $puzzleMode === "failedLichess"}
+          <PuzzleConfigForm />
+        {/if}
+
+        {#if $puzzleMode === "lichessDrillMode"}
+          <DrillModeConfigForm />
+        {/if}
       </CollapsibleBox>
     </div>
   </div>

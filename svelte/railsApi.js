@@ -61,6 +61,10 @@ export async function fetchNextPuzzle(puzzleIdToExclude = null) {
   return await getApiCall("/user/next-puzzle", params);
 }
 
+export async function fetchRandomLichessPuzzle(params) {
+  return await getApiCall("/user_puzzles/lichess-puzzle", params);
+}
+
 export async function fetchFilteredPuzzles() {
   return await getApiCall("/user/all-filtered-puzzles");
 }

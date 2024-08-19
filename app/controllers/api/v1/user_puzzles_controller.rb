@@ -23,7 +23,30 @@ module Api
         render json: all
       end
 
+      def lichess_puzzle
+        themes = lichess_puzzle_params[:themes]&.split(',') || []
+        query = LichessPuzzle
+          .high_quality
+          .rating_range(lichess_puzzle_params[:min_rating], lichess_puzzle_params[:max_rating])
+          .with_any_of_these_themes(themes)
+
+        puzzle = query.random_record
+        user_puzzle = @user.user_puzzles.build(
+          lichess_puzzle: puzzle,
+          lichess_puzzle_id: puzzle.puzzle_id,
+          lichess_rating: puzzle.rating,
+          uci_moves: puzzle.moves,
+          fen: puzzle.fen,
+        )
+
+        render json: user_puzzle
+      end
+
       private
+
+      def lichess_puzzle_params
+        params.permit(:min_rating, :max_rating, :themes)
+      end
 
       def user_puzzle_params
         params.require(:user_puzzle).permit(:puzzle_id, :made_mistake)

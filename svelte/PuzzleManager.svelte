@@ -1,5 +1,5 @@
 <script>
-  import { onMount, createEventDispatcher } from "svelte";
+  import { onMount, createEventDispatcher, onDestroy } from "svelte";
   import * as RailsAPI from "./railsApi";
 
   // State stores
@@ -99,5 +99,9 @@
     await getFirstPuzzles();
     void updateActivePuzzles();
     dispatch("ready");
+  });
+
+  onDestroy(async () => {
+    activePuzzles.set([]);
   });
 </script>

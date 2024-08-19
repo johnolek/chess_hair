@@ -3,7 +3,9 @@ class LichessPuzzle < ApplicationRecord
 
   scope :high_quality, -> { where(rating_deviation: ..80, popularity: 80.., nb_plays: 1000..) }
 
+  scope :rating_range, ->(min, max) { where(rating: min..max) }
   scope :with_theme, ->(theme) { where(arel_table[:themes].matches("%#{theme}%")) }
+  scope :with_any_of_these_themes, ->(themes) { where(arel_table[:themes].matches_any(themes.map { |theme| "%#{theme}%" })) }
   scope :without_theme, ->(theme) { where.not(arel_table[:themes].matches("%#{theme}%")) }
 
   scope :excluding_user_puzzles, ->(user) do

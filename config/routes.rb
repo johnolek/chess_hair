@@ -20,7 +20,9 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      resources :user_puzzles, only: [:create, :show, :index]
+      resources :user_puzzles, only: [:create, :show, :index] do
+        get 'lichess-puzzle', on: :collection
+      end
       resources :puzzle_results, only: [:create, :show, :index]
       resources :mistakes, only: [:create]
       resource :user, only: [] do
