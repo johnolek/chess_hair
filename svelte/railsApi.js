@@ -38,6 +38,14 @@ async function putApiCall(endpoint, body, headers = {}) {
   });
 }
 
+async function patchApiCall(endpoint, body, headers = {}) {
+  return await apiCall(endpoint, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
 async function deleteApiCall(endpoint, headers = {}) {
   return await apiCall(endpoint, {
     method: "DELETE",
@@ -106,5 +114,12 @@ export async function saveMistake(userPuzzleId, move) {
       uci_move: move.lan,
       move_index: move.moveIndex,
     },
+  });
+}
+
+export async function updateDrillModeLevel(theme, newRating) {
+  return await patchApiCall("/drill_mode_levels/update_level", {
+    theme,
+    new_rating: newRating,
   });
 }

@@ -24,6 +24,7 @@
   $: maxRating = baseRating + ratingRange;
 
   import { currentPuzzle, nextPuzzle } from "./stores.js";
+  import { updateDrillModeLevel } from "./railsApi";
 
   const dispatch = createEventDispatcher();
 

@@ -25,6 +25,9 @@ Rails.application.routes.draw do
       end
       resources :puzzle_results, only: [:create, :show, :index]
       resources :mistakes, only: [:create]
+      resources :drill_mode_levels, only: [:index] do
+        patch :update_level, on: :collection, action: :update
+      end
       resource :user, only: [] do
         get 'settings'
         get 'active-puzzles'
