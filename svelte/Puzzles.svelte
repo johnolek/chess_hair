@@ -46,6 +46,7 @@
   import MaterialCounter from "./components/MaterialCounter.svelte";
   import LichessDrillingPuzzleManager from "./LichessDrillingPuzzleManager.svelte";
   import DrillModeConfigForm from "./DrillModeConfigForm.svelte";
+  import DrillModeLevelsTable from "./components/DrillModeLevelsTable.svelte";
 
   /** @type {PuzzleManager} */
   let puzzleManager;
@@ -226,6 +227,7 @@
       user_puzzle_id: $currentPuzzle.id,
       made_mistake: madeMistake,
       duration: elapsedTime,
+      themes: $currentPuzzle.themes,
     };
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);
@@ -832,8 +834,7 @@
         <div class="box">
           <div class="content">
             <h3>Drill Mode</h3>
-            <p>Current Theme: {$drillModeTheme}</p>
-            <p>Rating: {$drillModeLevels[$drillModeTheme] || "?"}</p>
+            <DrillModeLevelsTable />
           </div>
         </div>
       {/if}

@@ -24,11 +24,29 @@ module Api
       end
 
       def lichess_puzzle
+        required_puzzles = 20
         themes = lichess_puzzle_params[:themes]&.split(',') || []
-        query = LichessPuzzle
-          .high_quality
-          .rating_range(lichess_puzzle_params[:min_rating], lichess_puzzle_params[:max_rating])
-          .with_any_of_these_themes(themes)
+        target_rating = lichess_puzzle_params[:target_rating].to_i
+        min_rating = target_rating - 100
+        max_rating = target_rating + 100
+
+        base_query = LichessPuzzle.with_any_of_these_themes(themes)
+
+        query = base_query.high_quality.rating_range(min_rating, max_rating)
+        count = query.count
+
+        if count >= required_puzzles
+          return query.random_record
+        end
+
+        # Not enough in the high quality, so try the rest
+        query = base_query.rating_range(min_rating, max_rating)
+
+        while query.count < required_puzzles
+          max_rating = max_rating * 1.25
+          min_rating = min_rating * 0.95
+          query = base_query.rating_range(min_rating, max_rating)
+        end
 
         puzzle = query.random_record
         user_puzzle = @user.user_puzzles.build(
@@ -39,13 +57,13 @@ module Api
           fen: puzzle.fen,
         )
 
-        render json: user_puzzle
+        render json: { puzzle: user_puzzle, rating_range: [min_rating, max_rating] }
       end
 
       private
 
       def lichess_puzzle_params
-        params.permit(:min_rating, :max_rating, :themes)
+        params.permit(:target_rating, :themes)
       end
 
       def user_puzzle_params

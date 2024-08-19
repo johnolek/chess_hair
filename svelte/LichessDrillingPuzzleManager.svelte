@@ -1,45 +1,35 @@
 <script>
   import { onMount, createEventDispatcher } from "svelte";
   import * as RailsAPI from "./railsApi";
-  import { persisted } from "svelte-persisted-store";
-  import { Util } from "src/util";
   import { drillModeTheme, drillModeLevels } from "./stores";
 
-  let lastResults = persisted("lastResults", []);
-
+  let sessionResults = {};
   let baseRating = 1000;
-  let ratingRange = 50;
   let ratingStep = 100;
 
-  let minimumPuzzlesPerLevel = 3;
+  let minimumPuzzlesPerLevel = 5;
   let requiredSolveTime = 30000;
-  let requiredAccuracy = 0.8;
 
-  let losingAccuracy = 0.4;
+  let goBackThreshold = 0.5;
+  let moveOnThreshold = 0.8;
 
-  let puzzleCounter = 0;
   let rollingAverageNumber = 10;
 
-  $: minRating = baseRating - ratingRange;
-  $: maxRating = baseRating + ratingRange;
-
   import { currentPuzzle, nextPuzzle } from "./stores.js";
-  import { updateDrillModeLevel } from "./railsApi";
 
   const dispatch = createEventDispatcher();
 
   async function fetchNextPuzzle() {
-    const puzzle = await RailsAPI.fetchRandomLichessPuzzle({
-      min_rating: minRating,
-      max_rating: maxRating,
+    const puzzleResult = await RailsAPI.fetchRandomLichessPuzzle({
+      target_rating: baseRating,
       themes: [$drillModeTheme],
     });
 
-    if (!puzzle) {
-      return;
+    if (!puzzleResult) {
+      return null;
     }
 
-    return puzzle;
+    return puzzleResult.puzzle;
   }
 
   async function getFirstPuzzles() {
@@ -64,73 +54,60 @@
   }
 
   export async function savePuzzleResult(result) {
-    puzzleCounter = puzzleCounter + 1;
-    lastResults.update((results) => {
-      results.push(result);
-      return results;
+    const meetsCriteria =
+      !result.made_mistake && result.duration <= requiredSolveTime;
+    result.themes.forEach((theme) => {
+      void addResult(theme, meetsCriteria);
     });
-    maybeChangeLevel();
   }
 
-  function maybeChangeLevel() {
-    if (puzzleCounter < minimumPuzzlesPerLevel) {
-      return;
+  async function addResult(theme, meetsCriteria) {
+    if (!sessionResults[theme]) {
+      sessionResults[theme] = [];
     }
+    sessionResults[theme].push(meetsCriteria);
+    // Every {minimumPuzzlesPerLevel} puzzles, check if we should move on, go back, etc
 
-    if (accuracy() < losingAccuracy) {
-      baseRating = baseRating - ratingStep;
-      $drillModeLevels[$drillModeTheme] = baseRating;
-      puzzleCounter = 0;
-      Util.info(
-        `Reduced base rating to ${baseRating} because accuracy of ${accuracy()} is lower than ${losingAccuracy}`,
-      );
-      return;
-    }
-
-    if (averageSolveTime() > requiredSolveTime) {
-      Util.info(
-        `${averageSolveTime()} is higher than ${requiredSolveTime}, not possible to increase level`,
-      );
-      return;
-    }
-
-    if (accuracy() > requiredAccuracy) {
-      baseRating = baseRating + ratingStep;
-      $drillModeLevels[$drillModeTheme] = baseRating;
-      puzzleCounter = 0;
-      Util.info(
-        `Increased base rating to ${baseRating} because accuracy of ${accuracy()} is higher than ${requiredAccuracy}`,
-      );
-      return;
-    }
-  }
-
-  function accuracy() {
-    const relevantResults = $lastResults.slice(-rollingAverageNumber);
-    const correctResults = relevantResults.filter(
-      (result) => !result.made_mistake,
-    );
-    return correctResults.length / relevantResults.length;
-  }
-
-  function averageSolveTime() {
-    const relevantResults = $lastResults
-      .filter((result) => !result.made_mistake)
-      .slice(-rollingAverageNumber);
-    return (
-      relevantResults.reduce((acc, result) => acc + result.duration, 0) /
-      relevantResults.length
-    );
-  }
-
-  // Initialize puzzles on mount
-  onMount(async () => {
-    drillModeTheme.subscribe(async (theme) => {
-      if (!$drillModeLevels[theme]) {
-        $drillModeLevels[theme] = 1000;
-        $lastResults = [];
+    let themeRating = $drillModeLevels[theme] || baseRating;
+    let ratingChanged = false;
+    if (sessionResults[theme].length % minimumPuzzlesPerLevel === 0) {
+      const performanceRating = performance(theme);
+      if (performanceRating <= goBackThreshold) {
+        themeRating = themeRating - ratingStep;
+        ratingChanged = true;
+      } else if (performanceRating >= moveOnThreshold) {
+        themeRating = themeRating + ratingStep;
+        ratingChanged = true;
       }
-      baseRating = $drillModeLevels[theme];
+    }
+
+    if (ratingChanged) {
+      await RailsAPI.updateDrillModeLevel(theme, themeRating);
+      $drillModeLevels[theme] = themeRating;
+      if (theme === $drillModeTheme) {
+        baseRating = themeRating;
+      }
+    }
+  }
+
+  function performance(theme) {
+    const results = sessionResults[theme] || [];
+    if (results.length === 0) {
+      return 0;
+    }
+    const consideredResults = results.slice(-rollingAverageNumber);
+    const meetsCriteria = consideredResults.filter((result) => result).length;
+    return meetsCriteria / consideredResults.length;
+  }
+
+  onMount(async () => {
+    await RailsAPI.fetchDrillModeLevels().then((levels) => {
+      levels.forEach((level) => {
+        $drillModeLevels[level.theme] = level.rating;
+      });
+    });
+    drillModeTheme.subscribe(async (theme) => {
+      baseRating = $drillModeLevels[theme] || 1000;
       await getFirstPuzzles();
       dispatch("ready");
     });

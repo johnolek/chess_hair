@@ -123,3 +123,7 @@ export async function updateDrillModeLevel(theme, newRating) {
     new_rating: newRating,
   });
 }
+
+export async function fetchDrillModeLevels() {
+  return await getApiCall("/drill_mode_levels");
+}
