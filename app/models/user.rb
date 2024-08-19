@@ -13,6 +13,7 @@ class User < ApplicationRecord
   has_one :config
   has_many :user_puzzle_histories
   has_many :collections
+  has_many :drill_mode_levels
 
   serialize :active_puzzle_ids, coder: YAML
 
