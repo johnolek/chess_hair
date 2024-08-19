@@ -1,7 +1,7 @@
 class User < ApplicationRecord
   after_initialize :init_active_puzzle_ids
   after_update :maybe_fetch_more_puzzles
-  after_create :create_default_collections
+  after_create :create_default_collections, :create_default_drill_mode_levels
 
   # Include default devise modules. Others available are:
   # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
@@ -28,6 +28,15 @@ class User < ApplicationRecord
   def create_default_collections
     collections.create!(name: 'favorites')
     collections.create!(name: 'failed_lichess_puzzles')
+  end
+
+  def create_default_drill_mode_levels
+    LichessPuzzle::THEMES.each do |theme|
+      level = drill_mode_levels.find_or_initialize_by(theme: theme)
+      next unless level.new_record?
+      level.rating = 1000
+      level.save
+    end
   end
 
   def get_collection(name)
