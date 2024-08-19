@@ -51,6 +51,7 @@ end
 
 group :test do
   gem 'timecop'
+  gem 'shoulda-matchers'
 end
 
 group :development do
