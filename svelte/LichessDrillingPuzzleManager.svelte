@@ -127,6 +127,7 @@
     drillModeTheme.subscribe(async (theme) => {
       if (!$drillModeLevels[theme]) {
         $drillModeLevels[theme] = 1000;
+        $lastResults = [];
       }
       baseRating = $drillModeLevels[theme];
       await getFirstPuzzles();
