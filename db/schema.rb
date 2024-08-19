@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_08_15_031255) do
+ActiveRecord::Schema[7.1].define(version: 2024_08_19_185804) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -35,6 +35,15 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_15_031255) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_configs_on_user_id"
+  end
+
+  create_table "drill_mode_levels", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "theme", null: false
+    t.integer "rating"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_drill_mode_levels_on_user_id"
   end
 
   create_table "favorites_collection_for_existing_users", force: :cascade do |t|
@@ -153,6 +162,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_08_15_031255) do
   end
 
   add_foreign_key "configs", "users"
+  add_foreign_key "drill_mode_levels", "users"
   add_foreign_key "mistakes", "user_puzzles"
   add_foreign_key "puzzle_results", "user_puzzles"
   add_foreign_key "user_puzzle_histories", "users"

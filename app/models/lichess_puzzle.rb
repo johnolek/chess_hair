@@ -12,4 +12,6 @@ class LichessPuzzle < ApplicationRecord
     return all if user.user_puzzles.empty?
     where.not(puzzle_id: user.user_puzzles.select(:lichess_puzzle_id))
   end
+
+  THEMES = %w[advancedPawn advantage anastasiaMate arabianMate attackingF2F7 attraction backRankMate bishopEndgame bodenMate capturingDefender castling clearance crushing defensiveMove deflection discoveredAttack doubleBishopMate doubleCheck dovetailMate enPassant endgame equality exposedKing fork hangingPiece hookMate interference intermezzo kingsideAttack knightEndgame long master masterVsMaster mate mateIn1 mateIn2 mateIn3 mateIn4 mateIn5 middlegame oneMove opening pawnEndgame pin promotion queenEndgame queenRookEndgame queensideAttack quietMove rookEndgame sacrifice short skewer smotheredMate superGM trappedPiece underPromotion veryLong xRayAttack zugzwang]
 end
