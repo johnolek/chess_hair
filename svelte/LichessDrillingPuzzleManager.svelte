@@ -4,11 +4,11 @@
   import { drillModeTheme, drillModeLevels } from "./stores";
 
   let sessionResults = {};
-  let baseRating = 1000;
+  let targetRating = 1000;
   let ratingStep = 100;
 
   let minimumPuzzlesPerLevel = 5;
-  let requiredSolveTime = 30000;
+  let requiredSolveTime = 15000;
 
   let goBackThreshold = 0.5;
   let moveOnThreshold = 0.8;
@@ -21,7 +21,7 @@
 
   async function fetchNextPuzzle() {
     const puzzleResult = await RailsAPI.fetchRandomLichessPuzzle({
-      target_rating: baseRating,
+      target_rating: targetRating,
       themes: [$drillModeTheme],
     });
 
@@ -68,14 +68,17 @@
     sessionResults[theme].push(meetsCriteria);
     // Every {minimumPuzzlesPerLevel} puzzles, check if we should move on, go back, etc
 
-    let themeRating = $drillModeLevels[theme] || baseRating;
+    let themeRating = $drillModeLevels[theme] || targetRating;
     let ratingChanged = false;
     if (sessionResults[theme].length % minimumPuzzlesPerLevel === 0) {
       const performanceRating = performance(theme);
-      if (performanceRating <= goBackThreshold) {
+      if (performanceRating <= goBackThreshold && themeRating >= targetRating) {
         themeRating = themeRating - ratingStep;
         ratingChanged = true;
-      } else if (performanceRating >= moveOnThreshold) {
+      } else if (
+        performanceRating >= moveOnThreshold &&
+        themeRating <= targetRating
+      ) {
         themeRating = themeRating + ratingStep;
         ratingChanged = true;
       }
@@ -85,7 +88,8 @@
       await RailsAPI.updateDrillModeLevel(theme, themeRating);
       $drillModeLevels[theme] = themeRating;
       if (theme === $drillModeTheme) {
-        baseRating = themeRating;
+        targetRating = themeRating;
+        sessionResults = {};
       }
     }
   }
@@ -107,7 +111,7 @@
       });
     });
     drillModeTheme.subscribe(async (theme) => {
-      baseRating = $drillModeLevels[theme] || 1000;
+      targetRating = $drillModeLevels[theme] || 1000;
       await getFirstPuzzles();
       dispatch("ready");
     });
