@@ -10,7 +10,7 @@
     </tr>
   </thead>
   <tbody>
-    {#each Object.keys($drillModeLevels).sort() as theme}
+    {#each Object.keys($drillModeLevels).sort() as theme (theme)}
       <tr class:is-selected={theme === $drillModeTheme}>
         <td>{theme}</td>
         <td>{$drillModeLevels[theme]}</td>

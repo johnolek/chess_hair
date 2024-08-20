@@ -13,8 +13,6 @@
   let goBackThreshold = 0.5;
   let moveOnThreshold = 0.8;
 
-  let rollingAverageNumber = 10;
-
   import { currentPuzzle, nextPuzzle } from "./stores.js";
 
   const dispatch = createEventDispatcher();
@@ -70,16 +68,17 @@
 
     let themeRating = $drillModeLevels[theme] || targetRating;
     let ratingChanged = false;
+
     if (sessionResults[theme].length % minimumPuzzlesPerLevel === 0) {
       const performanceRating = performance(theme);
-      if (performanceRating <= goBackThreshold && themeRating >= targetRating) {
-        themeRating = themeRating - ratingStep;
+      if (performanceRating <= goBackThreshold && targetRating <= themeRating) {
+        themeRating = Math.max(themeRating - ratingStep, 700);
         ratingChanged = true;
       } else if (
         performanceRating >= moveOnThreshold &&
-        themeRating <= targetRating
+        targetRating >= themeRating
       ) {
-        themeRating = themeRating + ratingStep;
+        themeRating = Math.min(themeRating + ratingStep, 3000);
         ratingChanged = true;
       }
     }
@@ -87,9 +86,10 @@
     if (ratingChanged) {
       await RailsAPI.updateDrillModeLevel(theme, themeRating);
       $drillModeLevels[theme] = themeRating;
+      sessionResults[theme] = [];
       if (theme === $drillModeTheme) {
         targetRating = themeRating;
-        sessionResults = {};
+        $nextPuzzle = await fetchNextPuzzle();
       }
     }
   }
@@ -99,7 +99,7 @@
     if (results.length === 0) {
       return 0;
     }
-    const consideredResults = results.slice(-rollingAverageNumber);
+    const consideredResults = results.slice(-minimumPuzzlesPerLevel);
     const meetsCriteria = consideredResults.filter((result) => result).length;
     return meetsCriteria / consideredResults.length;
   }
