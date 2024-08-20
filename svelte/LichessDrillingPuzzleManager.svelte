@@ -63,7 +63,7 @@
     });
   }
 
-  async function addResult(theme, meetsCriteria, targetRating) {
+  async function addResult(theme, meetsCriteria, targetRatingOfSolvedPuzzle) {
     if (!sessionResults[theme]) {
       sessionResults[theme] = [];
     }
@@ -74,15 +74,18 @@
       themeCounterBelow[theme] = 0;
     }
 
-    sessionResults[theme].push({ meetsCriteria, targetRating });
+    sessionResults[theme].push({
+      meetsCriteria,
+      targetRating: targetRatingOfSolvedPuzzle,
+    });
 
-    let themeRating = $drillModeLevels[theme] || targetRating;
+    let themeRating = $drillModeLevels[theme] || targetRatingOfSolvedPuzzle;
 
-    if (targetRating >= themeRating) {
+    if (targetRatingOfSolvedPuzzle >= themeRating) {
       themeCounterAbove[theme]++;
     }
 
-    if (targetRating <= themeRating) {
+    if (targetRatingOfSolvedPuzzle <= themeRating) {
       themeCounterBelow[theme]++;
     }
 
