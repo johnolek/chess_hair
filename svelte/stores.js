@@ -22,6 +22,7 @@ export const totalFilteredPuzzlesCount = writable(0);
 export const completedFilteredPuzzlesCount = writable(0);
 
 export const puzzleMode = persisted("puzzles.puzzleMode", "failedLichess");
+export const drillModePerformance = writable(0.5);
 export const drillModeTheme = persisted("puzzles.drillModeTheme", "mateIn1");
 export const drillModeLevels = writable({});
 export const drillModeMinPuzzles = persisted("puzzles.drillModeMinLevels", 3);

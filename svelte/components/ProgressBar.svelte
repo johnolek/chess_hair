@@ -6,6 +6,8 @@
   export let max = 100;
   export let automdaticColor = true;
   export let className = "is-success";
+  export let dangerThreshold = 0.15;
+  export let successThreshold = 0.5;
 
   const tweenedProgress = tweened(current, {
     duration: 2000,
@@ -17,9 +19,9 @@
   $: {
     if (automdaticColor) {
       const percentComplete = $tweenedProgress / max;
-      if (percentComplete < 0.15) {
+      if (percentComplete < dangerThreshold) {
         className = "is-danger";
-      } else if (percentComplete < 0.5) {
+      } else if (percentComplete < successThreshold) {
         className = "is-warning";
       } else {
         className = "is-success";
@@ -28,5 +30,5 @@
   }
 </script>
 
-<progress class="progress {className}" value={$tweenedProgress} {max}
-></progress>
+<progress class="progress {className}" value={$tweenedProgress} {max}>
+</progress>

@@ -9,6 +9,7 @@
     drillModeMoveOnThreshold,
     drillModeRollingAverage,
     drillModeTimeGoal,
+    drillModePerformance,
   } from "./stores";
   import { Util } from "src/util";
 
@@ -89,6 +90,10 @@
 
     if (targetRatingOfSolvedPuzzle <= themeRating) {
       themeCounterBelow[theme]++;
+    }
+
+    if (theme === $drillModeTheme) {
+      $drillModePerformance = performanceAboveTarget(theme, themeRating);
     }
 
     if (themeCounterBelow[theme] >= $drillModeMinPuzzles) {

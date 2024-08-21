@@ -44,6 +44,7 @@
   import LichessDrillingPuzzleManager from "./LichessDrillingPuzzleManager.svelte";
   import DrillModeConfigForm from "./DrillModeConfigForm.svelte";
   import DrillModeLevelsTable from "./components/DrillModeLevelsTable.svelte";
+  import DrillModePerformanceBar from "./components/DrillModePerformanceBar.svelte";
 
   /** @type {PuzzleManager} */
   let puzzleManager;
@@ -345,7 +346,7 @@
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
-                {#key $currentPuzzle.id}
+                {#key $currentPuzzle.fen}
                   <Spoiler
                     title="Rating"
                     minWidth="60"
@@ -359,7 +360,7 @@
             </div>
             <div class="column is-narrow pb-0">
               <div class="has-text-centered is-inline-block">
-                {#key $currentPuzzle.id}
+                {#key $currentPuzzle.fen}
                   <Spoiler
                     title="Material"
                     minWidth="70"
@@ -369,34 +370,42 @@
                 {/key}
               </div>
             </div>
-            <div class="column is-narrow pb-0">
-              <div class="has-text-centered is-inline-block">
-                {#key $currentPuzzle.id}
-                  <span title="Total times played">
-                    {$currentPuzzle.total_fails + $currentPuzzle.total_solves}
-                  </span>
-                  |
-                  <span class="has-text-success" title="Current solve streak">
-                    {$currentPuzzle.solve_streak}
-                  </span>
-                  |
-                  <span class="has-text-success" title="Total solves">
-                    {$currentPuzzle.total_solves}
-                  </span>
-                  |
-                  <span class="has-text-danger" title="Total fails">
-                    {$currentPuzzle.total_fails}
-                  </span>
-                {/key}
+            {#if $puzzleMode === "failedLichess"}
+              <div class="column is-narrow pb-0">
+                <div class="has-text-centered is-inline-block">
+                  {#key $currentPuzzle.id}
+                    <span title="Total times played">
+                      {$currentPuzzle.total_fails + $currentPuzzle.total_solves}
+                    </span>
+                    |
+                    <span class="has-text-success" title="Current solve streak">
+                      {$currentPuzzle.solve_streak}
+                    </span>
+                    |
+                    <span class="has-text-success" title="Total solves">
+                      {$currentPuzzle.total_solves}
+                    </span>
+                    |
+                    <span class="has-text-danger" title="Total fails">
+                      {$currentPuzzle.total_fails}
+                    </span>
+                  {/key}
+                </div>
               </div>
-            </div>
+            {/if}
           </div>
           <div class="columns is-mobile is-vcentered mb-1 ml-0 mr-0">
             <div class="column">
-              {#key $currentPuzzle.id}
-                <ProgressBar bind:current={$currentPuzzle.percentage_complete}
-                ></ProgressBar>
-              {/key}
+              {#if $puzzleMode === "failedLichess"}
+                {#key $currentPuzzle.id}
+                  <ProgressBar bind:current={$currentPuzzle.percentage_complete}
+                  ></ProgressBar>
+                {/key}
+              {/if}
+
+              {#if $puzzleMode === "lichessDrillMode"}
+                <DrillModePerformanceBar />
+              {/if}
             </div>
           </div>
           <div class="mb-0 scrollable" style="min-height: 31px">
@@ -824,6 +833,7 @@
         <div class="box">
           <div class="content">
             <h3>Drill Mode</h3>
+            <DrillModeLevelsTable />
             <button
               class="button is-danger"
               on:click={() => {
@@ -831,7 +841,6 @@
               }}>
               Reset levels
             </button>
-            <DrillModeLevelsTable />
           </div>
         </div>
       {/if}
