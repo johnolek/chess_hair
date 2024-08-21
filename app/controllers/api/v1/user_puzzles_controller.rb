@@ -27,7 +27,7 @@ module Api
         required_puzzles = 20
         themes = lichess_puzzle_params[:themes]&.split(',') || []
         target_rating = lichess_puzzle_params[:target_rating].to_i
-        min_rating = target_rating - 100
+        min_rating = target_rating
         max_rating = target_rating + 100
 
         base_query = LichessPuzzle.with_any_of_these_themes(themes)
