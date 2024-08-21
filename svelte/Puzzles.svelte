@@ -22,7 +22,6 @@
     faArrowLeft,
     faArrowRight,
   } from "@fortawesome/free-solid-svg-icons";
-  import { getMaterialCounts } from "./components/lib/chess_functions";
 
   // State stores
   import {
@@ -35,8 +34,6 @@
     stockfishCores,
     stockfishDepth,
     puzzleMode,
-    drillModeTheme,
-    drillModeLevels,
   } from "./stores.js";
 
   const [send, receive] = crossfade({ fallback: fade, duration: 300 });
@@ -53,13 +50,6 @@
   let loaded = false;
   let fen;
   let material;
-
-  $: {
-    if (fen) {
-      material = getMaterialCounts(fen);
-      Util.debug(material);
-    }
-  }
 
   let moveTree;
   // When we're going to undo a move we don't want the highlight to flash
