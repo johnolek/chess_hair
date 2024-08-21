@@ -13,7 +13,6 @@ class MoveTree {
     this.currentNode = this.currentNode.addChild(chessJsCompatibleMove);
     this.currentNode.isMainLine = isMainLine;
     this.moveMap[this.currentNode.getGuid()] = this.currentNode;
-    Util.info({ moveTree: this });
   }
 
   findNodeByFen(fen) {
