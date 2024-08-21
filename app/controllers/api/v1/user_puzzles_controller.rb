@@ -30,7 +30,7 @@ module Api
         min_rating = target_rating
         max_rating = target_rating + 100
 
-        base_query = LichessPuzzle.with_any_of_these_themes(themes)
+        base_query = LichessPuzzle.with_any_of_these_themes(themes).excluding_user_puzzles(@user)
 
         query = base_query.high_quality.rating_range(min_rating, max_rating)
         count = query.count
