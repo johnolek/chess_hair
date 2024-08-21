@@ -6,8 +6,10 @@ class Collection < ApplicationRecord
   validates :name, presence: true, uniqueness: { scope: :user_id }
 
   def add_puzzle(puzzle)
-    user_puzzles << puzzle
-    save!
+    unless user_puzzles.include?(puzzle)
+      user_puzzles << puzzle
+      save!
+    end
   end
 
   def remove_puzzle(puzzle)
