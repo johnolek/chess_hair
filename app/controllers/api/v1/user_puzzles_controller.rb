@@ -49,13 +49,20 @@ module Api
 
         puzzle = query.random_record
 
-        user_puzzle = @user.user_puzzles.build(
-          lichess_puzzle: puzzle,
-          lichess_puzzle_id: puzzle.puzzle_id,
-          lichess_rating: puzzle.rating,
-          uci_moves: puzzle.moves,
-          fen: puzzle.fen,
-        )
+        existing_user_puzzle = @user.user_puzzles.find_by(lichess_puzzle_id: puzzle.puzzle_id)
+
+        if existing_user_puzzle
+          user_puzzle = existing_user_puzzle
+        else
+          user_puzzle = @user.user_puzzles.create(
+            lichess_puzzle: puzzle,
+            lichess_puzzle_id: puzzle.puzzle_id,
+            lichess_rating: puzzle.rating,
+            uci_moves: puzzle.moves,
+            fen: puzzle.fen,
+            )
+        end
+        @user.drill_mode_puzzles_collection.add_puzzle(user_puzzle)
 
         render json: { puzzle: user_puzzle, rating_range: [min_rating, max_rating] }
       end

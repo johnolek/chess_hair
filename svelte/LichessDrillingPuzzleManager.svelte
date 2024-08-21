@@ -58,6 +58,7 @@
   }
 
   export async function savePuzzleResult(result) {
+    void RailsAPI.savePuzzleResult(result);
     const meetsCriteria =
       !result.made_mistake && result.duration <= $drillModeTimeGoal;
     result.themes.forEach(async (theme) => {
