@@ -834,6 +834,13 @@
         <div class="box">
           <div class="content">
             <h3>Drill Mode</h3>
+            <button
+              class="button is-danger"
+              on:click={() => {
+                RailsAPI.resetDrillModeLevels();
+              }}>
+              Reset levels
+            </button>
             <DrillModeLevelsTable />
           </div>
         </div>

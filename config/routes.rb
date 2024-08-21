@@ -27,6 +27,7 @@ Rails.application.routes.draw do
       resources :mistakes, only: [:create]
       resources :drill_mode_levels, only: [:index] do
         patch :update_level, on: :collection, action: :update
+        post :reset, on: :collection, action: :reset
       end
       resource :user, only: [] do
         get 'settings'

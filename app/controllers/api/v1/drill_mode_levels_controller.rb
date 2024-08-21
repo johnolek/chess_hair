@@ -18,6 +18,11 @@ module Api
         end
       end
 
+      def reset
+        @user.drill_mode_levels.update_all(rating: 1000)
+        render json: { message: 'all levels reset to 1000' }
+      end
+
       private
 
       def update_params
