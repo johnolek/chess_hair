@@ -24,3 +24,17 @@ export const completedFilteredPuzzlesCount = writable(0);
 export const puzzleMode = persisted("puzzles.puzzleMode", "failedLichess");
 export const drillModeTheme = persisted("puzzles.drillModeTheme", "mateIn1");
 export const drillModeLevels = writable({});
+export const drillModeMinPuzzles = persisted("puzzles.drillModeMinLevels", 3);
+export const drillModeRollingAverage = persisted(
+  "puzzles.drillModeRollingAverage",
+  7,
+);
+export const drillModeGoBackThreshold = persisted(
+  "puzzles.drillModeGoBackThreshold",
+  0.4,
+);
+export const drillModeMoveOnThreshold = persisted(
+  "puzzles.drillModeMoveOnThreshold",
+  0.8,
+);
+export const drillModeTimeGoal = persisted("puzzles.drillModeTimeGoal", 20000);

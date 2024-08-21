@@ -1,5 +1,12 @@
 <script>
-  import { drillModeTheme } from "./stores";
+  import {
+    drillModeTheme,
+    drillModeMinPuzzles,
+    drillModeRollingAverage,
+    drillModeTimeGoal,
+    drillModeGoBackThreshold,
+    drillModeMoveOnThreshold,
+  } from "./stores";
 
   const themeOptions = [
     "advancedPawn",
@@ -78,4 +85,39 @@
       </select>
     </div>
   </div>
+</div>
+
+<div class="field">
+  <label class="label">
+    Minimum Puzzles Per Level
+    <input class="input" type="number" bind:value={$drillModeMinPuzzles} />
+  </label>
+</div>
+
+<div class="field">
+  <label class="label">
+    Rolling Average Count
+    <input class="input" type="number" bind:value={$drillModeRollingAverage} />
+  </label>
+</div>
+
+<div class="field">
+  <label class="label">
+    Time Goal (ms)
+    <input class="input" type="number" bind:value={$drillModeTimeGoal} />
+  </label>
+</div>
+
+<div class="field">
+  <label class="label">
+    Go Back Threshold
+    <input class="input" type="number" bind:value={$drillModeGoBackThreshold} />
+  </label>
+</div>
+
+<div class="field">
+  <label class="label">
+    Move On Threshold
+    <input class="input" type="number" bind:value={$drillModeMoveOnThreshold} />
+  </label>
 </div>
