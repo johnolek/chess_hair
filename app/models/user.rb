@@ -47,6 +47,10 @@ class User < ApplicationRecord
     get_collection('random_lichess_puzzles')
   end
 
+  def drill_mode_puzzles
+    get_collection('drill_mode_puzzles')
+  end
+
   def favorites_collection
     get_collection('favorites')
   end
