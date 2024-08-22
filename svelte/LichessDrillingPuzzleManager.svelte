@@ -97,6 +97,13 @@
       $drillModePerformance = performanceAboveTarget(theme, themeRating);
     }
 
+    Util.info(
+      `${theme} above target: ${performanceAboveTarget(theme, themeRating)}`,
+    );
+    Util.info(
+      `${theme} below target: ${performanceBelowTarget(theme, themeRating)}`,
+    );
+
     if (themeCounterBelow[theme] >= $drillModeMinPuzzles) {
       const performanceBelow = performanceBelowTarget(theme, themeRating);
       if (performanceBelow <= $drillModeGoBackThreshold) {
