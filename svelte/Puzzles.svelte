@@ -46,7 +46,7 @@
   import DrillModeLevelsTable from "./components/DrillModeLevelsTable.svelte";
   import DrillModePerformanceBar from "./components/DrillModePerformanceBar.svelte";
 
-  /** @type {PuzzleManager} */
+  /** @type {PuzzleManager|DrillModePuzzleManager} */
   let puzzleManager;
   let loaded = false;
   let fen;
