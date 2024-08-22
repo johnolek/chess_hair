@@ -50,7 +50,6 @@
   let puzzleManager;
   let loaded = false;
   let fen;
-  let material;
 
   let moveTree;
   // When we're going to undo a move we don't want the highlight to flash
