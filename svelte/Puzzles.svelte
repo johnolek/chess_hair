@@ -41,7 +41,7 @@
   import PuzzleConfigForm from "./PuzzleConfigForm.svelte";
   import DevOnly from "./components/DevOnly.svelte";
   import MaterialCounter from "./components/MaterialCounter.svelte";
-  import LichessDrillingPuzzleManager from "./LichessDrillingPuzzleManager.svelte";
+  import DrillModePuzzleManager from "./DrillModePuzzleManager.svelte";
   import DrillModeConfigForm from "./DrillModeConfigForm.svelte";
   import DrillModeLevelsTable from "./components/DrillModeLevelsTable.svelte";
   import DrillModePerformanceBar from "./components/DrillModePerformanceBar.svelte";
@@ -317,7 +317,7 @@
       await loadCurrentPuzzle();
     }} />
 {:else if $puzzleMode === "lichessDrillMode"}
-  <LichessDrillingPuzzleManager
+  <DrillModePuzzleManager
     bind:this={puzzleManager}
     on:ready={async () => {
       loaded = true;
