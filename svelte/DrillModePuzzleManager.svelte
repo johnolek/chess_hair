@@ -111,6 +111,8 @@
         themeRating = Math.max(themeRating - ratingStep, 700);
         await updateDrillModeLevel(theme, themeRating);
         themeCounterBelow[theme] = 0;
+        themeCounterAbove[theme] = 0;
+        sessionResults[theme] = [];
         if (theme === $drillModeTheme) {
           targetRating = themeRating;
           $nextPuzzle = await fetchNextPuzzle();
@@ -124,7 +126,9 @@
         Util.info("Increasing rating for " + theme);
         themeRating = Math.min(themeRating + ratingStep, 3000);
         await updateDrillModeLevel(theme, themeRating);
+        themeCounterBelow[theme] = 0;
         themeCounterAbove[theme] = 0;
+        sessionResults[theme] = [];
         if (theme === $drillModeTheme) {
           targetRating = themeRating;
           $nextPuzzle = await fetchNextPuzzle();
