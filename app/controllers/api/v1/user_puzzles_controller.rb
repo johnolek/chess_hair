@@ -24,30 +24,24 @@ module Api
       end
 
       def lichess_puzzle
-        required_puzzles = 20
         themes = lichess_puzzle_params[:themes]&.split(',') || []
         target_rating = lichess_puzzle_params[:target_rating].to_i
         min_rating = target_rating
-        max_rating = target_rating + 100
 
-        base_query = LichessPuzzle.with_any_of_these_themes(themes).excluding_user_puzzles(@user)
+        base_query = LichessPuzzle
+          .rating_range(min_rating, nil)
+          .with_any_of_these_themes(themes)
+          .excluding_user_puzzles(@user)
+          .order(rating: :asc)
+          .limit(1)
 
-        query = base_query.high_quality.rating_range(min_rating, max_rating)
-        count = query.count
+        puzzle = base_query.take
 
-        if count < required_puzzles
-          # Not enough in the high quality, so try the rest
-          query = base_query.rating_range(min_rating, max_rating)
-
-          # Expand rating range until we have enough puzzles
-          while query.count < required_puzzles
-            max_rating = max_rating * 1.25
-            min_rating = min_rating * 0.95
-            query = base_query.rating_range(min_rating, max_rating)
-          end
+        while puzzle.nil?
+          min_rating = min_rating * 0.95
+          query = base_query.rating_range(min_rating, nil)
+          puzzle = query.take
         end
-
-        puzzle = query.random_record
 
         existing_user_puzzle = @user.user_puzzles.find_by(lichess_puzzle_id: puzzle.puzzle_id)
 
@@ -64,7 +58,7 @@ module Api
         end
         @user.drill_mode_puzzles_collection.add_puzzle(user_puzzle)
 
-        render json: { puzzle: user_puzzle, rating_range: [min_rating, max_rating] }
+        render json: { puzzle: user_puzzle }
       end
 
       private
