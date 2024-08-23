@@ -34,6 +34,7 @@
     <tr>
       <th>Theme</th>
       <th>Rating</th>
+      <th>Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -42,8 +43,17 @@
         <tr animate:flip class:is-selected={level.theme === $drillModeTheme}>
           <td>{level.theme}</td>
           <td>{level.rating}</td>
+          <td>
+            {#if level.theme !== $drillModeTheme}
+              <button
+                class="button is-small is-primary"
+                on:click={() => ($drillModeTheme = level.theme)}>
+                ✔
+              </button>
+            {/if}
+          </td>
         </tr>
       {/each}
-    {/if}
+    {/if}✔
   </tbody>
 </table>
