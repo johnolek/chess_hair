@@ -62,9 +62,11 @@
     void RailsAPI.savePuzzleResult(result);
     const meetsCriteria =
       !result.made_mistake && result.duration <= $drillModeTimeGoal;
-    result.themes.forEach(async (theme) => {
-      await addResult(theme, meetsCriteria, targetRating);
-    });
+    await Promise.all(
+      result.themes.map(async (theme) => {
+        await addResult(theme, meetsCriteria, result.rating);
+      }),
+    );
   }
 
   function initializeThemeData(theme) {
