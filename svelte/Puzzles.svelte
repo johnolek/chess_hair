@@ -218,6 +218,7 @@
       made_mistake: madeMistake,
       duration: elapsedTime,
       themes: $currentPuzzle.themes,
+      rating: $currentPuzzle.lichess_rating,
     };
     let message = madeMistake ? "Completed with mistake" : "Correct!";
     showSuccess(message);

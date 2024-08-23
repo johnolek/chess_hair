@@ -18,7 +18,6 @@
   let sessionResults = {};
   let themeCounterAbove = {};
   let themeCounterBelow = {};
-  let targetRating = 1000;
   let ratingStep = 100;
 
   import { currentPuzzle, nextPuzzle } from "./stores.js";
@@ -26,6 +25,10 @@
   const dispatch = createEventDispatcher();
 
   async function fetchNextPuzzle() {
+    if ($drillModeAutoSelectWorst) {
+      chooseWorstTheme();
+    }
+    const targetRating = $drillModeLevels[$drillModeTheme].rating || 1000;
     const puzzleResult = await RailsAPI.fetchRandomLichessPuzzle({
       target_rating: targetRating,
       themes: [$drillModeTheme],
@@ -114,10 +117,6 @@
         await updateDrillModeLevel(theme, themeRating);
         resetThemeCounters(theme);
         if (theme === $drillModeTheme) {
-          targetRating = themeRating;
-          if ($drillModeAutoSelectWorst) {
-            chooseWorstTheme();
-          }
           $nextPuzzle = await fetchNextPuzzle();
         }
       }
@@ -131,10 +130,6 @@
         await updateDrillModeLevel(theme, themeRating);
         resetThemeCounters(theme);
         if (theme === $drillModeTheme) {
-          targetRating = themeRating;
-          if ($drillModeAutoSelectWorst) {
-            chooseWorstTheme();
-          }
           $nextPuzzle = await fetchNextPuzzle();
         }
       }
@@ -224,10 +219,6 @@
       levels.forEach((level) => {
         $drillModeLevels[level.theme] = level;
       });
-    });
-    drillModeTheme.subscribe(async (theme) => {
-      targetRating = $drillModeLevels[theme].rating || 1000;
-      nextPuzzle.set(null);
     });
     if ($drillModeAutoSelectWorst) {
       chooseWorstTheme();
