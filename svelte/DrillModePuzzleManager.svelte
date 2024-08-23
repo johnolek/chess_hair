@@ -12,13 +12,14 @@
     drillModePerformance,
     drillModeAutoSelectWorst,
     drillModeAvoidThemes,
+    drillModeIncreaseStep,
+    drillModeDecreaseStep,
   } from "./stores";
   import { Util } from "src/util";
 
   let sessionResults = {};
   let themeCounterAbove = {};
   let themeCounterBelow = {};
-  let ratingStep = 100;
 
   import { currentPuzzle, nextPuzzle } from "./stores.js";
 
@@ -113,12 +114,9 @@
       const performanceBelow = performanceBelowTarget(theme, themeRating);
       if (performanceBelow <= $drillModeGoBackThreshold) {
         Util.info("Decreasing rating for " + theme);
-        themeRating = Math.max(themeRating - ratingStep, 700);
+        themeRating = Math.max(themeRating - $drillModeDecreaseStep, 700);
         await updateDrillModeLevel(theme, themeRating);
         resetThemeCounters(theme);
-        if (theme === $drillModeTheme) {
-          $nextPuzzle = await fetchNextPuzzle();
-        }
       }
     }
 
@@ -126,12 +124,9 @@
       const performanceAbove = performanceAboveTarget(theme, themeRating);
       if (performanceAbove >= $drillModeMoveOnThreshold) {
         Util.info("Increasing rating for " + theme);
-        themeRating = Math.min(themeRating + ratingStep, 3000);
+        themeRating = Math.min(themeRating + $drillModeIncreaseStep, 3000);
         await updateDrillModeLevel(theme, themeRating);
         resetThemeCounters(theme);
-        if (theme === $drillModeTheme) {
-          $nextPuzzle = await fetchNextPuzzle();
-        }
       }
     }
   }

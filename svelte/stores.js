@@ -47,3 +47,11 @@ export const drillModeAvoidThemes = persisted(
   "puzzles.drillModeAvoidThemes",
   [],
 );
+export const drillModeIncreaseStep = persisted(
+  "puzzles.drillModeIncreaseStep",
+  200,
+);
+export const drillModeDecreaseStep = persisted(
+  "puzzles.drillModeDecreaseStep",
+  100,
+);

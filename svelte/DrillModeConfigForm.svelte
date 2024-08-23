@@ -6,7 +6,8 @@
     drillModeTimeGoal,
     drillModeGoBackThreshold,
     drillModeMoveOnThreshold,
-    drillModeAutoSelectWorst,
+    drillModeIncreaseStep,
+    drillModeDecreaseStep,
   } from "./stores";
 
   const themeOptions = [
@@ -120,5 +121,19 @@
   <label class="label">
     Move On Threshold
     <input class="input" type="number" bind:value={$drillModeMoveOnThreshold} />
+  </label>
+</div>
+
+<div class="field">
+  <label class="label">
+    Increase Step
+    <input class="input" type="number" bind:value={$drillModeIncreaseStep} />
+  </label>
+</div>
+
+<div class="field">
+  <label class="label">
+    Decrease Step
+    <input class="input" type="number" bind:value={$drillModeDecreaseStep} />
   </label>
 </div>
