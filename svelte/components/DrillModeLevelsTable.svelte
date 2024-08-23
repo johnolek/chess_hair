@@ -1,10 +1,11 @@
 <script>
   import Fa from "svelte-fa";
-  import { faEye } from "@fortawesome/free-solid-svg-icons";
+  import { faBan, faEye, faPlus } from "@fortawesome/free-solid-svg-icons";
   import {
     drillModeLevels,
     drillModeTheme,
     drillModeAutoSelectWorst,
+    drillModeAvoidThemes,
   } from "../stores";
   import { flip } from "svelte/animate";
 
@@ -30,6 +31,25 @@
     const dateA = new Date(a.updated_at);
     const dateB = new Date(b.updated_at);
     return dateB - dateA;
+  }
+
+  function excludeThemeFromDrillMode(theme) {
+    drillModeAvoidThemes.update((themes) => {
+      if (!themes.includes(theme)) {
+        themes.push(theme);
+      }
+      return themes;
+    });
+  }
+
+  function includeThemeInDrillMode(theme) {
+    drillModeAvoidThemes.update((themes) => {
+      return themes.filter((t) => t !== theme);
+    });
+  }
+
+  function isThemeExcludedFromDrillMode(theme) {
+    return $drillModeAvoidThemes.includes(theme);
   }
 
   $: levelsCount = Object.keys($drillModeLevels).length;
@@ -73,10 +93,28 @@
                 title="Focus on this theme"
                 on:click={() => {
                   $drillModeTheme = level.theme;
+                  includeThemeInDrillMode(level.theme);
                   $drillModeAutoSelectWorst = false;
                 }}>
                 <Fa icon={faEye} />
               </button>
+            {/if}
+            {#if $drillModeAutoSelectWorst}
+              {#if !$drillModeAvoidThemes.includes(level.theme)}
+                <button
+                  class="button is-small is-danger"
+                  title="Exclude this theme"
+                  on:click={() => excludeThemeFromDrillMode(level.theme)}>
+                  <Fa icon={faBan} />
+                </button>
+              {:else}
+                <button
+                  class="button is-small is-success"
+                  title="Include this theme"
+                  on:click={() => includeThemeInDrillMode(level.theme)}>
+                  <Fa icon={faPlus} />
+                </button>
+              {/if}
             {/if}
           </td>
         </tr>
