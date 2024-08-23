@@ -172,12 +172,12 @@
   }
 
   function chooseWorstTheme() {
-    const levels = Object.values($drillModeLevels).filter((level) => {
-      return !$drillModeAvoidThemes.includes(level.theme);
-    });
-    const minRating = Math.min(...levels.map((level) => level.rating));
-    const worstThemes = levels.filter((level) => level.rating === minRating);
-    $drillModeTheme = Util.getRandomElement(worstThemes).theme;
+    const levels = Object.values($drillModeLevels)
+      .filter((level) => {
+        return !$drillModeAvoidThemes.includes(level.theme);
+      })
+      .sort((a, b) => a.rating - b.rating);
+    $drillModeTheme = Util.getRandomElement(levels.slice(0, 2)).theme;
   }
 
   function performanceAboveTarget(theme, themeRating) {
