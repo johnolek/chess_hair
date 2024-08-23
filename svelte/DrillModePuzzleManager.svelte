@@ -12,7 +12,6 @@
     drillModePerformance,
     drillModeAutoSelectWorst,
     drillModeAvoidThemes,
-    allowedDrillModeLevels,
   } from "./stores";
   import { Util } from "src/util";
 
@@ -68,7 +67,7 @@
     });
   }
 
-  async function addResult(theme, meetsCriteria, targetRatingOfSolvedPuzzle) {
+  function initializeThemeData(theme) {
     if (!sessionResults[theme]) {
       sessionResults[theme] = [];
     }
@@ -78,7 +77,13 @@
     if (!themeCounterBelow[theme]) {
       themeCounterBelow[theme] = 0;
     }
+  }
 
+  function updateSessionResults(
+    theme,
+    meetsCriteria,
+    targetRatingOfSolvedPuzzle,
+  ) {
     sessionResults[theme].push({
       meetsCriteria,
       targetRating: targetRatingOfSolvedPuzzle,
@@ -95,26 +100,17 @@
       themeCounterBelow[theme]++;
     }
 
-    if (theme === $drillModeTheme) {
-      $drillModePerformance = performanceAboveTarget(theme, themeRating);
-    }
+    return themeRating;
+  }
 
-    Util.info(
-      `${theme} above target: ${performanceAboveTarget(theme, themeRating)}`,
-    );
-    Util.info(
-      `${theme} below target: ${performanceBelowTarget(theme, themeRating)}`,
-    );
-
+  async function checkAndUpdateThemeRating(theme, themeRating) {
     if (themeCounterBelow[theme] >= $drillModeMinPuzzles) {
       const performanceBelow = performanceBelowTarget(theme, themeRating);
       if (performanceBelow <= $drillModeGoBackThreshold) {
         Util.info("Decreasing rating for " + theme);
         themeRating = Math.max(themeRating - ratingStep, 700);
         await updateDrillModeLevel(theme, themeRating);
-        themeCounterBelow[theme] = 0;
-        themeCounterAbove[theme] = 0;
-        sessionResults[theme] = [];
+        resetThemeCounters(theme);
         if (theme === $drillModeTheme) {
           targetRating = themeRating;
           if ($drillModeAutoSelectWorst) {
@@ -131,9 +127,7 @@
         Util.info("Increasing rating for " + theme);
         themeRating = Math.min(themeRating + ratingStep, 3000);
         await updateDrillModeLevel(theme, themeRating);
-        themeCounterBelow[theme] = 0;
-        themeCounterAbove[theme] = 0;
-        sessionResults[theme] = [];
+        resetThemeCounters(theme);
         if (theme === $drillModeTheme) {
           targetRating = themeRating;
           if ($drillModeAutoSelectWorst) {
@@ -143,6 +137,35 @@
         }
       }
     }
+  }
+
+  function resetThemeCounters(theme) {
+    themeCounterBelow[theme] = 0;
+    themeCounterAbove[theme] = 0;
+  }
+
+  async function addResult(theme, meetsCriteria, targetRatingOfSolvedPuzzle) {
+    initializeThemeData(theme);
+
+    let themeRating = updateSessionResults(
+      theme,
+      meetsCriteria,
+      targetRatingOfSolvedPuzzle,
+    );
+
+    if (theme === $drillModeTheme) {
+      $drillModePerformance = performanceAboveTarget(theme, themeRating);
+    }
+
+    Util.info(
+      `${theme} above target: ${performanceAboveTarget(theme, themeRating)}`,
+    );
+    Util.info(
+      `${theme} below target: ${performanceBelowTarget(theme, themeRating)}`,
+    );
+
+    await checkAndUpdateThemeRating(theme, themeRating);
+
     Util.info({ sessionResults });
   }
 
@@ -209,6 +232,5 @@
     }
     await getFirstPuzzles();
     dispatch("ready");
-    console.log($allowedDrillModeLevels);
   });
 </script>

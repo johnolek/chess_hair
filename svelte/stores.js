@@ -1,5 +1,5 @@
 import { persisted } from "svelte-persisted-store";
-import { derived, writable } from "svelte/store";
+import { writable } from "svelte/store";
 
 export const pieceSet = persisted("global.pieceSet", "maestro");
 export const boardStyle = persisted("global.boardStyle", "brown");
@@ -46,16 +46,4 @@ export const drillModeAutoSelectWorst = persisted(
 export const drillModeAvoidThemes = persisted(
   "puzzles.drillModeAvoidThemes",
   [],
-);
-
-export const allowedDrillModeLevels = derived(
-  [drillModeLevels, drillModeAvoidThemes],
-  ([$drillModeLevels, $drillModeAvoidThemes]) => {
-    return Object.values($drillModeLevels).reduce((acc, level) => {
-      if (!$drillModeAvoidThemes.includes(level.theme)) {
-        acc[level.theme] = level;
-      }
-      return acc;
-    }, {});
-  },
 );
