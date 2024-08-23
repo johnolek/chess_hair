@@ -1,5 +1,6 @@
 <script>
   import { onMount, createEventDispatcher } from "svelte";
+  import { derived } from "svelte/store";
   import * as RailsAPI from "./railsApi";
   import {
     drillModeTheme,
@@ -11,6 +12,8 @@
     drillModeTimeGoal,
     drillModePerformance,
     drillModeAutoSelectWorst,
+    drillModeAvoidThemes,
+    allowedDrillModeLevels,
   } from "./stores";
   import { Util } from "src/util";
 
@@ -150,7 +153,9 @@
   }
 
   function chooseWorstTheme() {
-    const levels = Object.values($drillModeLevels);
+    const levels = Object.values($drillModeLevels).filter((level) => {
+      return !$drillModeAvoidThemes.includes(level.theme);
+    });
     const minRating = Math.min(...levels.map((level) => level.rating));
     const worstThemes = levels.filter((level) => level.rating === minRating);
     $drillModeTheme = Util.getRandomElement(worstThemes).theme;
@@ -205,5 +210,6 @@
     }
     await getFirstPuzzles();
     dispatch("ready");
+    console.log($allowedDrillModeLevels);
   });
 </script>

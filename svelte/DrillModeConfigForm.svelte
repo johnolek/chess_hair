@@ -88,17 +88,6 @@
   </div>
 </div>
 
-<button
-  class="button is-primary"
-  on:click={() => ($drillModeAutoSelectWorst = !$drillModeAutoSelectWorst)}>
-  {#if $drillModeAutoSelectWorst}
-    Disable
-  {:else}
-    Enable
-  {/if}
-  Auto Select Worst
-</button>
-
 <div class="field">
   <label class="label">
     Minimum Puzzles Per Level

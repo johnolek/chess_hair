@@ -1,5 +1,11 @@
 <script>
-  import { drillModeLevels, drillModeTheme } from "../stores";
+  import Fa from "svelte-fa";
+  import { faEye } from "@fortawesome/free-solid-svg-icons";
+  import {
+    drillModeLevels,
+    drillModeTheme,
+    drillModeAutoSelectWorst,
+  } from "../stores";
   import { flip } from "svelte/animate";
 
   let sortingFunction = undefined;
@@ -29,7 +35,22 @@
   $: levelsCount = Object.keys($drillModeLevels).length;
 </script>
 
-<table class="table is-striped is-narrow is-fullwidth">
+<div class="block">
+  <button
+    class="button is-primary"
+    on:click={() => {
+      $drillModeAutoSelectWorst = !$drillModeAutoSelectWorst;
+    }}>
+    {#if $drillModeAutoSelectWorst}
+      Disable
+    {:else}
+      Enable
+    {/if}
+    Auto Select Worst
+  </button>
+</div>
+
+<table class="table is-striped is-narrow">
   <thead>
     <tr>
       <th>Theme</th>
@@ -49,13 +70,17 @@
             {#if level.theme !== $drillModeTheme}
               <button
                 class="button is-small is-primary"
-                on:click={() => ($drillModeTheme = level.theme)}>
-                ✔
+                title="Focus on this theme"
+                on:click={() => {
+                  $drillModeTheme = level.theme;
+                  $drillModeAutoSelectWorst = false;
+                }}>
+                <Fa icon={faEye} />
               </button>
             {/if}
           </td>
         </tr>
       {/each}
-    {/if}✔
+    {/if}
   </tbody>
 </table>
