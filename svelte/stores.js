@@ -39,3 +39,7 @@ export const drillModeMoveOnThreshold = persisted(
   0.8,
 );
 export const drillModeTimeGoal = persisted("puzzles.drillModeTimeGoal", 20000);
+export const drillModeAutoSelectWorst = persisted(
+  "puzzles.drillModeAutoSelectWorst",
+  true,
+);

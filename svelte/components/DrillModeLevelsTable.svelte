@@ -40,7 +40,9 @@
   <tbody>
     {#if levelsCount > 0}
       {#each Object.values($drillModeLevels).sort(sortByLastUpdatedDescending) as level (level.theme)}
-        <tr animate:flip class:is-selected={level.theme === $drillModeTheme}>
+        <tr
+          animate:flip={{ duration: 500 }}
+          class:is-selected={level.theme === $drillModeTheme}>
           <td>{level.theme}</td>
           <td>{level.rating}</td>
           <td>

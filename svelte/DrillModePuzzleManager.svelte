@@ -10,6 +10,7 @@
     drillModeRollingAverage,
     drillModeTimeGoal,
     drillModePerformance,
+    drillModeAutoSelectWorst,
   } from "./stores";
   import { Util } from "src/util";
 
@@ -47,14 +48,13 @@
   export async function updateCurrentPuzzle() {
     if ($nextPuzzle) {
       currentPuzzle.set($nextPuzzle);
-      void fetchNextPuzzle().then((puzzle) => {
-        nextPuzzle.set(puzzle);
-      });
     } else {
-      const puzzle = await RailsAPI.fetchNextPuzzle();
+      const puzzle = await fetchNextPuzzle();
       currentPuzzle.set(puzzle);
-      void fetchNextPuzzle();
     }
+    void fetchNextPuzzle().then((puzzle) => {
+      nextPuzzle.set(puzzle);
+    });
   }
 
   export async function savePuzzleResult(result) {
@@ -115,6 +115,9 @@
         sessionResults[theme] = [];
         if (theme === $drillModeTheme) {
           targetRating = themeRating;
+          if ($drillModeAutoSelectWorst) {
+            chooseWorstTheme();
+          }
           $nextPuzzle = await fetchNextPuzzle();
         }
       }
@@ -131,6 +134,9 @@
         sessionResults[theme] = [];
         if (theme === $drillModeTheme) {
           targetRating = themeRating;
+          if ($drillModeAutoSelectWorst) {
+            chooseWorstTheme();
+          }
           $nextPuzzle = await fetchNextPuzzle();
         }
       }
@@ -141,6 +147,13 @@
   async function updateDrillModeLevel(theme, rating) {
     const response = await RailsAPI.updateDrillModeLevel(theme, rating);
     $drillModeLevels[theme] = response.updated_level;
+  }
+
+  function chooseWorstTheme() {
+    const levels = Object.values($drillModeLevels);
+    const minRating = Math.min(...levels.map((level) => level.rating));
+    const worstThemes = levels.filter((level) => level.rating === minRating);
+    $drillModeTheme = Util.getRandomElement(worstThemes).theme;
   }
 
   function performanceAboveTarget(theme, themeRating) {
@@ -185,8 +198,12 @@
     });
     drillModeTheme.subscribe(async (theme) => {
       targetRating = $drillModeLevels[theme].rating || 1000;
-      await getFirstPuzzles();
-      dispatch("ready");
+      nextPuzzle.set(null);
     });
+    if ($drillModeAutoSelectWorst) {
+      chooseWorstTheme();
+    }
+    await getFirstPuzzles();
+    dispatch("ready");
   });
 </script>
