@@ -5,7 +5,6 @@
   import Stockfish from "./components/Stockfish.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
   import { Chess } from "chess.js";
-  import { debounce } from "lodash";
   import { Util } from "src/util";
   import { onMount, tick } from "svelte";
   import { fade, crossfade, fly } from "svelte/transition";
@@ -401,10 +400,6 @@
                   <ProgressBar bind:current={$currentPuzzle.percentage_complete}
                   ></ProgressBar>
                 {/key}
-              {/if}
-
-              {#if $puzzleMode === "lichessDrillMode"}
-                <DrillModePerformanceBar />
               {/if}
             </div>
           </div>
