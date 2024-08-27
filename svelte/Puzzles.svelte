@@ -2,11 +2,10 @@
   import Chessboard from "./components/Chessboard.svelte";
   import ProgressBar from "./components/ProgressBar.svelte";
   import FocusTimer from "./components/FocusTimer.svelte";
-  import Stockfish from "./components/Stockfish.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
   import { Chess } from "chess.js";
   import { Util } from "src/util";
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
   import { fade, crossfade, fly } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { scrollIntoView } from "./actions/scrollIntoView";
@@ -14,13 +13,6 @@
   import Spoiler from "./components/Spoiler.svelte";
   import { getSetting, initSettings } from "./settingsManager.js";
   import * as RailsAPI from "./railsApi";
-  import Fa from "svelte-fa";
-  import { faRotateLeft } from "@fortawesome/free-solid-svg-icons";
-  import {
-    faFishFins,
-    faArrowLeft,
-    faArrowRight,
-  } from "@fortawesome/free-solid-svg-icons";
 
   // State stores
   import {
@@ -43,7 +35,6 @@
   import DrillModePuzzleManager from "./DrillModePuzzleManager.svelte";
   import DrillModeConfigForm from "./DrillModeConfigForm.svelte";
   import DrillModeLevelsTable from "./components/DrillModeLevelsTable.svelte";
-  import DrillModePerformanceBar from "./components/DrillModePerformanceBar.svelte";
 
   /** @type {PuzzleManager|DrillModePuzzleManager} */
   let puzzleManager;
@@ -99,13 +90,11 @@
     if (chessboard) {
       chessboard.enableShowLastMove();
     }
-
-    if (analysisEnabled) {
-      analysisEnabled = false;
-      topStockfishMoves = [];
-      stockfish.stopAnalysis();
-    }
   }
+
+  // Stockfish
+  let topStockfishMoves = [];
+  let analysisEnabled;
 
   // History browsing
   let hasHistoryForward;
@@ -284,28 +273,6 @@
       2,
     );
   });
-
-  // Stockfish
-  /** @type {Stockfish} */
-  let stockfish;
-  let readyToStartAnalyzing;
-  let topStockfishMoves = [];
-  let analysisEnabled = false;
-
-  $: {
-    if (!analysisEnabled) {
-      if (stockfish) {
-        stockfish.stopAnalysis();
-        chessboard.clearDrawings();
-      }
-    }
-  }
-
-  $: {
-    if (analysisEnabled && stockfish && fen) {
-      stockfish.analyzePosition(fen);
-    }
-  }
 </script>
 
 {#if $puzzleMode === "failedLichess"}
@@ -446,9 +413,16 @@
                 bind:hasHistoryForward
                 bind:hasHistoryBack
                 bind:isViewingHistory
+                bind:analysisEnabled
+                bind:topStockfishMoves
                 {chessgroundConfig}
                 {orientation}
                 bind:this={chessboard}
+                on:enabledAnalysis={() => {
+                  if (!puzzleComplete) {
+                    madeMistake = true;
+                  }
+                }}
                 on:move={handleUserMove}
                 on:currentNode={handleCurrentNode}>
                 <div slot="centered-content">
@@ -458,31 +432,7 @@
                     </span>
                   {/if}
                 </div>
-                <div slot="buttons-left">
-                  {#if !analysisEnabled}
-                    <button
-                      class="button is-dark-cyan is-small is-inline-block"
-                      title="Enable stockfish analysis"
-                      class:is-danger={!puzzleComplete}
-                      disabled={!readyToStartAnalyzing}
-                      on:click={() => {
-                        analysisEnabled = true;
-                        madeMistake = true;
-                      }}>
-                      <Fa icon={faFishFins} />
-                    </button>
-                  {:else}
-                    <button
-                      class="button is-tiffany-blue is-small is-inline-block"
-                      title="Stop analysis"
-                      on:click={() => {
-                        analysisEnabled = false;
-                        topStockfishMoves = [];
-                      }}>
-                      <Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
-                    </button>
-                  {/if}
-                </div>
+                <div slot="buttons-left"></div>
                 <div slot="buttons-right">
                   <button
                     class="button is-primary next-button ml-2"
@@ -597,17 +547,6 @@
         <div class="box">
           {#if fen}
             <h3 class="is-size-4">Analysis</h3>
-            <Stockfish
-              bind:this={stockfish}
-              bind:readyok={readyToStartAnalyzing}
-              bind:analysisEnabled
-              on:topmoves={(event) => {
-                if (!analysisEnabled) {
-                  return;
-                }
-                topStockfishMoves = event.detail.topMoves;
-                chessboard.drawStockfishArrows(topStockfishMoves);
-              }} />
             <div>
               <div class="field is-inline-block">
                 <label class="label">
@@ -833,10 +772,6 @@
 <style>
   .puzzle-id {
     font-family: monospace;
-  }
-
-  .history-button {
-    touch-action: manipulation;
   }
 
   .board-container {

@@ -20,8 +20,10 @@
   import {
     faArrowLeft,
     faArrowRight,
+    faFishFins,
     faRotateLeft,
   } from "@fortawesome/free-solid-svg-icons";
+  import Stockfish from "./Stockfish.svelte";
 
   const INITIAL_SETUP =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -112,6 +114,27 @@
   let showPromotion = false;
   let promotionColor = "white";
   let promotionFrom, promotionTo;
+
+  // Stockfish
+  export let hasStockfish = true;
+  /** @type {Stockfish} */
+  let stockfish;
+  export let topStockfishMoves = [];
+  let analysisEnabled = false;
+  let readyToStartAnalyzing;
+
+  $: {
+    if (!analysisEnabled && stockfish) {
+      stockfish.stopAnalysis();
+      clearDrawings();
+    }
+  }
+
+  $: {
+    if (analysisEnabled && stockfish && fen) {
+      stockfish.analyzePosition(fen);
+    }
+  }
 
   export let chessgroundConfig = {};
   export let orientation = "white";
@@ -341,6 +364,12 @@
   }
 
   export function load(fen, moves = []) {
+    if (hasStockfish && stockfish) {
+      stockfish.stopAnalysis();
+      analysisEnabled = false;
+      topStockfishMoves = [];
+      clearDrawings();
+    }
     moveTree = new MoveTree(fen);
     isViewingHistory = false;
     mainLineNodeId = null;
@@ -516,6 +545,28 @@
   class="block is-flex is-align-items-center is-justify-content-space-between">
   <div class="buttons mb-0">
     <slot name="buttons-left" />
+    {#if !analysisEnabled}
+      <button
+        class="button is-dark-cyan is-small is-inline-block"
+        title="Enable stockfish analysis"
+        disabled={!readyToStartAnalyzing}
+        on:click={() => {
+          analysisEnabled = true;
+          dispatch("enabledAnalysis");
+        }}>
+        <Fa icon={faFishFins} />
+      </button>
+    {:else}
+      <button
+        class="button is-tiffany-blue is-small is-inline-block"
+        title="Stop analysis"
+        on:click={() => {
+          analysisEnabled = false;
+          topStockfishMoves = [];
+        }}>
+        <Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
+      </button>
+    {/if}
   </div>
   <div class="buttons mb-0">
     <button
@@ -530,20 +581,33 @@
       on:click={historyForward}>
       <Fa icon={faArrowRight} />
     </button>
-    {#if isViewingHistory}
-      <button
-        in:fly={{ x: -30, duration: 300 }}
-        out:fade
-        class="button is-primary history-button is-normal"
-        on:click={backToMainLine}>
-        <Fa icon={faRotateLeft} />
-      </button>
-    {/if}
+    <button
+      in:fly={{ x: -30, duration: 300 }}
+      class:is-invisible={!isViewingHistory}
+      out:fade
+      class="button is-primary history-button is-normal"
+      on:click={backToMainLine}>
+      <Fa icon={faRotateLeft} />
+    </button>
   </div>
   <div class="buttons mb-0">
     <slot name="buttons-right" />
   </div>
 </div>
+
+{#if hasStockfish}
+  <Stockfish
+    bind:this={stockfish}
+    bind:readyok={readyToStartAnalyzing}
+    bind:analysisEnabled
+    on:topmoves={(event) => {
+      if (!analysisEnabled) {
+        return;
+      }
+      topStockfishMoves = event.detail.topMoves;
+      drawStockfishArrows(topStockfishMoves);
+    }} />
+{/if}
 
 <style>
   .centered-content {
@@ -554,8 +618,13 @@
     z-index: 3; /* required to appear in front of pieces */
     opacity: 0.8;
   }
+
   .centered {
     margin-left: auto;
     margin-right: auto;
+  }
+
+  .history-button {
+    touch-action: manipulation;
   }
 </style>
