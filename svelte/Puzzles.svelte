@@ -85,6 +85,7 @@
 
   let madeMistake = false;
   let mistakes = new Map();
+  $: mistakeMoves = Array.from(mistakes.values());
   let puzzleComplete = false;
   let elapsedTime = 0;
 
@@ -180,6 +181,7 @@
       const mistakeId = move.after;
       if (!mistakes.has(mistakeId)) {
         mistakes.set(mistakeId, move);
+        mistakes = mistakes; // Reactivity
         if ($currentPuzzle.id) {
           void RailsAPI.saveMistake($currentPuzzle.id, move);
         }
@@ -536,6 +538,20 @@
                 {/if}
               </div>
             </div>
+            {#if puzzleComplete && mistakeMoves.length > 0}
+              <div class="block tags">
+                {#each mistakeMoves as move (move)}
+                  <button
+                    class="tag is-warning"
+                    title="View position after mistake"
+                    on:click={() => {
+                      chessboard.goToFen(move.after);
+                    }}>
+                    {move.fullMove}{move.color === "w" ? "." : "..."}{move.san}
+                  </button>
+                {/each}
+              </div>
+            {/if}
             {#if analysisEnabled && topStockfishMoves.length > 0}
               <div class="block">
                 <div class="buttons">
