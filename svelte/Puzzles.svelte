@@ -112,8 +112,6 @@
   let hasHistoryBack;
   let lastMoveIndexToShow = 0;
   let isViewingHistory;
-  let historyBackButton;
-  let historyForwardButton;
 
   // DOM elements
   let nextButton;
@@ -263,13 +261,13 @@
         event.preventDefault();
         nextButton.click();
       }
-      if (event.key === "ArrowRight" && historyForwardButton) {
+      if (event.key === "ArrowRight" && chessboard) {
         event.preventDefault();
-        historyForwardButton.click();
+        chessboard.historyForward();
       }
-      if (event.key === "ArrowLeft" && historyBackButton) {
+      if (event.key === "ArrowLeft" && chessboard) {
         event.preventDefault();
-        historyBackButton.click();
+        chessboard.historyBack();
       }
     });
   }
@@ -460,72 +458,35 @@
                     </span>
                   {/if}
                 </div>
-              </Chessboard>
-            </div>
-          </div>
-          <div class="block mt-1 ml-4 mr-4">
-            <div class="columns is-mobile is-vcentered">
-              <div class="column has-text-left is-narrow">
-                {#if !analysisEnabled}
-                  <button
-                    class="button is-dark-cyan is-small is-inline-block"
-                    title="Enable stockfish analysis"
-                    class:is-danger={!puzzleComplete}
-                    disabled={!readyToStartAnalyzing}
-                    on:click={() => {
-                      analysisEnabled = true;
-                      madeMistake = true;
-                    }}>
-                    <Fa icon={faFishFins} />
-                  </button>
-                {:else}
-                  <button
-                    class="button is-tiffany-blue is-small is-inline-block"
-                    title="Stop analysis"
-                    on:click={() => {
-                      analysisEnabled = false;
-                      topStockfishMoves = [];
-                    }}>
-                    <Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
-                  </button>
-                {/if}
-              </div>
-              <div class="column has-text-left">
-                <button
-                  disabled={!hasHistoryBack}
-                  class="button is-primary history-button is-normal"
-                  bind:this={historyBackButton}
-                  on:click={() => {
-                    chessboard.historyBack();
-                  }}>
-                  <Fa icon={faArrowLeft} />
-                </button>
-                <button
-                  disabled={!hasHistoryForward}
-                  class="button is-primary history-button is-normal"
-                  bind:this={historyForwardButton}
-                  on:click={() => {
-                    chessboard.historyForward();
-                  }}>
-                  <Fa icon={faArrowRight} />
-                </button>
-                {#if isViewingHistory}
-                  <button
-                    in:fly={{ x: -30, duration: 300 }}
-                    out:fade
-                    class="button is-primary history-button is-normal"
-                    on:click={() => {
-                      chessboard.backToMainLine();
-                    }}>
-                    <Fa icon={faRotateLeft} />
-                  </button>
-                {/if}
-              </div>
-
-              <div class="column has-text-right is-narrow">
-                {#if puzzleComplete}
+                <div slot="buttons-left">
+                  {#if !analysisEnabled}
+                    <button
+                      class="button is-dark-cyan is-small is-inline-block"
+                      title="Enable stockfish analysis"
+                      class:is-danger={!puzzleComplete}
+                      disabled={!readyToStartAnalyzing}
+                      on:click={() => {
+                        analysisEnabled = true;
+                        madeMistake = true;
+                      }}>
+                      <Fa icon={faFishFins} />
+                    </button>
+                  {:else}
+                    <button
+                      class="button is-tiffany-blue is-small is-inline-block"
+                      title="Stop analysis"
+                      on:click={() => {
+                        analysisEnabled = false;
+                        topStockfishMoves = [];
+                      }}>
+                      <Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
+                    </button>
+                  {/if}
+                </div>
+                <div slot="buttons-right">
                   <button
                     class="button is-primary next-button ml-2"
+                    class:is-invisible={!puzzleComplete}
                     bind:this={nextButton}
                     on:click={async () => {
                       // Do this first for spoiler animations
@@ -535,8 +496,14 @@
                     }}>
                     Next
                   </button>
-                {/if}
-              </div>
+                </div>
+              </Chessboard>
+            </div>
+          </div>
+          <div class="block mt-1 ml-4 mr-4">
+            <div class="columns is-mobile is-vcentered">
+              <div class="column has-text-left is-narrow"></div>
+              <div class="column has-text-right is-narrow"></div>
             </div>
             {#if puzzleComplete && mistakeMoves.length > 0}
               <div class="block tags">
@@ -688,29 +655,6 @@
                 </label>
               </div>
               <br />
-              {#if !analysisEnabled}
-                <button
-                  class="button is-dark-cyan is-small is-inline-block"
-                  title="Enable stockfish analysis"
-                  class:is-danger={!puzzleComplete}
-                  disabled={!readyToStartAnalyzing}
-                  on:click={() => {
-                    analysisEnabled = true;
-                    madeMistake = true;
-                  }}>
-                  <Fa icon={faFishFins} />
-                </button>
-              {:else}
-                <button
-                  class="button is-tiffany-blue is-small is-inline-block"
-                  title="Stop analysis"
-                  on:click={() => {
-                    analysisEnabled = false;
-                    topStockfishMoves = [];
-                  }}>
-                  <Fa icon={faFishFins} spin={!readyToStartAnalyzing} />
-                </button>
-              {/if}
               {#if topStockfishMoves.length > 0}
                 <table class="table is-striped is-narrow is-fullwidth">
                   <thead>

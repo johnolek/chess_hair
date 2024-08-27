@@ -1,4 +1,7 @@
 <script>
+  import Fa from "svelte-fa";
+  import { fade, crossfade, fly } from "svelte/transition";
+
   import { onDestroy, onMount } from "svelte";
   import { Chessground } from "chessground";
   import {
@@ -14,6 +17,11 @@
   import { Util } from "src/util";
   import { MoveTree } from "./lib/MoveTree";
   import { getKingSquareAttackers } from "./lib/chess_functions";
+  import {
+    faArrowLeft,
+    faArrowRight,
+    faRotateLeft,
+  } from "@fortawesome/free-solid-svg-icons";
 
   const INITIAL_SETUP =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -476,29 +484,64 @@
     rel="stylesheet" />
 {/if}
 
-<div
-  class="board-wrapper"
-  bind:this={boardWrapper}
-  data-board={currentBoardStyle}>
-  <div class="centered-content">
-    <slot name="centered-content"></slot>
-  </div>
+<div class="block">
   <div
-    class="centered"
-    style="position: relative;width: {size}px; height: {size}px">
-    <div
-      class="is2d"
-      bind:this={boardContainer}
-      style="position: relative;width: {size}px; height: {size}px">
+    class="board-wrapper"
+    bind:this={boardWrapper}
+    data-board={currentBoardStyle}>
+    <div class="centered-content">
+      <slot name="centered-content"></slot>
     </div>
-    <PromotionModal
-      isOpen={showPromotion}
-      color={promotionColor}
-      on:select={(event) => selectPromotionPiece(event.detail.piece)}
-      on:close={() => {
-        showPromotion = false;
-        updateChessground();
-      }} />
+    <div
+      class="centered"
+      style="position: relative;width: {size}px; height: {size}px">
+      <div
+        class="is2d"
+        bind:this={boardContainer}
+        style="position: relative;width: {size}px; height: {size}px">
+      </div>
+      <PromotionModal
+        isOpen={showPromotion}
+        color={promotionColor}
+        on:select={(event) => selectPromotionPiece(event.detail.piece)}
+        on:close={() => {
+          showPromotion = false;
+          updateChessground();
+        }} />
+    </div>
+  </div>
+</div>
+
+<div
+  class="block is-flex is-align-items-center is-justify-content-space-between">
+  <div class="buttons mb-0">
+    <slot name="buttons-left" />
+  </div>
+  <div class="buttons mb-0">
+    <button
+      disabled={!hasHistoryBack}
+      class="button is-primary history-button is-normal"
+      on:click={historyBack}>
+      <Fa icon={faArrowLeft} />
+    </button>
+    <button
+      disabled={!hasHistoryForward}
+      class="button is-primary history-button is-normal"
+      on:click={historyForward}>
+      <Fa icon={faArrowRight} />
+    </button>
+    {#if isViewingHistory}
+      <button
+        in:fly={{ x: -30, duration: 300 }}
+        out:fade
+        class="button is-primary history-button is-normal"
+        on:click={backToMainLine}>
+        <Fa icon={faRotateLeft} />
+      </button>
+    {/if}
+  </div>
+  <div class="buttons mb-0">
+    <slot name="buttons-right" />
   </div>
 </div>
 
