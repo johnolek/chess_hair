@@ -36,6 +36,10 @@ class UserPuzzle < ApplicationRecord
     where.not(id: ids)
   end
 
+  scope :without_results, -> {
+    left_outer_joins(:puzzle_results).where(puzzle_results: { id: nil })
+  }
+
   def calculate_average_solve_duration
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     results = puzzle_results

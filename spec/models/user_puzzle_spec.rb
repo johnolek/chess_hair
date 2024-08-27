@@ -70,6 +70,15 @@ RSpec.describe UserPuzzle, type: :model do
         expect(UserPuzzle.excluding_ids([puzzle1.id])).to eq [puzzle2]
       end
     end
+
+    describe '.without_results' do
+      it 'returns puzzles without results' do
+        user_puzzle = create(:user_puzzle)
+        expect(UserPuzzle.without_results).to eq [user_puzzle]
+        create(:puzzle_result, user_puzzle: user_puzzle)
+        expect(UserPuzzle.without_results).to eq []
+      end
+    end
   end
 
   describe 'instance methods' do
