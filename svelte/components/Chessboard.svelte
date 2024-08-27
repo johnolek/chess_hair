@@ -15,6 +15,9 @@
   import { MoveTree } from "./lib/MoveTree";
   import { getKingSquareAttackers } from "./lib/chess_functions";
 
+  const INITIAL_SETUP =
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
   const customBrushes = {
     brand1: {
       key: "brand1",
@@ -182,6 +185,7 @@
       turnColor: currentNode().turnColor(),
       movable: {
         free: false,
+        color: currentNode().turnColor(),
         dests: currentNode().legalMoves(),
       },
     });
@@ -193,6 +197,9 @@
 
   function handleMove(from, to) {
     const isPromotion = (from, to) => {
+      if (!currentNode()) {
+        return false;
+      }
       const fromRank = from[1];
       const toRank = to[1];
       const piece = currentNode().pieceAtSquare(from);
@@ -437,7 +444,9 @@
       },
     });
     if (fen) {
-      this.load(fen);
+      load(fen);
+    } else {
+      load(INITIAL_SETUP);
     }
 
     updateSize();
@@ -459,33 +468,29 @@
   <link
     id="piece-sprite"
     href="/piece-css/{pieceSetOverride}.css"
-    rel="stylesheet"
-  />
+    rel="stylesheet" />
 {:else}
   <link
     id="piece-sprite"
     href="/piece-css/{currentPieceSet}.css"
-    rel="stylesheet"
-  />
+    rel="stylesheet" />
 {/if}
 
 <div
   class="board-wrapper"
   bind:this={boardWrapper}
-  data-board={currentBoardStyle}
->
+  data-board={currentBoardStyle}>
   <div class="centered-content">
     <slot name="centered-content"></slot>
   </div>
   <div
     class="centered"
-    style="position: relative;width: {size}px; height: {size}px"
-  >
+    style="position: relative;width: {size}px; height: {size}px">
     <div
       class="is2d"
       bind:this={boardContainer}
-      style="position: relative;width: {size}px; height: {size}px"
-    ></div>
+      style="position: relative;width: {size}px; height: {size}px">
+    </div>
     <PromotionModal
       isOpen={showPromotion}
       color={promotionColor}
@@ -493,8 +498,7 @@
       on:close={() => {
         showPromotion = false;
         updateChessground();
-      }}
-    />
+      }} />
   </div>
 </div>
 
