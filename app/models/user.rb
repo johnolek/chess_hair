@@ -157,8 +157,7 @@ class User < ApplicationRecord
           .user_puzzles
           .excluding_ids(previous_puzzle_id)
           .incomplete
-          .left_outer_joins(:puzzle_results)
-          .where(puzzle_results: { id: nil })
+          .without_results
           .where(lichess_rating: config.puzzle_min_rating..config.puzzle_max_rating)
           .random_record
         return existing_random if existing_random
