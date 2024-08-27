@@ -129,14 +129,10 @@ class User < ApplicationRecord
   end
 
   def next_puzzle_type
-    odds_of_random_new = config.odds_of_random_new
     odds_of_random_completed = config.odds_of_random_completed
     random = rand
-    if random < odds_of_random_new
-      return :random_new
-    end
 
-    if random < odds_of_random_new + odds_of_random_completed
+    if random < odds_of_random_completed
       return :random_completed
     end
 
@@ -151,19 +147,7 @@ class User < ApplicationRecord
 
     excluding_recently_seen = without_last_n_played.and(due_for_review)
 
-    case next_puzzle_type
-    when :random_new
-        existing_random = random_lichess_puzzles_collection
-          .user_puzzles
-          .excluding_ids(previous_puzzle_id)
-          .incomplete
-          .without_results
-          .where(lichess_rating: config.puzzle_min_rating..config.puzzle_max_rating)
-          .random_record
-        return existing_random if existing_random
-        puzzle = create_random_lichess_puzzle
-        return puzzle if puzzle
-      when :random_completed
+    if next_puzzle_type == :random_completed
         random_completed = excluding_recently_seen.completed.random_record
         return random_completed if random_completed
     end

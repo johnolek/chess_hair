@@ -49,17 +49,12 @@ class Config < ApplicationRecord
     self.get_setting('puzzles.oddsOfRandomCompleted')
   end
 
-  def odds_of_random_new
-    self.get_setting('puzzles.oddsOfRandomNew')
-  end
-
   def self.default_settings
     {
       "puzzles.batchSize" => 15,
       "puzzles.timeGoal" => 15,
       "puzzles.consecutiveSolves" => 2,
       "puzzles.oddsOfRandomCompleted" => 0.1,
-      "puzzles.oddsOfRandomNew" => 0.0,
       "puzzles.minimumTimeBetween" => 5.minutes.to_i,
       "puzzles.minimumPuzzlesBetweenReviews" => 10,
       "puzzles.minRating" => 1,
