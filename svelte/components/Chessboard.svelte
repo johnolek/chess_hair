@@ -595,6 +595,32 @@
   </div>
 </div>
 
+{#if topStockfishMoves.length > 0}
+  <div class="block">
+    <div class="buttons">
+      {#each topStockfishMoves as stockfishMove}
+        <button
+          class="button is-small stockfish-move"
+          title={`Depth ${stockfishMove.depth}`}
+          class:is-white={stockfishMove.fullMove.color === "w"}
+          class:is-black={stockfishMove.fullMove.color === "b"}
+          on:click={() => {
+            move(stockfishMove.fullMove.lan);
+          }}>
+          <div class="has-text-centered">
+            <div>
+              {stockfishMove.fullMove.san}
+            </div>
+            <div>
+              {stockfishMove.scoreDisplay}
+            </div>
+          </div>
+        </button>
+      {/each}
+    </div>
+  </div>
+{/if}
+
 {#if hasStockfish}
   <Stockfish
     bind:this={stockfish}
@@ -626,5 +652,9 @@
 
   .history-button {
     touch-action: manipulation;
+  }
+
+  .stockfish-move {
+    min-width: 75px;
   }
 </style>

@@ -35,6 +35,7 @@
   import DrillModePuzzleManager from "./DrillModePuzzleManager.svelte";
   import DrillModeConfigForm from "./DrillModeConfigForm.svelte";
   import DrillModeLevelsTable from "./components/DrillModeLevelsTable.svelte";
+  import PuzzleBuilder from "./components/PuzzleBuilder.svelte";
 
   /** @type {PuzzleManager|DrillModePuzzleManager} */
   let puzzleManager;
@@ -184,7 +185,6 @@
 
   let currentNode;
   let lastMove;
-  let colorToPlay;
 
   function handleCurrentNode(event) {
     currentNode = event.detail;
@@ -192,10 +192,8 @@
 
     if (lastMove) {
       fenToHighlight = lastMove.after;
-      colorToPlay = lastMove.color === "w" ? "black" : "white";
     } else {
       fenToHighlight = fen;
-      colorToPlay = Util.otherColor(orientation);
     }
   }
 
@@ -448,6 +446,9 @@
               </Chessboard>
             </div>
           </div>
+          <DevOnly>
+            <PuzzleBuilder />
+          </DevOnly>
           <div class="block mt-1 ml-4 mr-4">
             {#if puzzleComplete && mistakeMoves.length > 0}
               <div class="block tags">
@@ -463,31 +464,6 @@
                 {/each}
               </div>
             {/if}
-            {#if topStockfishMoves.length > 0}
-              <div class="block">
-                <div class="buttons">
-                  {#each topStockfishMoves as move}
-                    <button
-                      class="button is-small stockfish-move"
-                      class:is-white={colorToPlay === "white"}
-                      class:is-black={colorToPlay === "black"}
-                      on:click|preventDefault={() => {
-                        makeMove(move.fullMove.lan);
-                      }}>
-                      <div class="has-text-centered">
-                        <div>
-                          {move.fullMove.san}
-                        </div>
-                        <div>
-                          {move.scoreDisplay}
-                        </div>
-                      </div>
-                    </button>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-            <div class="block"></div>
           </div>
         {:else}
           <p>There are no current puzzles to play.</p>
@@ -603,8 +579,7 @@
                         <td>
                           <button
                             class="button is-small"
-                            class:is-white={colorToPlay === "white"}
-                            class:is-black={colorToPlay === "black"}
+                            class:is-white={move.fullMove.color === "w"}
                             on:click|preventDefault={() => {
                               makeMove(move.fullMove.lan);
                             }}>
@@ -812,9 +787,5 @@
     height: 3px;
     width: 75%;
     border-radius: 10px;
-  }
-
-  .stockfish-move {
-    min-width: 75px;
   }
 </style>
