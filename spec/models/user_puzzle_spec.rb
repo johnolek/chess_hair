@@ -268,7 +268,7 @@ RSpec.describe UserPuzzle, type: :model do
 
       it 'does not return ridiculous numbers if solve streak greater than required' do
         user = create(:user)
-        user_puzzle = create(:user_puzzle, user: user)
+        user_puzzle = create(:user_puzzle, :failed_lichess_puzzle, user: user)
         allow(user.config).to receive(:puzzle_consecutive_solves).and_return(2)
         allow(user.config).to receive(:puzzle_time_goal).and_return(1)
         create(:puzzle_result, :correct, user_puzzle: user_puzzle, duration: 200000)
@@ -279,7 +279,7 @@ RSpec.describe UserPuzzle, type: :model do
 
       it 'returns 50 if streak is complete but time is not' do
         user = create(:user)
-        user_puzzle = create(:user_puzzle, user: user)
+        user_puzzle = create(:user_puzzle, :failed_lichess_puzzle, user: user)
         allow(user.config).to receive(:puzzle_consecutive_solves).and_return(2)
         allow(user.config).to receive(:puzzle_time_goal).and_return(30)
         create(:puzzle_result, :correct, user_puzzle: user_puzzle, duration: 300_000_000)

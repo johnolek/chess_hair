@@ -67,10 +67,8 @@ class UserPuzzle < ApplicationRecord
   end
 
   def is_complete?
-    # Special case for random lichess puzzles solved correctly the first time
-    #
-    # This currently ignores time for first attempt
-    if user.random_lichess_puzzles_collection.user_puzzles.include?(self)
+    # Puzzles in other collections are considered complete if solved the first time
+    unless user.failed_lichess_puzzles_collection.user_puzzles.include?(self)
       return true if puzzle_results.count >= 1 && puzzle_results.incorrect.count == 0
     end
 
@@ -95,8 +93,8 @@ class UserPuzzle < ApplicationRecord
   end
 
   def percentage_complete
-    return 0 if total_solves == 0
     return 100 if complete?
+    return 0 if total_solves == 0
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     streak_percent = solve_streak >= required_consecutive_solves ? 100
       : (solve_streak / required_consecutive_solves.to_f) * 100

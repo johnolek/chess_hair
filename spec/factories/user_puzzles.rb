@@ -29,5 +29,11 @@ FactoryBot.define do
         user_puzzle.user.random_lichess_puzzles_collection.add_puzzle(user_puzzle)
       end
     end
+
+    trait :failed_lichess_puzzle do
+      after(:create) do |user_puzzle|
+        user_puzzle.user.failed_lichess_puzzles_collection.add_puzzle(user_puzzle)
+      end
+    end
   end
 end
