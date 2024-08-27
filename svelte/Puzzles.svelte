@@ -94,7 +94,6 @@
 
   // Stockfish
   let topStockfishMoves = [];
-  let analysisEnabled;
 
   // History browsing
   let hasHistoryForward;
@@ -413,7 +412,6 @@
                 bind:hasHistoryForward
                 bind:hasHistoryBack
                 bind:isViewingHistory
-                bind:analysisEnabled
                 bind:topStockfishMoves
                 {chessgroundConfig}
                 {orientation}
@@ -451,10 +449,6 @@
             </div>
           </div>
           <div class="block mt-1 ml-4 mr-4">
-            <div class="columns is-mobile is-vcentered">
-              <div class="column has-text-left is-narrow"></div>
-              <div class="column has-text-right is-narrow"></div>
-            </div>
             {#if puzzleComplete && mistakeMoves.length > 0}
               <div class="block tags">
                 {#each mistakeMoves as move (move)}
@@ -469,7 +463,7 @@
                 {/each}
               </div>
             {/if}
-            {#if analysisEnabled && topStockfishMoves.length > 0}
+            {#if topStockfishMoves.length > 0}
               <div class="block">
                 <div class="buttons">
                   {#each topStockfishMoves as move}
