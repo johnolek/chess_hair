@@ -216,7 +216,6 @@
       turnColor: currentNode().turnColor(),
       movable: {
         free: false,
-        color: currentNode().turnColor(),
         dests: currentNode().legalMoves(),
       },
     });
