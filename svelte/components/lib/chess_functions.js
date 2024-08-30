@@ -1,6 +1,12 @@
 import { Chess } from "chess.js";
 import { Util } from "src/util";
 
+export function getMovesFromPgn(pgn) {
+  const chess = new Chess();
+  chess.loadPgn(pgn);
+  return chess.history({ verbose: true });
+}
+
 export function getLegalMoves(fen) {
   const chess = new Chess(fen);
   return chess.moves({ verbose: true });
