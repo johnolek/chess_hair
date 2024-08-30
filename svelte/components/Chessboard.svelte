@@ -16,7 +16,10 @@
   import PromotionModal from "./PromotionModal.svelte";
   import { Util } from "src/util";
   import { MoveTree } from "./lib/MoveTree";
-  import { getKingSquareAttackers } from "./lib/chess_functions";
+  import {
+    getKingSquareAttackers,
+    getMovesFromPgn,
+  } from "./lib/chess_functions";
   import {
     faArrowLeft,
     faArrowRight,
@@ -132,6 +135,7 @@
 
   $: {
     if (analysisEnabled && stockfish && fen) {
+      clearDrawings();
       stockfish.analyzePosition(fen);
     }
   }
@@ -362,26 +366,43 @@
     updateChessground();
   }
 
-  export function load(fen, moves = []) {
+  function disableStockfish() {
     if (hasStockfish && stockfish) {
       stockfish.stopAnalysis();
       analysisEnabled = false;
       topStockfishMoves = [];
       clearDrawings();
     }
+  }
+
+  export function load(fen, mainlineMoves = []) {
+    disableStockfish();
     moveTree = new MoveTree(fen);
     isViewingHistory = false;
     mainLineNodeId = null;
     mainLineFen = null;
 
     const fullMoves = [];
-    moves.forEach((move) => {
+    mainlineMoves.forEach((move) => {
       moveTree.addMove(move);
       fullMoves.push(moveTree.currentNode.move);
     });
     moveTree.goToRoot();
     updateChessground();
     return fullMoves;
+  }
+
+  export function loadPgn(pgn) {
+    disableStockfish();
+    const moves = getMovesFromPgn(pgn);
+    moveTree = new MoveTree();
+    moves.forEach((move) => {
+      moveTree.addMove(move.lan);
+    });
+    while (currentNode().parent) {
+      historyBack();
+    }
+    updateChessground();
   }
 
   export function enableShowLastMove() {
