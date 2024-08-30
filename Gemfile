@@ -47,6 +47,7 @@ group :development, :test do
   gem "debug", platforms: %i[ mri windows ]
   gem 'bullet'
   gem 'rack-mini-profiler', require: false
+  gem 'rubocop', require: false
 end
 
 group :test do
