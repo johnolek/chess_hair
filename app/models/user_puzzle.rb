@@ -2,8 +2,8 @@ class UserPuzzle < ApplicationRecord
   belongs_to :user
   has_and_belongs_to_many :collections
 
-  has_many :puzzle_results
-  has_many :mistakes
+  has_many :puzzle_results, dependent: :destroy
+  has_many :mistakes, dependent: :destroy
 
   has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :puzzle_id
 

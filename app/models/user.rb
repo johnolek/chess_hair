@@ -6,13 +6,16 @@ class User < ApplicationRecord
   # Include default devise modules. Others available are:
   # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
   devise :database_authenticatable, :recoverable, :rememberable, :validatable
-  has_many :user_puzzles
+
+  has_one :config, dependent: :destroy
+
+  has_many :user_puzzles, dependent: :destroy
+  has_many :user_puzzle_histories, dependent: :destroy
+  has_many :collections, dependent: :destroy
+  has_many :drill_mode_levels, dependent: :destroy
+
   has_many :mistakes, through: :user_puzzles
   has_many :puzzle_results, through: :user_puzzles
-  has_one :config
-  has_many :user_puzzle_histories
-  has_many :collections
-  has_many :drill_mode_levels
 
   serialize :active_puzzle_ids, coder: YAML
 

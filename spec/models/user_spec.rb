@@ -36,4 +36,11 @@ RSpec.describe UserPuzzle, type: :model do
       expect(user.active_puzzle_ids.first).to eq puzzle2.id
     end
   end
+
+  describe '#destroy' do
+    it 'destroys associated records' do
+      user = create(:user)
+      user.destroy
+    end
+  end
 end
