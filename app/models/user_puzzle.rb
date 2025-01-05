@@ -1,5 +1,5 @@
 class UserPuzzle < ApplicationRecord
-  belongs_to :user
+  belongs_to :user, dependent: :destroy
   has_and_belongs_to_many :collections
 
   has_many :puzzle_results

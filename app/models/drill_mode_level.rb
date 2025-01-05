@@ -1,5 +1,5 @@
 class DrillModeLevel < ApplicationRecord
-  belongs_to :user
+  belongs_to :user, dependent: :destroy
 
   validates :theme, presence: true, uniqueness: { scope: :user_id }
 
