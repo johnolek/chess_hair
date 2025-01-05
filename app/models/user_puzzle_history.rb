@@ -1,5 +1,5 @@
 class UserPuzzleHistory < ApplicationRecord
-  belongs_to :user, dependent: :destroy
+  belongs_to :user
 
   scope :for_puzzle_id, ->(puzzle_id) { where(puzzle_id: puzzle_id) if puzzle_id.present? }
 

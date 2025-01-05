@@ -1,5 +1,5 @@
 class Config < ApplicationRecord
-  belongs_to :user, dependent: :destroy
+  belongs_to :user
 
   validate :user_can_have_only_one_config
 

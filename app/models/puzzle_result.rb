@@ -1,5 +1,5 @@
 class PuzzleResult < ApplicationRecord
-  belongs_to :user_puzzle, dependent: :destroy
+  belongs_to :user_puzzle
   has_one :user, through: :user_puzzle
 
   after_create :recalculate_user_puzzle_stats
