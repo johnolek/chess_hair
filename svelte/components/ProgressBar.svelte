@@ -30,5 +30,5 @@
   }
 </script>
 
-<progress class="progress {className}" value={$tweenedProgress} {max}>
+<progress class="progress mb-2 {className}" value={$tweenedProgress} {max}>
 </progress>
