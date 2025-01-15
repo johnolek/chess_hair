@@ -38,7 +38,7 @@ module Api
         @user.recalculate_active_puzzles
 
         render json: {
-          puzzles: @user.active_puzzles.includes(:lichess_puzzle),
+          puzzles: @user.active_puzzles.includes(:lichess_puzzle, :puzzle_results),
           total_incorrect_puzzles_count: @user.user_puzzles.count,
           total_filtered_puzzles_count: @user.filtered_user_puzzles.count,
           completed_filtered_puzzles_count: @user.filtered_user_puzzles.where(complete: true).count,
