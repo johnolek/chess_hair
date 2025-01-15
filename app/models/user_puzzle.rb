@@ -134,6 +134,7 @@ class UserPuzzle < ApplicationRecord
         'moves' => uci_moves.split(' '),
         'themes' => lichess_puzzle&.themes&.split(' '),
         'percentage_complete' => percentage_complete,
+        'results' => puzzle_results
       }
     )
   end
