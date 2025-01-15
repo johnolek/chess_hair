@@ -3,6 +3,7 @@
   import ProgressBar from "./components/ProgressBar.svelte";
   import FocusTimer from "./components/FocusTimer.svelte";
   import PuzzleManager from "./PuzzleManager.svelte";
+  import ResultTimeline from "./components/ResultTimeline.svelte";
   import { Chess } from "chess.js";
   import { Util } from "src/util";
   import { onMount } from "svelte";
@@ -358,11 +359,14 @@
             {/if}
           </div>
           <div class="columns is-mobile is-vcentered mb-1 ml-0 mr-0">
-            <div class="column">
+            <div class="column is-full">
               {#if $puzzleMode === "failedLichess"}
                 {#key $currentPuzzle.id}
                   <ProgressBar bind:current={$currentPuzzle.percentage_complete}
                   ></ProgressBar>
+                {/key}
+                {#key `${$currentPuzzle.id}-${currentPuzzle.created_at}`}
+                  <ResultTimeline bind:results={$currentPuzzle.results} />
                 {/key}
               {/if}
             </div>
@@ -745,17 +749,6 @@
 
   .board-container {
     position: relative;
-  }
-
-  .scrollable {
-    overflow-x: auto;
-    white-space: nowrap;
-    -ms-overflow-style: none; /* Internet Explorer 10+ */
-    scrollbar-width: none; /* Firefox */
-  }
-
-  .scrollable::-webkit-scrollbar {
-    display: none; /* Safari and Chrome */
   }
 
   .move-tag {
