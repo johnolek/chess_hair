@@ -359,7 +359,7 @@
             {/if}
           </div>
           <div class="columns is-mobile is-vcentered mb-1 ml-0 mr-0">
-            <div class="column is-full">
+            <div class="column is-full pb-1 pt-1">
               {#if $puzzleMode === "failedLichess"}
                 {#key $currentPuzzle.id}
                   <ProgressBar bind:current={$currentPuzzle.percentage_complete}
