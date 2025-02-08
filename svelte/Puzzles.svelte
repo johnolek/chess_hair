@@ -364,8 +364,6 @@
                 {#key $currentPuzzle.id}
                   <ProgressBar bind:current={$currentPuzzle.percentage_complete}
                   ></ProgressBar>
-                {/key}
-                {#key `${$currentPuzzle.id}-${currentPuzzle.created_at}`}
                   <ResultTimeline bind:results={$currentPuzzle.results} />
                 {/key}
               {/if}
