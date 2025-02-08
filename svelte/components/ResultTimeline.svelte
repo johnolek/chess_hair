@@ -5,6 +5,11 @@
 
   export let results = [];
 
+  // Change from function to reactive statement
+  $: sortedResults = [...results].sort(
+    (a, b) => new Date(a.created_at) - new Date(b.created_at)
+  );
+
   // Function to format the date
   function formatDate(dateString) {
     const options = {
@@ -15,12 +20,6 @@
       minute: "2-digit",
     };
     return new Date(dateString).toLocaleDateString(undefined, options);
-  }
-
-  function sortedResults() {
-    return results.sort(
-      (a, b) => new Date(a.created_at) - new Date(b.created_at),
-    );
   }
 
   let scrollable;
@@ -69,18 +68,19 @@
       height={CIRCLE_RADIUS * 2 + 4} 
       width={results.length * CIRCLE_SPACING}>
       <defs>
-        {#each sortedResults() as result, index}
+        {#each sortedResults as result, index}
           {#if index < results.length - 1}
             <linearGradient id="gradient-{index}" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stop-color={getResultColor(result)} />
-              <stop offset="100%" stop-color={getResultColor(sortedResults()[index + 1])} />
+              <stop offset="100%" stop-color={getResultColor(sortedResults[index + 1])} />
             </linearGradient>
           {/if}
         {/each}
       </defs>
-      {#each sortedResults() as result, index}
+      {#each sortedResults as result, index}
         {#if index < results.length - 1}
           <rect 
+            in:fade={{ duration: mounted ? 300 : 0 }} 
             x={CIRCLE_SPACING * index + CIRCLE_RADIUS + (CIRCLE_RADIUS - 3.5)}
             y={CIRCLE_RADIUS + 2 - 2}
             width={CIRCLE_SPACING - ((CIRCLE_RADIUS - 3.5) * 2)}
@@ -91,9 +91,9 @@
           />
         {/if}
       {/each}
-      {#each sortedResults() as result, index}
+      {#each sortedResults as result, index}
         <g 
-          in:fade={{ duration: mounted ? 300 : 0 }} 
+          in:fade={{ duration: mounted ? 600 : 0 }} 
           use:scrollIntoView>
           <circle
             cx={CIRCLE_SPACING * index + CIRCLE_RADIUS}
