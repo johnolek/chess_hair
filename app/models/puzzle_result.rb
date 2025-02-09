@@ -17,7 +17,7 @@ class PuzzleResult < ApplicationRecord
 
   def as_json(options = nil)
     super(options).merge({
-                           'time_played_human' => created_at.strftime('%b %e, %l:%M%P')
+                           'time_played_human' => created_at.strftime('%b %-e, %-I:%M%P')
                          })
   end
 end

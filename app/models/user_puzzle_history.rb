@@ -29,4 +29,11 @@ class UserPuzzleHistory < ApplicationRecord
   def played_at_datetime
     Time.at(played_at / 1000)
   end
+
+  def as_json(options = nil)
+    super(options).slice('puzzle_id', 'played_at')
+                  .merge({
+                           'played_at_human' => played_at_datetime.strftime('%b %-e, %-I:%M%P')
+                         })
+  end
 end
