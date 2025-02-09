@@ -47,69 +47,70 @@
     mounted = true;
   });
 
-  const CIRCLE_RADIUS = 10;
-  const CIRCLE_SPACING = 30;
-  
-  // Define colors using CSS variables
   const SUCCESS_COLOR = "var(--bulma-success)";
   const ERROR_COLOR = "var(--bulma-danger)";
 
   function getResultColor(result) {
     return result.made_mistake ? ERROR_COLOR : SUCCESS_COLOR;
   }
+
+  // Add function to calculate consecutive correct answers up to current index
+  function getConsecutiveCorrect(results, currentIndex) {
+    let count = 0;
+    for (let i = currentIndex; i >= 0; i--) {
+      if (!results[i].made_mistake) {
+        count++;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }
+
 </script>
 
 <div class="timeline-container">
-<span class="timeline-label">History:</span>
+  <span class="timeline-label">History:</span>
   <div class="scrollable mb-0" bind:this={scrollable}>
-    <div class="left-indicator"></div>
     <div class="timeline">
-      <svg 
-        class="timeline-svg" 
-        height={CIRCLE_RADIUS * 2 + 4} 
-        width={results.length * CIRCLE_SPACING}>
-        <defs>
-          {#each sortedResults as result, index}
-            {#if index < results.length - 1}
-              <linearGradient id="gradient-{index}" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color={getResultColor(result)} />
-                <stop offset="100%" stop-color={getResultColor(sortedResults[index + 1])} />
-              </linearGradient>
-            {/if}
-          {/each}
-        </defs>
-        {#each sortedResults as result, index}
-          {#if index < results.length - 1 && !result.made_mistake}
-            <rect 
-              in:fade={{ duration: mounted ? 300 : 0 }} 
-              x={CIRCLE_SPACING * index + CIRCLE_RADIUS + (CIRCLE_RADIUS - 3.5)}
-              y={CIRCLE_RADIUS + 2 - 2}
-              width={CIRCLE_SPACING - ((CIRCLE_RADIUS - 3.5) * 2)}
-              height="4"
-              fill={`url(#gradient-${index})`}
-              rx="2"
-              ry="2"
-            />
+      {#each sortedResults as result, index}
+        <div class="result-item">
+          {#if index > 0 && !result.made_mistake && !sortedResults[index - 1].made_mistake}
+            <svg 
+              class="connecting-line-svg" 
+              viewBox="-3 0 8 24" 
+            >
+              <line
+                in:fade={{ duration: mounted ? 300 : 0 }}
+                x1="-3"
+                x2="8"
+                y1="50%"
+                y2="50%"
+                stroke={SUCCESS_COLOR}
+                stroke-width="3"
+              />
+            </svg>
           {/if}
-        {/each}
-        {#each sortedResults as result, index}
-          <g 
-            in:fade={{ duration: mounted ? 600 : 0 }} 
-            use:scrollIntoView>
+          <svg 
+            class="circle-svg" 
+            viewBox="0 0 24 24"
+            use:scrollIntoView
+          >
             <circle
-              cx={CIRCLE_SPACING * index + CIRCLE_RADIUS}
-              cy={CIRCLE_RADIUS + 2}
-              r={CIRCLE_RADIUS - 2}
+              in:fade={{ duration: mounted ? 600 : 0 }}
+              cx="50%"
+              cy="50%"
+              r="8"
               stroke={getResultColor(result)}
               stroke-width="4"
               fill="transparent"
-              class="timeline-circle"
+              class="circle"
             >
-              <title>{formatDate(result.created_at)}</title>
+              <title>{result.time_played_human}</title>
             </circle>
-          </g>
-        {/each}
-      </svg>
+          </svg>
+        </div>
+      {/each}
     </div>
   </div>
 </div>
@@ -134,20 +135,32 @@
 
   .scrollable {
     overflow-x: auto;
-    padding: 0 16px;
+    padding: 0 8px;
     position: relative;
     display: inline-block;
   }
 
-  .timeline-svg {
-    overflow: visible;
+  .result-item {
+    display: flex;
+    align-items: center;
+    gap: 0;
   }
 
-  :global(.timeline-circle) {
+  .circle-svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .connecting-line-svg {
+    height: 24px;
+    margin: 0 -3px;
+  }
+
+  .circle {
     transition: fill 0.3s ease;
   }
 
-  :global(.timeline-circle:hover) {
+  .circle:hover {
     filter: brightness(1.1);
     cursor: pointer;
   }
