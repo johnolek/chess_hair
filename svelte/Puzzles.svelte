@@ -341,7 +341,7 @@
                 {#key $currentPuzzle.id}
                   <ProgressBar bind:current={$currentPuzzle.percentage_complete}
                   ></ProgressBar>
-                  <ResultTimeline bind:results={$currentPuzzle.results} />
+                  <ResultTimeline bind:results={$currentPuzzle.results} bind:firstFailure={$currentPuzzle.first_failure} />
                 {/key}
               {/if}
             </div>

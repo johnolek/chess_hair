@@ -33,7 +33,7 @@ class UserPuzzleHistory < ApplicationRecord
   def as_json(options = nil)
     super(options).slice('puzzle_id', 'played_at')
                   .merge({
-                           'played_at_human' => played_at_datetime.strftime('%b %-e, %-I:%M%P')
+                           'played_at_human' => played_at_datetime.strftime(PuzzleResult::HUMAN_FRIENDLY_DATE_FORMAT)
                          })
   end
 end

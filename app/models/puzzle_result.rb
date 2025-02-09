@@ -1,4 +1,6 @@
 class PuzzleResult < ApplicationRecord
+  HUMAN_FRIENDLY_DATE_FORMAT = '%b %-e, %Y, %-I:%M%P'
+
   belongs_to :user_puzzle
   has_one :user, through: :user_puzzle
 
@@ -17,7 +19,7 @@ class PuzzleResult < ApplicationRecord
 
   def as_json(options = nil)
     super(options).merge({
-                           'time_played_human' => created_at.strftime('%b %-e, %-I:%M%P')
+                           'time_played_human' => created_at.strftime(HUMAN_FRIENDLY_DATE_FORMAT)
                          })
   end
 end

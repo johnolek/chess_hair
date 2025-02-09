@@ -2,8 +2,10 @@
   import { onMount, tick } from "svelte";
   import { fade } from "svelte/transition";
   import { scrollIntoView } from "../actions/scrollIntoView";
+  import LichessLogo from "./LichessLogo.svelte";
 
   export let results = [];
+  export let firstFailure = null;
 
   // Change from function to reactive statement
   $: sortedResults = [...results].sort(
@@ -73,6 +75,11 @@
   <span class="timeline-label">History:</span>
   <div class="scrollable mb-0" bind:this={scrollable}>
     <div class="timeline">
+      {#if firstFailure}
+        <div class="lichess-logo result-item" title="Failed on Lichess on {firstFailure.played_at_human}">
+          <LichessLogo size={24} fill={ERROR_COLOR} />
+        </div>
+      {/if}
       {#each sortedResults as result, index}
         <div class="result-item">
           {#if index > 0 && !result.made_mistake && !sortedResults[index - 1].made_mistake}
@@ -174,7 +181,7 @@
     transition: fill 0.3s ease;
   }
 
-  .circle:hover, .mistake-svg:hover {
+  .result-item:hover {
     filter: brightness(1.2);
     cursor: pointer;
   }
