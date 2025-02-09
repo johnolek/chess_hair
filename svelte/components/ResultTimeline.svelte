@@ -79,7 +79,7 @@
           {/each}
         </defs>
         {#each sortedResults as result, index}
-          {#if index < results.length - 1}
+          {#if index < results.length - 1 && !result.made_mistake}
             <rect 
               in:fade={{ duration: mounted ? 300 : 0 }} 
               x={CIRCLE_SPACING * index + CIRCLE_RADIUS + (CIRCLE_RADIUS - 3.5)}
