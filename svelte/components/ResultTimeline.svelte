@@ -95,6 +95,7 @@
             <svg class="mistake-svg" viewBox="0 0 19 19">
               <line x1="1" x2="18" y1="1" y2="18" stroke={ERROR_COLOR} stroke-width="4" /> 
               <line x1="1" x2="18" y1="18" y2="1" stroke={ERROR_COLOR} stroke-width="4" /> 
+              <title>{result.time_played_human}</title>
             </svg>
           {:else}
            <svg 
@@ -173,8 +174,8 @@
     transition: fill 0.3s ease;
   }
 
-  .circle:hover {
-    filter: brightness(1.1);
+  .circle:hover, .mistake-svg:hover {
+    filter: brightness(1.2);
     cursor: pointer;
   }
 </style>
