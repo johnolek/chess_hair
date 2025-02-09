@@ -91,7 +91,13 @@
               />
             </svg>
           {/if}
-          <svg 
+          {#if result.made_mistake}
+            <svg class="mistake-svg" viewBox="0 0 19 19">
+              <line x1="1" x2="18" y1="1" y2="18" stroke={ERROR_COLOR} stroke-width="4" /> 
+              <line x1="1" x2="18" y1="18" y2="1" stroke={ERROR_COLOR} stroke-width="4" /> 
+            </svg>
+          {:else}
+           <svg 
             class="circle-svg" 
             viewBox="0 0 24 24"
             use:scrollIntoView
@@ -101,7 +107,7 @@
               cx="50%"
               cy="50%"
               r="8"
-              stroke={getResultColor(result)}
+              stroke={SUCCESS_COLOR}
               stroke-width="4"
               fill="transparent"
               class="circle"
@@ -109,6 +115,7 @@
               <title>{result.time_played_human}</title>
             </circle>
           </svg>
+          {/if}
         </div>
       {/each}
     </div>
@@ -149,6 +156,12 @@
   .circle-svg {
     width: 24px;
     height: 24px;
+  }
+
+  .mistake-svg {
+    width: 19px;
+    height: 19px;
+    margin: 0 5px;
   }
 
   .connecting-line-svg {
