@@ -334,29 +334,6 @@
                 {/key}
               </div>
             </div>
-            {#if $puzzleMode === "failedLichess"}
-              <div class="column is-narrow pb-0">
-                <div class="has-text-centered is-inline-block">
-                  {#key $currentPuzzle.id}
-                    <span title="Total times played">
-                      {$currentPuzzle.total_fails + $currentPuzzle.total_solves}
-                    </span>
-                    |
-                    <span class="has-text-success" title="Current solve streak">
-                      {$currentPuzzle.solve_streak}
-                    </span>
-                    |
-                    <span class="has-text-success" title="Total solves">
-                      {$currentPuzzle.total_solves}
-                    </span>
-                    |
-                    <span class="has-text-danger" title="Total fails">
-                      {$currentPuzzle.total_fails}
-                    </span>
-                  {/key}
-                </div>
-              </div>
-            {/if}
           </div>
           <div class="columns is-mobile is-vcentered mb-1 ml-0 mr-0">
             <div class="column is-full pb-1 pt-1">
