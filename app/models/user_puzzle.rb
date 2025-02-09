@@ -6,46 +6,50 @@ class UserPuzzle < ApplicationRecord
   has_many :mistakes, dependent: :destroy
 
   has_one :lichess_puzzle, primary_key: :lichess_puzzle_id, foreign_key: :puzzle_id
+  has_one :user_puzzle_history, primary_key: :lichess_puzzle_id, foreign_key: :puzzle_id
 
-  scope :with_weighted_fail_ratio, -> { select(
-    arel_table[Arel.star],
-    Arel.sql('(RANDOM() * 5) + ((total_fails + 1.0) / (total_solves + 1.0)) as weighted_fail_ratio')
-  ) }
+  scope :with_weighted_fail_ratio, lambda {
+                                     select(
+                                       arel_table[Arel.star],
+                                       Arel.sql('(RANDOM() * 5) + ((total_fails + 1.0) / (total_solves + 1.0)) as weighted_fail_ratio')
+                                     )
+                                   }
   scope :ordered_by_weighted_fail_ratio, -> { with_weighted_fail_ratio.order(weighted_fail_ratio: :desc) }
   scope :completed, -> { where(complete: true) }
   scope :incomplete, -> { where(complete: false) }
 
-  scope :excluding_last_n_played, ->(user, n) do
+  scope :excluding_last_n_played, lambda { |user, n|
     return all if n < 1
 
     recent_puzzle_ids_subquery = user.puzzle_results
-      .order(created_at: :desc)
-      .limit(n)
-      .select(:user_puzzle_id)
+                                     .order(created_at: :desc)
+                                     .limit(n)
+                                     .select(:user_puzzle_id)
 
     where.not(id: recent_puzzle_ids_subquery)
-  end
+  }
 
-  scope :due_for_review, -> do
+  scope :due_for_review, lambda {
     where(next_review: ..Time.current).or(where(next_review: nil))
-  end
+  }
 
-  scope :excluding_ids, ->(ids) do
+  scope :excluding_ids, lambda { |ids|
     ids = Array(ids)
     return all if ids.empty?
-    where.not(id: ids)
-  end
 
-  scope :without_results, -> {
+    where.not(id: ids)
+  }
+
+  scope :without_results, lambda {
     left_outer_joins(:puzzle_results).where(puzzle_results: { id: nil })
   }
 
   def calculate_average_solve_duration
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     results = puzzle_results
-      .correct
-      .order(created_at: :desc)
-      .limit(required_consecutive_solves)
+              .correct
+              .order(created_at: :desc)
+              .limit(required_consecutive_solves)
     return nil if results.empty?
 
     last_results = results.slice(0, required_consecutive_solves)
@@ -61,6 +65,7 @@ class UserPuzzle < ApplicationRecord
     streak = 0
     puzzle_results.order(created_at: :desc).each do |result|
       break unless result.correct?
+
       streak += 1
     end
     streak
@@ -68,12 +73,13 @@ class UserPuzzle < ApplicationRecord
 
   def is_complete?
     # Puzzles in other collections are considered complete if solved the first time
-    unless user.failed_lichess_puzzles_collection.user_puzzles.include?(self)
-      return true if puzzle_results.count >= 1 && puzzle_results.incorrect.count == 0
+    if !user.failed_lichess_puzzles_collection.user_puzzles.include?(self) && (puzzle_results.count >= 1 && puzzle_results.incorrect.count == 0)
+      return true
     end
 
     required_consecutive_solves = user.config.puzzle_consecutive_solves
     return false unless solve_streak >= required_consecutive_solves
+
     time_goal = user.config.puzzle_time_goal
     average_solve_time && average_solve_time <= time_goal
   end
@@ -86,18 +92,20 @@ class UserPuzzle < ApplicationRecord
     self.complete = is_complete?
     self.last_played = puzzle_results.last&.created_at
     most_recent_result = puzzle_results.order(created_at: :desc).first
-    if most_recent_result
-      self.next_review = most_recent_result.created_at + user.config.minimum_time_between_puzzles
-    end
+    self.next_review = most_recent_result.created_at + user.config.minimum_time_between_puzzles if most_recent_result
     save!
   end
 
   def percentage_complete
     return 100 if complete?
     return 0 if total_solves == 0
+
     required_consecutive_solves = user.config.puzzle_consecutive_solves
-    streak_percent = solve_streak >= required_consecutive_solves ? 100
-      : (solve_streak / required_consecutive_solves.to_f) * 100
+    streak_percent = if solve_streak >= required_consecutive_solves
+                       100
+                     else
+                       (solve_streak / required_consecutive_solves.to_f) * 100
+                     end
     time_percent = percent_time_complete
 
     (streak_percent * 0.5) + (time_percent * 0.5)
